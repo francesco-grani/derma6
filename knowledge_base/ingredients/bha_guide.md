@@ -1,4 +1,4 @@
-## BHA Guide
+# BHA Guide
 
 ## Overview
 
