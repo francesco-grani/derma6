@@ -87,6 +87,27 @@ class TestBackendRequest:
         assert len(errors) > 0
         assert "username" in str(errors[0]["loc"])
 
+    def test_backend_request_message_too_long(self):
+        """Test that a message exceeding max_message_chars raises ValidationError."""
+        from backend.config import settings
+
+        oversized = "a" * (settings.max_message_chars + 1)
+        with pytest.raises(ValidationError) as exc_info:
+            BackendRequest(username="john_doe", message=oversized)
+
+        errors = exc_info.value.errors()
+        assert len(errors) > 0
+        assert "message" in str(errors[0]["loc"])
+        assert str(settings.max_message_chars) in errors[0]["msg"]
+
+    def test_backend_request_message_at_max_length(self):
+        """Test that a message of exactly max_message_chars is valid."""
+        from backend.config import settings
+
+        exact = "a" * settings.max_message_chars
+        req = BackendRequest(username="john_doe", message=exact)
+        assert len(req.message) == settings.max_message_chars
+
 
 class TestBackendResponse:
     """Tests for BackendResponse schema."""

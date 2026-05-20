@@ -6,6 +6,8 @@ for custom validation logic.
 
 from pydantic import BaseModel, field_validator
 
+from backend.config import settings
+
 
 class UserProfile(BaseModel):
     """User profile information from onboarding."""
@@ -84,7 +86,7 @@ class BackendRequest(BaseModel):
     @field_validator("message", mode="before")
     @classmethod
     def validate_message(cls, v: str) -> str:
-        """Validate that message is a non-empty string.
+        """Validate that message is a non-empty string within the allowed length.
 
         Args:
             v: The message to validate
@@ -93,10 +95,15 @@ class BackendRequest(BaseModel):
             The validated message
 
         Raises:
-            ValueError: If message is empty or not a string
+            ValueError: If message is empty, not a string, or exceeds max length
         """
         if not isinstance(v, str) or len(v.strip()) == 0:
             raise ValueError("message must be a non-empty string")
+        if len(v) > settings.max_message_chars:
+            raise ValueError(
+                f"message must not exceed {settings.max_message_chars} characters "
+                f"(got {len(v)})"
+            )
         return v
 
 
