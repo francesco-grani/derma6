@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD055 MD056 MD058 MD060 -->
 # Skincare Routine Builder — Implementation Backlog
 
 > Status: `⬜ pending` · `🔄 in progress` · `✅ done` · `❌ blocked`
@@ -9,7 +10,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T1** · Project structure + config | — |
+| ✅ | **T1** · Project structure + config | — |
 
 ---
 
@@ -17,12 +18,12 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T2** · Logging + Sentry | T1 |
-| ⬜ | **T3** · ORM models + DB init | T1 |
-| ⬜ | **T5** · Pydantic schemas | T1 |
-| ⬜ | **T7** · Rate Limiter | T1 |
-| ⬜ | **T8** · Retriever + embeddings | T1 |
-| ⬜ | **T9** · Knowledge Base first drafts | T1 |
+| ✅ | **T2** · Logging + Sentry | T1 |
+| ✅ | **T3** · ORM models + DB init | T1 |
+| 🔄 | **T5** · Pydantic schemas | T1 |
+| 🔄 | **T7** · Rate Limiter | T1 |
+| 🔄 | **T8** · Retriever + embeddings | T1 |
+| 🔄 | **T9** · Knowledge Base first drafts | T1 |
 
 ---
 
