@@ -23,7 +23,7 @@
 | ✅ | **T5** · Pydantic schemas | T1 |
 | ✅ | **T7** · Rate Limiter | T1 |
 | ✅ | **T8** · Retriever + embeddings | T1 |
-| 🔄 | **T9** · Knowledge Base first drafts | T1 |
+| ✅ | **T9** · Knowledge Base first drafts | T1 |
 
 ---
 
@@ -31,9 +31,9 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T4** · Profile Store | T3 |
-| ⬜ | **T6** · Chat History | T3 |
-| ⬜ | **T10** · Conflict Table + indexing script | T8 + T9 |
+| 🔄 | **T4** · Profile Store | T3 |
+| 🔄 | **T6** · Chat History | T3 |
+| 🔄 | **T10** · Conflict Table + indexing script | T8 + T9 |
 
 ---
 
