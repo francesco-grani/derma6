@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD055 MD056 MD058 MD060 -->
+<!-- markdownlint-disable MD036 MD055 MD056 MD058 MD060 -->
 # Skincare Routine Builder — Implementation Backlog
 
 > Status: `⬜ pending` · `🔄 in progress` · `✅ done` · `❌ blocked`
@@ -20,7 +20,7 @@
 |--------|------|------------|
 | ✅ | **T2** · Logging + Sentry | T1 |
 | ✅ | **T3** · ORM models + DB init | T1 |
-| 🔄 | **T5** · Pydantic schemas | T1 |
+| ✅ | **T5** · Pydantic schemas | T1 |
 | 🔄 | **T7** · Rate Limiter | T1 |
 | 🔄 | **T8** · Retriever + embeddings | T1 |
 | 🔄 | **T9** · Knowledge Base first drafts | T1 |
