@@ -42,6 +42,10 @@ Repository = "https://github.com/fgrani/skincare-routine-builder"
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "frontend"]
 
+[tool.uv]
+# onnxruntime 1.24+ dropped macOS Intel (x86_64) wheels; pin to last supported version
+override-dependencies = ["onnxruntime<=1.23.2"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
