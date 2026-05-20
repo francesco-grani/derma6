@@ -4,8 +4,11 @@ Uses an in-memory SQLite database to avoid test database side effects.
 """
 
 import pytest
+from unittest.mock import patch
 from langchain_community.chat_message_histories import SQLChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage
+
+from backend.db.chat_history import serialise_history
 
 
 class TestChatHistory:
@@ -136,3 +139,59 @@ class TestChatHistory:
         # This is expected behavior with `:memory:` databases.
         # The test validates the API works correctly; actual persistence happens with file DB.
         assert isinstance(history2.messages, list)
+
+
+class TestSerialiseHistory:
+    """Test suite for serialise_history function."""
+
+    def test_non_empty_history_returns_correct_structure(self):
+        """Test that non-empty history returns correct dict structure with role, content, timestamp."""
+        # Create in-memory history and add messages
+        history = SQLChatMessageHistory(
+            session_id="test_user",
+            connection_string="sqlite:///:memory:",
+        )
+        history.add_user_message("What is retinol?")
+        history.add_ai_message("Retinol is a vitamin A derivative.")
+
+        # Mock get_history to return our in-memory history
+        with patch("backend.db.chat_history.get_history", return_value=history):
+            result = serialise_history("test_user")
+
+        # Verify structure
+        assert len(result) == 2
+        assert isinstance(result, list)
+
+        # Check first message (human)
+        assert isinstance(result[0], dict)
+        assert "role" in result[0]
+        assert "content" in result[0]
+        assert "timestamp" in result[0]
+        assert result[0]["role"] == "human"
+        assert result[0]["content"] == "What is retinol?"
+        assert isinstance(result[0]["timestamp"], str) and "T" in result[0]["timestamp"]
+
+        # Check second message (AI)
+        assert isinstance(result[1], dict)
+        assert "role" in result[1]
+        assert "content" in result[1]
+        assert "timestamp" in result[1]
+        assert result[1]["role"] == "ai"
+        assert result[1]["content"] == "Retinol is a vitamin A derivative."
+        assert isinstance(result[1]["timestamp"], str) and "T" in result[1]["timestamp"]
+
+    def test_empty_history_returns_empty_list(self):
+        """Test that empty history returns an empty list."""
+        # Create in-memory history without adding any messages
+        history = SQLChatMessageHistory(
+            session_id="empty_user",
+            connection_string="sqlite:///:memory:",
+        )
+
+        # Mock get_history to return our empty in-memory history
+        with patch("backend.db.chat_history.get_history", return_value=history):
+            result = serialise_history("empty_user")
+
+        assert result == []
+        assert isinstance(result, list)
+        assert len(result) == 0
