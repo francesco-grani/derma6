@@ -46,6 +46,38 @@ _TOOL_INSTRUCTIONS = (
 )
 
 
+def _sanitise(text: str) -> str:
+    """Sanitise user-controlled text before embedding it in the system prompt.
+
+    Prevents prompt-injection attacks that exploit newlines or section delimiters.
+
+    Steps applied (in order):
+    1. Truncate at the first newline (\\n or \\r) — anything after a newline is
+       attacker-injected prompt content and is discarded entirely.
+    2. Truncate at the first occurrence of the ``---`` section-delimiter sequence
+       — anything after it is discarded.
+    3. Strip leading/trailing whitespace from the surviving fragment.
+
+    Args:
+        text: Raw user-controlled string (e.g. skin_type, concern, medical flag).
+
+    Returns:
+        Sanitised string safe to embed in the system prompt.
+    """
+    # Truncate at first CR or LF
+    for nl in ("\r\n", "\r", "\n"):
+        idx = text.find(nl)
+        if idx != -1:
+            text = text[:idx]
+
+    # Truncate at first section delimiter
+    idx = text.find("---")
+    if idx != -1:
+        text = text[:idx]
+
+    return text.strip()
+
+
 def build_system_prompt(profile: UserProfile) -> str:
     """Build a system prompt string tailored to the user's profile.
 
@@ -66,15 +98,18 @@ def build_system_prompt(profile: UserProfile) -> str:
             "has_shaving_routine (yes/no)."
         )
     else:
+        safe_skin_type = _sanitise(profile.skin_type) if profile.skin_type else profile.skin_type
+        safe_concerns = [_sanitise(c) for c in profile.skin_concerns]
         sections.append(
-            f"USER PROFILE: skin_type={profile.skin_type}, "
-            f"concerns={profile.skin_concerns}, "
+            f"USER PROFILE: skin_type={safe_skin_type}, "
+            f"concerns={safe_concerns}, "
             f"shaving={profile.has_shaving_routine}"
         )
 
     # --- Medical flag rule (only when flags are present) ---
     if profile.medical_flags:
-        flags_str = ", ".join(profile.medical_flags)
+        safe_flags = [_sanitise(f) for f in profile.medical_flags]
+        flags_str = ", ".join(safe_flags)
         sections.append(
             f"MEDICAL FLAG: This user has flagged: {flags_str}. "
             "Always append this disclaimer to your responses: "
