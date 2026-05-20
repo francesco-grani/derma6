@@ -1,4 +1,4 @@
-## AHA Guide
+# AHA Guide
 
 ## Overview
 
