@@ -31,9 +31,9 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| 🔄 | **T4** · Profile Store | T3 |
-| 🔄 | **T6** · Chat History | T3 |
-| 🔄 | **T10** · Conflict Table + indexing script | T8 + T9 |
+| ✅ | **T4** · Profile Store | T3 |
+| ✅ | **T6** · Chat History | T3 |
+| ✅ | **T10** · Conflict Table + indexing script | T8 + T9 |
 
 ---
 
@@ -41,12 +41,12 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T11** · Conflict Checker Tool | T4 + T10 |
-| ⬜ | **T12** · Routine Sequencer Tool | T8 |
-| ⬜ | **T13** · Skin Type Advisor Tool | T4 + T8 |
-| ⬜ | **T14** · SPF Recommender Tool | T8 |
-| ⬜ | **TA1** · `serialise_history` method | T6 |
-| ⬜ | **TB1** · Golden eval dataset | T9 |
+| ✅ | **T11** · Conflict Checker Tool | T4 + T10 |
+| ✅ | **T12** · Routine Sequencer Tool | T8 |
+| ✅ | **T13** · Skin Type Advisor Tool | T4 + T8 |
+| ✅ | **T14** · SPF Recommender Tool | T8 |
+| ✅ | **TA1** · `serialise_history` method | T6 |
+| 🔄 | **TB1** · Golden eval dataset | T9 _(waiting on KB finalization)_ |
 
 ---
 
