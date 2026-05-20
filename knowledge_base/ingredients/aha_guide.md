@@ -1,16 +1,19 @@
-# AHA Guide
+## AHA Guide
 
 ## Overview
 
-Alpha-hydroxy acids (AHAs) are water-soluble chemical exfoliants derived from natural sources (fruit acids, milk, sugar cane). Unlike physical scrubs, AHAs dissolve the bonds between dead skin cells without mechanical abrasion, delivering controlled, even exfoliation. They are among the most evidence-backed actives for improving skin texture, tone, and mild acne.
+Alpha-hydroxy acids (AHAs) are water-soluble chemical exfoliants derived from natural sources (fruit acids, milk, sugar cane). Unlike physical scrubs, AHAs dissolve the bonds between dead skin cells without mechanical abrasion, delivering controlled, even exfoliation. They are among the most evidence-backed actives for improving skin texture, tone, and mild acne. 
+
+**Paula's Choice rating:** Best — benefits: Anti-Aging, Dark Spot Fading, Evens Skin Tone, Hydration  
+**INCI Decoder classification:** superstar — exfoliant, humectant
 
 ## Types of AHAs
 
 ### Glycolic Acid
-Derived from sugar cane. Smallest molecular weight (~76 Da) of all AHAs, which gives it the deepest skin penetration and the strongest efficacy — but also the greatest irritation potential. Most studied AHA in clinical literature. Effective range: 5–15% for leave-on products (up to 30–70% for professional peels).
+Derived from sugar cane. Smallest molecular weight (~76 Da) of all AHAs, which gives it the deepest skin penetration and the strongest efficacy — but also the greatest irritation potential. Most studied AHA in clinical literature. Effective range: 5–15% for leave-on products (up to 30–70% for professional peels). Glycolic acid is known to help skin’s own collagen production, resulting in firmer, younger skin, and can fade brown spots caused by sun damage or post-inflammatory hyperpigmentation (PIH) (⚠ source conflict — verify).
 
 ### Lactic Acid
-Derived from milk. Larger molecule than glycolic acid, penetrates more slowly — gentler and better tolerated for sensitive skin. Added benefit: acts as a humectant, attracting moisture. Effective range: 5–12%. Also has mild skin-lightening properties.
+Derived from milk. Larger molecule than glycolic acid, penetrates more slowly — gentler and better tolerated for sensitive skin. Added benefit: acts as a humectant, attracting moisture. Effective range: 5–12%. Also has mild skin-lightening properties. In higher concentrations (10% and up), lactic acid improves skin firmness, thickness, and wrinkles (⚠ source conflict — verify).
 
 ### Mandelic Acid
 Derived from bitter almonds. Largest common AHA molecule — slowest penetration, most tolerable, suitable for sensitive and darker skin tones (lower risk of post-inflammatory hyperpigmentation from over-exfoliation). Effective range: 5–15%. Has mild antibacterial properties, useful for acne.
@@ -61,3 +64,7 @@ AHAs increase UV sensitivity by thinning the stratum corneum. Studies have shown
 1. Kornhauser, A. et al. (2010). "Applications of hydroxy acids: classification, mechanisms, and photoactivity." *Clinical, Cosmetic and Investigational Dermatology*, 3, 135–142. https://doi.org/10.2147/CCID.S9042
 2. Tang, S.C. & Yang, J.H. (2018). "Dual Effects of Alpha-Hydroxy Acids on the Skin." *Molecules*, 23(4), 863. https://doi.org/10.3390/molecules23040863
 3. U.S. Food & Drug Administration — Alpha hydroxy acids in cosmetics: https://www.fda.gov/cosmetics/cosmetic-ingredients/alpha-hydroxy-acids
+4. Măgerușan, Ș.E., & Hancu, G. (2023). "A Comprehensive Bibliographic Review Concerning the Efficacy of Organic Acids for Chemical Peels Treating Acne Vulgaris." *Molecules*, 28(20), 7219. https://doi.org/10.3390/molecules28207219
+5. Paula's Choice Research & Education Team. (2024). "AHA." Retrieved from https://www.paulaschoice.com/ingredient-dictionary/ingredient-aha.html
+6. INCI Decoder. "Glycolic Acid." Retrieved from https://incidecoder.com/ingredients/glycolic-acid
+7. INCI Decoder. "Lactic Acid." Retrieved from https://incidecoder.com/ingredients/lactic-acid

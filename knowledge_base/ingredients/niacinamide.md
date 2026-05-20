@@ -2,14 +2,17 @@
 
 ## Overview
 
-Niacinamide (nicotinamide) is the amide form of vitamin B3. It is water-soluble, highly stable across a wide pH range (3–9), and exceptionally well-tolerated, making it one of the most versatile actives in modern skincare. It is effective across virtually all skin types — oily, dry, sensitive, and acne-prone.
+Niacinamide (nicotinamide) is the amide form of vitamin B3. It is water-soluble, highly stable across a wide pH range (3–9), and exceptionally well-tolerated, making it one of the most versatile actives in modern skincare. It is effective across virtually all skin types — oily, dry, sensitive, and acne-prone. 
+
+**Paula's Choice rating:** Best — benefits: Anti-Aging, Pore Minimizer, Soothing.  
+**INCI Decoder classification:** superstar — cell-communicating ingredient.
 
 ## Mechanism of Action
 
 Niacinamide acts as a precursor to the coenzymes NAD+ (nicotinamide adenine dinucleotide) and NADP+, which are critical in cellular energy metabolism and oxidative stress defence. Key mechanisms include:
 
 - **Anti-inflammatory:** inhibits the transfer of melanosomes from melanocytes to keratinocytes and suppresses pro-inflammatory cytokine cascades (TNF-α, IL-1β), reducing redness and irritation.
-- **Barrier reinforcement:** upregulates the synthesis of ceramides, free fatty acids, and cholesterol — the three lipid components of the stratum corneum — thereby strengthening the skin's barrier.
+- **Barrier reinforcement:** upregulates the synthesis of ceramides, free fatty acids, and cholesterol — the three lipid components of the stratum corneum — thereby strengthening the skin's barrier. Studies have shown that niacinamide increases ceramide synthesis, resulting in a stronger, healthier skin barrier and better hydration (Tanno et al., 2000).
 - **Sebum regulation:** reduces sebocyte lipid synthesis, decreasing surface sebum and pore congestion.
 - **Melanin inhibition:** blocks melanosome transfer (independent of tyrosinase inhibition), fading existing hyperpigmentation and preventing new spots.
 
@@ -17,11 +20,11 @@ Niacinamide acts as a precursor to the coenzymes NAD+ (nicotinamide adenine dinu
 
 | Concentration | Effect |
 |---|---|
-| 2–5% | Barrier support, mild brightening, soothing |
+| 0.2–5% | Barrier support, mild brightening, soothing |
 | 5–10% | Oil control, pore minimisation, visible brightening |
 | >10% | Diminishing returns; higher risk of flushing in some users |
 
-Most peer-reviewed efficacy studies use 4–5%.
+Most peer-reviewed efficacy studies use 4–5% (Walocko et al., 2017).
 
 ## Benefits
 
@@ -31,6 +34,7 @@ Most peer-reviewed efficacy studies use 4–5%.
 - Strengthens the skin barrier, reducing trans-epidermal water loss (TEWL).
 - Mild anti-ageing effect: stimulates dermal collagen and reduces fine lines at higher concentrations.
 - Reduces redness and sensitivity — useful for rosacea-prone skin.
+- Provides antioxidant protection, helping to visibly repair damage from UV light and environmental pollutants (Paula's Choice).
 
 ## Layering and Compatibility
 
@@ -54,6 +58,8 @@ Niacinamide is compatible with almost every other skincare active:
 
 ## Sources
 
-1. Levin, J. & Momin, S.B. (2010). "How much do we really know about our favorite cosmeceutical ingredients?" *Journal of Clinical and Aesthetic Dermatology*, 3(2), 22–41. https://pubmed.ncbi.nlm.nih.gov/20725560/
-2. Draelos, Z.D. et al. (2005). "The effect of 2% niacinamide on facial sebum production." *Journal of Cosmetic and Laser Therapy*, 7(2), 96–101. https://doi.org/10.1080/14764170500173479
-3. Bissett, D.L. et al. (2004). "Niacinamide: A B vitamin that improves aging facial skin appearance." *Dermatologic Surgery*, 31(7), 860–866. https://doi.org/10.1111/j.1524-4725.2005.31725
+1. Tanno, O., et al. (2000). "Nicotinamide increases biosynthesis of ceramides as well as other stratum corneum lipids to improve the epidermal permeability barrier." *British Journal of Dermatology*, 143(3), 524-531. https://doi.org/10.1046/j.1365-2133.2000.03780.x
+2. Walocko, F.M., et al. (2017). "The role of nicotinamide in acne treatment." *Dermatologic Therapy*, 30(5), e12437. https://doi.org/10.1111/dth.12437
+3. Levin, J. & Momin, S.B. (2010). "How much do we really know about our favorite cosmeceutical ingredients?" *Journal of Clinical and Aesthetic Dermatology*, 3(2), 22–41. https://pubmed.ncbi.nlm.nih.gov/20725560/
+4. Draelos, Z.D. et al. (2005). "The effect of 2% niacinamide on facial sebum production." *Journal of Cosmetic and Laser Therapy*, 7(2), 96–101. https://doi.org/10.1080/14764170500173479
+5. Bissett, D.L. et al. (2004). "Niacinamide: A B vitamin that improves aging facial skin appearance." *Dermatologic Surgery*, 31(7), 860–866. https://doi.org/10.1111/j.1524-4725.2005.31725

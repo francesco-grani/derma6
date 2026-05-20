@@ -2,7 +2,10 @@
 
 ## Overview
 
-Azelaic acid (AzA) is a naturally occurring dicarboxylic acid found in wheat, rye, and barley, and produced by Malassezia yeast on human skin. It is a versatile multi-action ingredient with antimicrobial, anti-inflammatory, comedolytic, and skin-brightening properties. Prescription formulations (15–20%) are used for rosacea and acne; OTC formulations (10%) are available in many markets. It is notable for being one of the few actives considered safe during pregnancy.
+Azelaic acid (AzA) is a naturally occurring dicarboxylic acid found in wheat, rye, and barley, and produced by Malassezia yeast on human skin. It is a versatile multi-action ingredient with antimicrobial, anti-inflammatory, comedolytic, and skin-brightening properties. Prescription formulations (15–20%) are used for rosacea and acne; OTC formulations (10%) are available in many markets. It is notable for being one of the few actives considered safe during pregnancy. 
+
+**Paula's Choice rating:** Best — benefits: Anti-Acne, Dark Spot Fading, Smooths Bumpy Skin.  
+**INCI Decoder classification:** superstar — anti-acne, soothing, buffering.
 
 ## Mechanism of Action
 
@@ -66,6 +69,7 @@ AzA is one of the most compatible actives in skincare:
 
 ## Sources
 
-1. Breathnach, A.S. (1999). "Azelaic acid: potential as a general antitumoural agent." *Medical Hypotheses*, 52(3), 221–226. https://doi.org/10.1054/mehy.1998.0043
-2. Fitton, A. & Goa, K.L. (1991). "Azelaic acid: a review of its pharmacological properties and therapeutic efficacy in acne and hyperpigmentary skin disorders." *Drugs*, 41(5), 780–798. https://doi.org/10.2165/00003495-199141050-00007
-3. Baldwin, H.E. (2014). "Azelaic Acid for Rosacea." *Journal of Drugs in Dermatology*, 13(6). https://jddonline.com/articles/azelaic-acid-for-rosacea/
+1. Stordahl, D. (2023). "Azelaic Acid." *Paula's Choice Ingredient Dictionary*. Retrieved from https://www.paulaschoice.com/ingredient-dictionary/ingredient-azelaic-acid.html
+2. King, S., & Campbell, J. (2023). "A systematic review to evaluate the efficacy of azelaic acid in the management of acne, rosacea, melasma and skin aging." *Journal of Cosmetic Dermatology*. DOI:10.1111/jocd.15923
+3. Sharma, A., & Kroumpouzos, G. (2022). "Rosacea management: A comprehensive review." *Journal of Cosmetic Dermatology*. DOI:10.1111/jocd.14816
+4. Baldwin, H.E. (2015). "Azelaic Acid: Evidence-based Update on Mechanism of Action and Clinical Application." *Journal of Drugs in Dermatology*, 14(9), 964-968.

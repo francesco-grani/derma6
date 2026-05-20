@@ -54,7 +54,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T15** · Introduction Scheduler Tool | T4 + T8 + T11 |
+| ✅ | **T15** · Introduction Scheduler Tool | T4 + T8 + T11 |
 
 ---
 
@@ -62,7 +62,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T16** · BackendService + SystemPromptBuilder | T5 + T6 + T7 + T11 + T12 + T13 + T14 + T15 |
+| ✅ | **T16** · BackendService + SystemPromptBuilder | T5 + T6 + T7 + T11 + T12 + T13 + T14 + T15 |
 
 ---
 

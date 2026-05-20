@@ -2,7 +2,10 @@
 
 ## Overview
 
-Sunscreen (SPF) is the single most evidence-backed skincare product for preventing photoageing, hyperpigmentation, and skin cancer. Daily application is not optional — it is the foundation of any skincare routine. Without SPF, the benefits of actives like vitamin C, retinol, and AHAs are partially undermined because UV exposure re-damages the skin these actives are working to repair.
+Sunscreen (SPF) is the single most evidence-backed skincare product for preventing photoageing, hyperpigmentation, and skin cancer. Daily application is not optional — it is the foundation of any skincare routine. Without SPF, the benefits of actives like vitamin C, retinol, and AHAs are partially undermined because UV exposure re-damages the skin these actives are working to repair. 
+
+**Paula's Choice rating:** Best — benefits: Anti-Aging, Anti-Acne  
+**INCI Decoder classification:** superstar — cell-communicating ingredient
 
 ## UV Radiation Types
 
@@ -18,8 +21,8 @@ Sunscreen (SPF) is the single most evidence-backed skincare product for preventi
 
 ### Mineral (Physical) Filters
 Inorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):
-- **Zinc oxide (ZnO):** provides broad-spectrum UVA + UVB coverage; photostable; gentle on sensitive skin; white cast at higher concentrations (nanoparticle forms reduce cast).
-- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast.
+- **Zinc oxide (ZnO):** provides broad-spectrum UVA + UVB coverage; photostable; gentle on sensitive skin; white cast at higher concentrations (nanoparticle forms reduce cast). Zinc oxide is considered to offer the broadest range of UV protection, covering UVB, UVA II, and UVA I almost uniformly (INCI Decoder). It is also recognized as a skin protectant and anti-irritant, often used to treat skin irritations such as diaper rash.
+- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast. Titanium dioxide provides good protection primarily in the UVB and UVA II range but is less effective at UVA I (INCI Decoder). 
 
 Mineral sunscreens are recommended for sensitive, rosacea-prone, and acne-prone skin due to lower irritation risk.
 
@@ -63,3 +66,6 @@ European and Asian sunscreen formulations generally provide superior UVA protect
 1. World Health Organization — Radiation: Ultraviolet (UV) radiation: https://www.who.int/news-room/questions-and-answers/item/radiation-ultraviolet-(uv)
 2. Lim, H.W. et al. (2017). "Current challenges in photoprotection." *Journal of the American Academy of Dermatology*, 76(3 Suppl 1), S91–S99. https://doi.org/10.1016/j.jaad.2016.09.040
 3. European Dermatology Forum — Photoprotection guidelines: https://www.euroderm.org/edf/index.php/edf-guidelines/category/5-guidelines-miscellaneous
+4. Flieger, J., & Raszewska-Famielec, M. (2024). "Skin Protection by Carotenoid Pigments." *International Journal of Molecular Sciences*. DOI:10.3390/ijms25031431
+5. Passeron, T., & Lim, H.W. (2021). "Photoprotection according to skin phototype and dermatoses: practical recommendations from an expert panel." *Journal of the European Academy of Dermatology and Venereology*, DOI:10.1111/jdv.17242
+6. Pellacani, G., & Lim, H.W. (2024). "Photoprotection: Current developments and controversies." *Journal of the European Academy of Dermatology and Venereology*, DOI:10.1111/jdv.19677
