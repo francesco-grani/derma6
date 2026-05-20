@@ -2,7 +2,10 @@
 
 ## Overview
 
-Vitamin C (ascorbic acid) is a potent antioxidant and one of the most studied topical actives for brightening, photoprotection, and anti-ageing. It exists in multiple forms with different stability and efficacy profiles. Understanding the differences between forms is critical for selecting an effective product.
+Vitamin C (ascorbic acid) is a potent antioxidant and one of the most studied topical actives for brightening, photoprotection, and anti-aging. It exists in multiple forms with different stability and efficacy profiles. Understanding the differences between forms is critical for selecting an effective product. 
+
+**Paula's Choice rating:** Best — benefits: Anti-Aging, Evens Skin Tone, Dark Spot Fading  
+**INCI Decoder classification:** superstar — antioxidant, skin brightening, buffering
 
 ## Forms of Vitamin C
 
@@ -48,3 +51,5 @@ More stable but require enzymatic conversion in the skin before becoming active,
 1. Telang, P.S. (2013). "Vitamin C in dermatology." *Indian Dermatology Online Journal*, 4(2), 143–146. https://doi.org/10.4103/2229-5178.110593
 2. Pinnell, S.R. et al. (2001). "Topical L-ascorbic acid: percutaneous absorption studies." *Dermatologic Surgery*, 27(2), 137–142. https://doi.org/10.1046/j.1524-4725.2001.00264.x
 3. Lin, F.H. et al. (2003). "Ferulic acid stabilizes a solution of vitamins C and E and doubles its photoprotection of skin." *Journal of Investigative Dermatology*, 125(4), 826–832. https://doi.org/10.1111/j.0022-202X.2005.23768.x
+4. Draelos, Z., & Bogdanowicz, P. (2024). "Top weapons in skin aging and actives to target the consequences of skin cell senescence." *Journal of the European Academy of Dermatology and Venereology*, DOI:10.1111/jdv.19648
+5. Enescu, C.D., & Bedford, L.M. (2022). "A review of topical vitamin C derivatives and their efficacy." *Journal of Cosmetic Dermatology*, DOI:10.1111/jocd.14465

@@ -4,6 +4,9 @@
 
 Benzoyl peroxide (BPO) is an organic peroxide and one of the most effective OTC treatments for acne. Unlike salicylic acid, which primarily unclogs pores, BPO works as a potent **bactericidal agent** targeting Cutibacterium acnes (C. acnes), the bacteria most responsible for acne lesion formation. It also has mild keratolytic (exfoliating) and comedolytic effects. BPO has decades of clinical evidence and is recommended by major dermatology bodies worldwide.
 
+**Paula's Choice rating:** Best — benefits: Anti-Acne, Smooths Bumpy Skin  
+**INCI Decoder classification:** superstar — antibacterial
+
 ## Mechanism of Action
 
 BPO releases free oxygen radicals when it contacts the skin, creating a highly oxidising environment within the follicle and on the skin surface. This oxidative burst is bactericidal — it kills C. acnes by oxidising its bacterial proteins and cell membranes. Key properties:
@@ -54,4 +57,7 @@ BPO releases free oxygen radicals when it contacts the skin, creating a highly o
 
 1. Kawashima, M. et al. (2017). "Efficacy and safety of adapalene gel, 0.1%, plus benzoyl peroxide wash, 2.5%, in treating acne." *Journal of Drugs in Dermatology*, 16(6), 566–572. https://pubmed.ncbi.nlm.nih.gov/28628698/
 2. Tanghetti, E.A. & Popp, K.F. (2009). "A current review of topical benzoyl peroxide: new perspectives on formulation and utilization." *Dermatologic Clinics*, 27(1), 17–24. https://doi.org/10.1016/j.det.2008.07.001
-3. American Academy of Dermatology — Benzoyl peroxide: https://www.aad.org/public/diseases/acne/diy/benzoyl-peroxide
+3. Mohsin N, Hernandez LE (2022). "Acne treatment review and future perspectives." *Dermatologic therapy*. DOI:10.1111/dth.15719
+4. Eichenfield DZ, Sprague J (2021). "Management of Acne Vulgaris: A Review." *JAMA*. DOI:10.1001/jama.2021.17633
+5. American Academy of Dermatology — Benzoyl peroxide: https://www.aad.org/public/diseases/acne/diy/benzoyl-peroxide
+6. Santaella-Lam, M. (2020). "Benzoyl Peroxide." *Paula's Choice Ingredient Dictionary*. https://www.paulaschoice.com/ingredient-dictionary/ingredient-benzoyl-peroxide.html

@@ -8,6 +8,9 @@ This lipid matrix serves two critical functions:
 1. Preventing trans-epidermal water loss (TEWL) — keeping moisture inside the skin.
 2. Acting as a physical and chemical barrier against pathogens, allergens, and irritants.
 
+**Paula's Choice rating:** Best — benefits: Hydration, Anti-Aging  
+**INCI Decoder classification:** superstar — skin-identical ingredient
+
 ## Types of Ceramides
 
 Ceramides are identified by their headgroup chemistry and acyl chain composition. INCI nomenclature uses letters and numbers:
@@ -20,7 +23,7 @@ Ceramides are identified by their headgroup chemistry and acyl chain composition
 | Ceramide NS | Ceramide 2 | Supports water-holding capacity |
 | Ceramide AS | Ceramide 1 | Involved in lamellar body formation |
 
-Well-formulated topical products typically include a **blend of ceramide types**, since the skin barrier requires multiple species in proportion to function optimally. The most common and well-studied combination includes Ceramide NP, AP, and EOP.
+Well-formulated topical products typically include a **blend of ceramide types**, since the skin barrier requires multiple species in proportion to function optimally. The most common and well-studied combination includes Ceramide NP, AP, and EOP. Other ceramides such as Ceramide NG and phytosphingosine are also utilized for their beneficial properties in skin care formulations (⚠ source conflict — verify).
 
 ## Mechanism of Action
 
@@ -39,6 +42,7 @@ The optimal vehicle for ceramide delivery is a **lipid-rich cream or lotion**, o
 - Protects against environmental irritants and pathogens.
 - Fundamental for dry, sensitive, and dehydrated skin types.
 - Counteracts the barrier disruption caused by retinoids and acids.
+- Ceramide-containing moisturizers have shown to significantly reduce dryness and improve barrier function during acne treatment (Draelos & Baalbaki, 2023).
 
 ## How to Use
 
@@ -65,3 +69,5 @@ Look for formulations that list ceramides alongside their cofactors:
 1. van Smeden, J. & Bouwstra, J.A. (2016). "Stratum Corneum Lipids: Their Role for the Skin Barrier Function in Healthy Subjects and Atopic Dermatitis Patients." *Current Problems in Dermatology*, 49, 8–26. https://doi.org/10.1159/000441540
 2. Elias, P.M. (2008). "Skin barrier function." *Current Allergy and Asthma Reports*, 8(4), 299–305. https://doi.org/10.1007/s11882-008-0048-0
 3. Meckfessel, M.H. & Brandt, S. (2014). "The structure, function, and importance of ceramides in skin and their use as therapeutic agents in skin-care products." *Journal of the American Academy of Dermatology*, 71(1), 177–184. https://doi.org/10.1016/j.jaad.2014.01.891
+4. Draelos, Z.D., Baalbaki, N. (2023). "Ceramide-Containing Adjunctive Skin Care for Skin Barrier Restoration During Acne Vulgaris Treatment." *Journal of Drugs in Dermatology*, 22(6), 554-558. https://doi.org/10.36849/JDD.7142
+5. Schild, J., Kalvodová, A. (2024). "The role of ceramides in skin barrier function and the importance of their correct formulation for skincare applications." *International Journal of Cosmetic Science*. https://doi.org/10.1111/ics.12972
