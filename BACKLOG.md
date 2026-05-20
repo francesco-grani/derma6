@@ -70,7 +70,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T17** · Input validation | T16 |
+| ✅ | **T17** · Input validation | T16 |
 | ⬜ | **T19** · Streamlit frontend (3 pages) | T16 |
 
 ---
