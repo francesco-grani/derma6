@@ -1,0 +1,3 @@
+# All business logic lives in a pure Python backend, decoupled from Streamlit
+
+The first frontend is Streamlit, but there is explicit intent to swap it for a Python-compatible framework (e.g., FastHTML) once the core is working. To make that swap cheap, all RAG logic, Tool implementations, User Profile management, and session state are owned by a backend layer. Streamlit (and any future frontend) is a thin presentation layer that calls the backend — it owns no business logic and holds no persistent state. The cost is some up-front layering discipline; the payoff is a frontend migration that touches zero domain code.
