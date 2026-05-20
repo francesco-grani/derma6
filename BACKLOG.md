@@ -46,7 +46,7 @@
 | ✅ | **T13** · Skin Type Advisor Tool | T4 + T8 |
 | ✅ | **T14** · SPF Recommender Tool | T8 |
 | ✅ | **TA1** · `serialise_history` method | T6 |
-| 🔄 | **TB1** · Golden eval dataset | T9 _(waiting on KB finalization)_ |
+| ✅ | **TB1** · Golden eval dataset | T9 |
 
 ---
 
