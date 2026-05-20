@@ -1,0 +1,74 @@
+[
+  {
+    "ingredient_a": "retinol",
+    "ingredient_b": "vitamin c",
+    "verdict": "use-at-different-times",
+    "reason": "Both are potent actives with incompatible pH requirements: L-ascorbic acid (vitamin C) works optimally at pH 3–3.5, while retinol is effective at pH 5–6. Combining them raises the pH of vitamin C, reducing its stability and efficacy, while the low pH accelerates retinol degradation. Additionally, vitamin C can oxidise in the presence of retinol. Recommended routine: vitamin C in AM, retinol in PM. (Sources: Paula's Choice Ingredient Dictionary; Mukherjee S et al., 'Retinoids in the treatment of skin aging', Clin Interv Aging 2006)"
+  },
+  {
+    "ingredient_a": "retinol",
+    "ingredient_b": "aha",
+    "verdict": "use-at-different-times",
+    "reason": "Alpha-hydroxy acids (e.g. glycolic acid) work at low pH (~3–4) and can destabilise retinol formulations while simultaneously increasing skin sensitivity and photosensitivity. Using both in the same step compounds irritation risk—redness, peeling, and compromised barrier—particularly for beginners. Use AHAs in AM (or alternate PM nights) and retinol in PM on separate evenings. (Sources: INCIDecoder ingredient guides; American Academy of Dermatology retinoid guidelines)"
+  },
+  {
+    "ingredient_a": "retinol",
+    "ingredient_b": "bha",
+    "verdict": "use-at-different-times",
+    "reason": "Salicylic acid (BHA) is a keratolytic exfoliant effective at pH 3–4. Layering it with retinol creates excessive skin cell turnover and barrier disruption, increasing irritation, dryness, and peeling risk. Alternating use on different evenings is safer; some experienced users can layer them with buffering (applying retinol first and waiting 20–30 minutes). (Sources: Paula's Choice BHA guide; INCIDecoder salicylic acid entry)"
+  },
+  {
+    "ingredient_a": "benzoyl peroxide",
+    "ingredient_b": "retinol",
+    "verdict": "use-at-different-times",
+    "reason": "Benzoyl peroxide (BP) is a strong oxidising agent that degrades retinol on contact, rendering it inactive. The combination provides no added benefit and wastes both actives. BP in AM (acne treatment), retinol in PM is the standard protocol. If both are in the routine, they must be used in separate sessions. (Sources: Leyden JJ et al., J Am Acad Dermatol 2011; Paula's Choice ingredient notes)"
+  },
+  {
+    "ingredient_a": "benzoyl peroxide",
+    "ingredient_b": "vitamin c",
+    "verdict": "use-at-different-times",
+    "reason": "Benzoyl peroxide oxidises L-ascorbic acid (vitamin C), converting it to dehydroascorbic acid and eliminating its antioxidant efficacy. Both are best used separately: BP in PM for acne control, vitamin C serum in AM as antioxidant protection. (Sources: Pinnell SR, Dermatol Surg 2001; Paula's Choice note on oxidising agents)"
+  },
+  {
+    "ingredient_a": "aha",
+    "ingredient_b": "bha",
+    "verdict": "use-at-different-times",
+    "reason": "Using an AHA (e.g. glycolic or lactic acid) and a BHA (salicylic acid) at the same time stacks exfoliation and significantly raises the risk of over-exfoliation: compromised skin barrier, increased transepidermal water loss, redness, and sensitivity. For most users—especially beginners—alternate days or use one in AM and one in PM on separate days. Advanced users may combine them at low concentrations with close monitoring. (Sources: INCIDecoder exfoliant guides; Decker A & Graber EM, J Clin Aesthet Dermatol 2012)"
+  },
+  {
+    "ingredient_a": "niacinamide",
+    "ingredient_b": "vitamin c",
+    "verdict": "safe",
+    "reason": "The long-held belief that niacinamide and vitamin C form niacin (causing flushing) was based on in-vitro studies using high concentrations at elevated temperatures—conditions irrelevant to topical cosmetic use. Modern peer-reviewed evidence and cosmetic chemist consensus confirm the combination is safe and even complementary: niacinamide reduces irritation risk from vitamin C and both provide brightening benefits. Some formulators still recommend applying them sequentially (vitamin C first, wait 30 seconds, then niacinamide) purely as a precaution, not because of proven incompatibility. (Sources: Hakozaki T et al., Br J Dermatol 2002; INCIDecoder niacinamide myths article; Cosmetic Chemist community consensus)"
+  },
+  {
+    "ingredient_a": "retinol",
+    "ingredient_b": "vitamin e",
+    "verdict": "safe",
+    "reason": "Vitamin E (tocopherol) is an oil-soluble antioxidant that is compatible with retinol and may actually help stabilise retinol formulations by reducing oxidative degradation. Many commercial retinol products include vitamin E as a co-ingredient. No irritation synergy concerns. (Sources: Rangarajan M & Zatz JL, J Cosmet Sci 2003; INCIDecoder tocopherol entry)"
+  },
+  {
+    "ingredient_a": "niacinamide",
+    "ingredient_b": "retinol",
+    "verdict": "safe",
+    "reason": "Niacinamide and retinol are frequently paired in commercial products. Niacinamide may buffer some of retinol's irritation and redness, making the combination beneficial for beginners introducing retinol. There are no antagonistic interactions between these two actives. (Sources: Cosmetic Dermatology product formularies; INCIDecoder ingredient compatibility notes)"
+  },
+  {
+    "ingredient_a": "hyaluronic acid",
+    "ingredient_b": "retinol",
+    "verdict": "safe",
+    "reason": "Hyaluronic acid is a humectant with no active exfoliating or oxidising properties and is fully compatible with retinol. Applying a hyaluronic acid serum before or after retinol is a common strategy to mitigate dryness and maintain skin hydration during retinol use. (Sources: Draelos ZD, J Cosmet Dermatol 2021; general formulary practice)"
+  },
+  {
+    "ingredient_a": "aha",
+    "ingredient_b": "vitamin c",
+    "verdict": "use-at-different-times",
+    "reason": "AHAs (e.g. glycolic acid) and L-ascorbic acid vitamin C both operate at low pH and are both exfoliating or reactive actives that significantly increase skin sensitivity when combined. While some experienced users layer them, beginners risk barrier disruption and irritation. Vitamin C in AM, AHA in PM or on alternate days is the safer split. (Sources: INCIDecoder acids compatibility guide; cosmetic dermatologist practice guidelines)"
+  },
+  {
+    "ingredient_a": "benzoyl peroxide",
+    "ingredient_b": "azelaic acid",
+    "verdict": "use-at-different-times",
+    "reason": "Both are acne-targeting actives; combining them increases the risk of dryness and irritation without providing meaningfully superior efficacy over each used alone. Alternating AM/PM use (azelaic acid AM, BP PM, or vice versa) is common clinical practice. (Sources: Thiboutot D et al., J Am Acad Dermatol 2009; Paula's Choice azelaic acid guide)"
+  }
+]
