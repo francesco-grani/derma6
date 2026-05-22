@@ -163,11 +163,11 @@ class TestRoutineSequencerExceptionHandling:
             assert "retinol (serum)" in result
 
     def test_exception_in_initialization(self):
-        """Test exception during Retriever initialization."""
+        """Test exception during Retriever initialization (needs unknown ingredient to trigger)."""
         with patch("backend.tools.routine_sequencer.Retriever") as MockRetriever:
-            # Raise exception on instantiation
+            # Raise exception on instantiation — use unknown ingredient to trigger Retriever
             MockRetriever.side_effect = Exception("Init error")
-            result = routine_sequencer.invoke("retinol, moisturiser")
+            result = routine_sequencer.invoke("mystery_product, another_unknown")
             assert "Sorry, I could not sequence the routine" in result
 
     def test_exception_logs_error(self, caplog):
@@ -175,7 +175,7 @@ class TestRoutineSequencerExceptionHandling:
         with patch("backend.tools.routine_sequencer.Retriever") as MockRetriever:
             MockRetriever.side_effect = Exception("Test error")
             caplog.set_level(logging.ERROR)
-            routine_sequencer.invoke("retinol, moisturiser")
+            routine_sequencer.invoke("mystery_product, another_unknown")
             assert any(
                 record.levelname == "ERROR" and "routine_sequencer failed" in record.message
                 for record in caplog.records

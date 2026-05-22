@@ -123,31 +123,20 @@ def skin_type_advisor(input_str: str) -> str:
         if not username:
             return "Error: 'username' is required and must not be empty."
 
-        # --- Retrieve relevant docs ---
+        # --- Classify from keywords first (no retrieval needed) ---
+        skin_type = _classify_from_description(description)
+
+        # --- Retrieve docs for richer classification and characteristics ---
         retriever = Retriever()
         docs = retriever.query(f"skin type classification {description}")
 
-        # --- No docs above threshold: ask for more detail ---
-        if not docs:
-            logger.info(
-                "skin_type_advisor: no docs retrieved for user '%s'; requesting clarification.",
-                username,
-            )
-            return (
-                "I need a bit more detail to classify your skin type. "
-                "Could you describe: how your skin feels an hour after washing "
-                "(tight/comfortable/oily), whether you get shine, and where?"
-            )
-
-        # --- Classify ---
-        skin_type = _classify_from_description(description)
-        if skin_type is None:
+        if skin_type is None and docs:
             skin_type = _classify_from_docs(docs)
         if skin_type is None:
             skin_type = "oily"  # last-resort default
 
         # --- Extract characteristics ---
-        characteristic = _extract_characteristic(skin_type, docs)
+        characteristic = _extract_characteristic(skin_type, docs) if docs else _CHARACTERISTICS.get(skin_type, "")
 
         # --- Persist ---
         ProfileStore().update_skin_type(username, skin_type)

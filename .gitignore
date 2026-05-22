@@ -55,5 +55,4 @@ logs/
 
 # Streamlit
 .streamlit/secrets.toml
-.streamlit/
 *.streamlit.run

@@ -50,7 +50,11 @@ class ProfileStore:
             with Session(self._engine) as session:
                 user = session.query(User).filter_by(username=username).first()
                 if user is None:
-                    user = User(username=username, onboarding_complete=False)
+                    user = User(
+                        username=username,
+                        onboarding_complete=False,
+                        medical_flags="[]",
+                    )
                     session.add(user)
                     session.commit()
                     session.refresh(user)
@@ -178,6 +182,75 @@ class ProfileStore:
             raise
         except SQLAlchemyError as exc:
             logger.error("save_routine failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
+    def rename_routine(self, username: str, old_name: str, new_name: str) -> None:
+        """Rename a routine by its current name."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                routine = (
+                    session.query(Routine)
+                    .filter_by(user_id=user.id, name=old_name)
+                    .first()
+                )
+                if routine is None:
+                    raise ProfileStoreError(f"Routine '{old_name}' not found.")
+                routine.name = new_name
+                session.commit()
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("rename_routine failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
+    def delete_routine(self, username: str, name: str) -> None:
+        """Delete a routine and all its steps by name."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                routine = (
+                    session.query(Routine)
+                    .filter_by(user_id=user.id, name=name)
+                    .first()
+                )
+                if routine is None:
+                    raise ProfileStoreError(f"Routine '{name}' not found.")
+                session.delete(routine)
+                session.commit()
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("delete_routine failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
+    def get_all_routines(self, username: str) -> list[RoutineSchema]:
+        """Return all saved routines for a user, ordered by creation time."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                routines = (
+                    session.query(Routine)
+                    .filter_by(user_id=user.id)
+                    .order_by(Routine.created_at)
+                    .all()
+                )
+                result = []
+                for routine in routines:
+                    steps = [
+                        RoutineStepSchema(
+                            position=s.position,
+                            ingredient=s.ingredient,
+                            product_name=s.product_name,
+                        )
+                        for s in sorted(routine.steps, key=lambda s: s.position)
+                    ]
+                    result.append(RoutineSchema(name=routine.name, steps=steps))
+                return result
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("get_all_routines failed for '%s': %s", username, exc)
             raise ProfileStoreError(str(exc)) from exc
 
     def get_routine(self, username: str, name: str) -> Optional[RoutineSchema]:

@@ -7,8 +7,20 @@ contains 20 documents with correct metadata.
 
 from unittest.mock import patch
 
-import chromadb
 import pytest
+
+# Skip entire module if chromadb native extension is unavailable (macOS Intel)
+try:
+    import chromadb_rust_bindings  # noqa: F401 — triggers the native extension load
+    import chromadb
+    _chromadb_ok = True
+except Exception:
+    _chromadb_ok = False
+
+pytestmark = pytest.mark.skipif(
+    not _chromadb_ok,
+    reason="chromadb native extension unavailable on this platform",
+)
 
 # The number of .md files in knowledge_base/ (11 ingredients + 6 guides + 3 mens)
 EXPECTED_DOC_COUNT = 20
