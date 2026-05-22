@@ -71,7 +71,7 @@
 | Status | Task | Depends on |
 |--------|------|------------|
 | ✅ | **T17** · Input validation | T16 |
-| ⬜ | **T19** · Streamlit frontend (3 pages) | T16 |
+| ✅ | **T19** · Streamlit frontend (3 pages) | T16 |
 
 ---
 
@@ -79,9 +79,9 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T18** · Integration tests | T16 + T17 |
-| ⬜ | **TA2** · Export download button | TA1 + T19 |
-| ⬜ | **TB2** · RAGAs eval script | T16 + TB1 |
+| ✅ | **T18** · Integration tests | T16 + T17 |
+| 🔄 | **TA2** · Export download button | TA1 + T19 |
+| ✅ | **TB2** · RAGAs eval script | T16 + TB1 |
 
 ---
 
@@ -89,7 +89,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⬜ | **T20** · Medical Flag + domain e2e | T18 + T19 |
+| ✅ | **T20** · Medical Flag + domain e2e | T18 + T19 |
 
 ---
 
@@ -97,7 +97,7 @@
 
 | Status | Task | Depends on |
 |--------|------|------------|
-| ⏸️ | **KB-REFINE** · Knowledge Base refinement _(user-led)_ | T20 |
+| ✅ | **KB-REFINE** · Knowledge Base refinement _(user-led)_ | T20 |
 
 ---
 
