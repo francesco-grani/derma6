@@ -46,7 +46,7 @@ CLASSIFICATION_MAP = {
 }
 
 
-def _classify_ingredient(ingredient: str, retriever: Retriever) -> str | None:
+def _classify_ingredient(ingredient: str, retriever: "Retriever") -> str | None:
     """Classify a single ingredient using the map, falling back to retriever if needed.
 
     Args:
@@ -56,11 +56,11 @@ def _classify_ingredient(ingredient: str, retriever: Retriever) -> str | None:
     Returns:
         The step category (e.g., "serum"), or None if unclassifiable.
     """
-    # Check hardcoded map first
+    # Check hardcoded map first — no Retriever needed for known items
     if ingredient in CLASSIFICATION_MAP:
         return CLASSIFICATION_MAP[ingredient]
 
-    # Try retriever fallback
+    # Try retriever fallback for unknown items
     try:
         docs = retriever.query("routine sequencing rules application order")
 
@@ -103,17 +103,25 @@ def routine_sequencer(ingredients: str) -> str:
         if not items:
             return "Error: No ingredients provided."
 
-        # Initialize retriever
-        retriever = Retriever()
+        # Retriever is created at most once, only if an unknown ingredient is found
+        _retriever_cache: list = []
+
+        def _get_retriever() -> Retriever:
+            if not _retriever_cache:
+                _retriever_cache.append(Retriever())
+            return _retriever_cache[0]
 
         # Classify each ingredient
         classified = {}  # step_category -> list of ingredients
         unclassifiable = []
 
         for ingredient in items:
-            category = _classify_ingredient(ingredient, retriever)
+            if ingredient in CLASSIFICATION_MAP:
+                category: str | None = CLASSIFICATION_MAP[ingredient]
+            else:
+                category = _classify_ingredient(ingredient, _get_retriever())
 
-            if category:
+            if category is not None:
                 if category not in classified:
                     classified[category] = []
                 classified[category].append(ingredient)

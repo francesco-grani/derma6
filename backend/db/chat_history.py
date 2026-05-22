@@ -24,7 +24,7 @@ def get_history(username: str) -> BaseChatMessageHistory:
     """
     return SQLChatMessageHistory(
         session_id=username,
-        connection_string=settings.sqlite_url,
+        connection=settings.sqlite_url,
     )
 
 

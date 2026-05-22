@@ -72,6 +72,16 @@ class Settings(BaseSettings):
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
     sentry_traces_sample_rate: float = Field(default=0.1, alias="SENTRY_TRACES_SAMPLE_RATE")
 
+    # LangSmith tracing (optional — enabled when LANGCHAIN_API_KEY is set)
+    langchain_api_key: str = Field(default="", alias="LANGCHAIN_API_KEY")
+    langchain_tracing_v2: str = Field(default="false", alias="LANGCHAIN_TRACING_V2")
+    langchain_project: str = Field(
+        default="skincare-routine-builder", alias="LANGCHAIN_PROJECT"
+    )
+    langchain_endpoint: str = Field(
+        default="https://api.smith.langchain.com", alias="LANGCHAIN_ENDPOINT"
+    )
+
     @property
     def sqlite_url(self) -> str:
         """SQLAlchemy-compatible connection string derived from sqlite_db_path."""
