@@ -33,5 +33,10 @@ class OpenRouterEmbeddings(Embeddings):
         return [item["embedding"] for item in data]
 
     def embed_query(self, text: str) -> list[float]:
-        """Embed a single query string."""
-        return self.embed_documents([text])[0]
+        """Embed a single query string with instruction prefix for qwen3-embedding-8b.
+
+        qwen3-embedding-8b is instruction-tuned: queries need the prefix to land
+        in the correct subspace; documents are indexed as plain text.
+        """
+        prefixed = f"Instruct: Retrieve relevant skincare knowledge base articles.\nQuery: {text}"
+        return self.embed_documents([prefixed])[0]
