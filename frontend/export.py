@@ -390,7 +390,7 @@ def generate_export_html(username: str) -> str:
     {routines_section}
     {chat_section}
     <div class="footer">
-      Skincare Routine Builder · AI-generated plan · Not medical advice
+      Derma6 · AI-generated plan · Not medical advice
     </div>
   </div>
 </body>

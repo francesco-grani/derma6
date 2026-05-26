@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "skincare-routine-builder"
+name = "derma6"
 version = "0.1.0"
 description = "Conversational RAG chatbot for male skincare beginners"
 readme = "README.md"
@@ -38,8 +38,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/fgrani/skincare-routine-builder"
-Repository = "https://github.com/fgrani/skincare-routine-builder"
+Homepage = "https://github.com/francesco-grani/derma6"
+Repository = "https://github.com/francesco-grani/derma6"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "frontend"]

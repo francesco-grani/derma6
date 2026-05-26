@@ -1,4 +1,4 @@
-"""BackendService: central integration layer for the Skincare Routine Builder RAG chatbot.
+"""BackendService: central integration layer for the Derma6 RAG chatbot.
 
 Wires together rate limiting, profile management, system-prompt construction,
 chat history, and the LangChain/LangGraph agent with all five domain tools.

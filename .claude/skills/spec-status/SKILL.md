@@ -1,6 +1,6 @@
 ---
 name: spec-status
-description: Summarizes the current spec workflow phase for the Skincare Routine Builder project — what is approved, what is next, and where the output files are.
+description: Summarizes the current spec workflow phase for the Derma6 project — what is approved, what is next, and where the output files are.
 ---
 
 Review the current state of the spec workflow and report:
