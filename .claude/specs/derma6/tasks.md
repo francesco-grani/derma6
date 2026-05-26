@@ -1,4 +1,4 @@
-# Implementation Plan — Skincare Routine Builder
+# Implementation Plan — Derma6
 
 ## Overview
 

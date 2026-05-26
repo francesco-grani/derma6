@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD036 MD055 MD056 MD058 MD060 -->
-# Skincare Routine Builder — Implementation Backlog
+# Derma6 — Implementation Backlog
 
 > Status: `⬜ pending` · `🔄 in progress` · `✅ done` · `❌ blocked`
 > Rule: a task is only ✅ when its tests pass.
@@ -102,6 +102,15 @@
 
 ---
 
+## Wave 11 — Security hardening
+
+| Status | Task | Depends on |
+|--------|------|------------|
+| ✅ | **TS1** · Input length cap on chat messages (500 chars) | T16 |
+| ✅ | **TS2** · Pattern-based injection block on chat messages | T16 |
+
+---
+
 ## Deferred
 
 | Status | Task | Depends on |
@@ -110,4 +119,4 @@
 
 ---
 
-_26 automated tasks · Updated in real time as tasks complete_
+_28 automated tasks · Updated in real time as tasks complete_

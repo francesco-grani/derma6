@@ -1,4 +1,4 @@
-"""Logging and error monitoring configuration for Skincare Routine Builder.
+"""Logging and error monitoring configuration for Derma6.
 
 Provides setup_logging() for standard logging with rotating file handlers,
 and init_sentry() for optional Sentry error monitoring with idempotency.

@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for Skincare Routine Builder.
+"""SQLAlchemy ORM models for Derma6.
 
 Uses SQLAlchemy 2.x declarative syntax with Mapped type annotations
 and mapped_column for column definitions.

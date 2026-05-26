@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Turing College AI Engineering Sprint 2. Goal: build a domain-specialized RAG chatbot in 2 weeks.
 
-**Selected project:** Skincare Routine Builder — conversational assistant for diagnosing and optimizing skincare routines, targeting male skincare beginners.
+**Selected project:** Derma6 — conversational assistant for diagnosing and optimizing skincare routines, targeting male skincare beginners.
 
 ## Tech Stack
 

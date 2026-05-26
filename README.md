@@ -1,6 +1,8 @@
-# Skincare Routine Builder
+# Derma6
 
 Conversational RAG chatbot for male skincare beginners. Diagnoses skin type, builds routines, checks ingredient conflicts, and schedules active introductions — all through a natural chat interface.
+
+**Live demo:** [derma6.streamlit.app](https://derma6.streamlit.app/)
 
 ## Tech Stack
 
