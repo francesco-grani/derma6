@@ -2,7 +2,7 @@
 
 ## Introduction
 
-The Skincare Routine Builder is a conversational RAG chatbot designed to help male skincare beginners diagnose and optimise their skincare routines. The system provides personalised advice through a chat interface backed by a curated knowledge base of 15–20 domain documents. It exposes five specialised domain Tools (Conflict Checker, Routine Sequencer, Skin Type Advisor, Introduction Scheduler, SPF Recommender), persists user profiles and chat history in SQLite, and stores vector embeddings in a persistent local ChromaDB instance. The frontend is built with Streamlit and communicates with a fully decoupled Python backend. All LLM calls are routed through OpenRouter using the openai/gpt-4o-mini model via a LangChain-compatible interface.
+Derma6 is a conversational RAG chatbot designed to help male skincare beginners diagnose and optimise their skincare routines. The system provides personalised advice through a chat interface backed by a curated knowledge base of 15–20 domain documents. It exposes five specialised domain Tools (Conflict Checker, Routine Sequencer, Skin Type Advisor, Introduction Scheduler, SPF Recommender), persists user profiles and chat history in SQLite, and stores vector embeddings in a persistent local ChromaDB instance. The frontend is built with Streamlit and communicates with a fully decoupled Python backend. All LLM calls are routed through OpenRouter using the openai/gpt-4o-mini model via a LangChain-compatible interface.
 
 ---
 

@@ -1,4 +1,4 @@
-"""Chat page — main conversational interface for the Skincare Routine Builder.
+"""Chat page — main conversational interface for Derma6.
 
 Features:
 - Empty state with suggestion pills
@@ -37,24 +37,22 @@ username = st.session_state.get("username", "guest")
 # Empty state
 # --------------------------------------------------------------------------
 if not st.session_state["messages"] and "_pending_prompt" not in st.session_state:
-    with st.container(horizontal_alignment="center"):
-        st.space("large")
-        st.html('<div style="text-align:center;font-size:48px;">💬</div>')
-        st.markdown("## How can I help you today?")
-        st.caption(
-            "Ask me about specific ingredients, building a personalised routine, "
-            "or understanding skincare concepts."
-        )
-        st.space("small")
-        selected = st.pills(
-            "Suggestions",
-            SUGGESTIONS,
-            label_visibility="collapsed",
-            selection_mode="single",
-        )
-        if selected:
-            st.session_state["_pending_prompt"] = selected
-            st.rerun()
+    st.space("large")
+    st.markdown("## How can I help you today?")
+    st.caption(
+        "Ask me about specific ingredients, building a personalised routine, "
+        "or understanding skincare concepts."
+    )
+    st.space("small")
+    selected = st.pills(
+        "Suggestions",
+        SUGGESTIONS,
+        label_visibility="collapsed",
+        selection_mode="single",
+    )
+    if selected:
+        st.session_state["_pending_prompt"] = selected
+        st.rerun()
 
 # --------------------------------------------------------------------------
 # Render existing chat history

@@ -1,4 +1,4 @@
-# Skincare Routine Builder
+# Derma6
 
 A conversational RAG assistant that helps male skincare beginners diagnose and optimise their skincare routine.
 

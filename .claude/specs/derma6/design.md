@@ -1,8 +1,8 @@
-# Design Document — Skincare Routine Builder
+# Design Document — Derma6
 
 ## Overview
 
-The Skincare Routine Builder is a conversational RAG assistant for male skincare beginners. It is structured as a monorepo with a pure Python backend and a Streamlit thin-skin frontend. The backend owns all business logic — LangChain agent orchestration, five domain Tools, RAG retrieval via ChromaDB, and User Profile persistence in SQLite. The frontend is a rendering layer only: it calls the backend through a single internal Python API and has no knowledge of LangChain, ChromaDB, or SQLAlchemy.
+Derma6 is a conversational RAG assistant for male skincare beginners. It is structured as a monorepo with a pure Python backend and a Streamlit thin-skin frontend. The backend owns all business logic — LangChain agent orchestration, five domain Tools, RAG retrieval via ChromaDB, and User Profile persistence in SQLite. The frontend is a rendering layer only: it calls the backend through a single internal Python API and has no knowledge of LangChain, ChromaDB, or SQLAlchemy.
 
 **Design goals:**
 
@@ -16,7 +16,7 @@ The Skincare Routine Builder is a conversational RAG assistant for male skincare
 ## Proposed File Structure
 
 ```
-skincare-routine-builder/
+derma6/
 ├── backend/
 │   ├── __init__.py
 │   ├── agent.py                    # LangChain agent, system-prompt builder, run() entry point

@@ -1,4 +1,4 @@
-"""Configuration management for Skincare Routine Builder.
+"""Configuration management for Derma6.
 
 Uses pydantic-settings for environment variable management with validation.
 Fails fast at import time if required variables are missing.
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     langchain_api_key: str = Field(default="", alias="LANGCHAIN_API_KEY")
     langchain_tracing_v2: str = Field(default="false", alias="LANGCHAIN_TRACING_V2")
     langchain_project: str = Field(
-        default="skincare-routine-builder", alias="LANGCHAIN_PROJECT"
+        default="derma6", alias="LANGCHAIN_PROJECT"
     )
     langchain_endpoint: str = Field(
         default="https://api.smith.langchain.com", alias="LANGCHAIN_ENDPOINT"

@@ -1,4 +1,4 @@
-"""RAGAs evaluation script for the Skincare Routine Builder RAG pipeline.
+"""RAGAs evaluation script for the Derma6 RAG pipeline.
 
 Usage:
     python scripts/eval_rag.py
@@ -162,7 +162,7 @@ def compute_ragas_metrics(
 
 
 def main() -> None:
-    print("=== RAGAs Evaluation — Skincare Routine Builder ===\n")
+    print("=== RAGAs Evaluation — Derma6 ===\n")
 
     dataset = load_eval_dataset()
     print(f"Loaded {len(dataset)} eval examples from {EVAL_DATASET_PATH}\n")

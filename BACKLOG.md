@@ -1,5 +1,5 @@
 <!-- markdownlint-disable MD036 MD055 MD056 MD058 MD060 -->
-# Skincare Routine Builder — Implementation Backlog
+# Derma6 — Implementation Backlog
 
 > Status: `⬜ pending` · `🔄 in progress` · `✅ done` · `❌ blocked`
 > Rule: a task is only ✅ when its tests pass.

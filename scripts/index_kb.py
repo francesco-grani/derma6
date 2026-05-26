@@ -1,4 +1,4 @@
-"""Indexing script for the Skincare Routine Builder knowledge base.
+"""Indexing script for the Derma6 knowledge base.
 
 Loads all .md files from knowledge_base/ recursively, splits them into
 overlapping chunks, embeds each chunk via OpenRouterEmbeddings, and upserts
