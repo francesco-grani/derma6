@@ -1,5 +1,6 @@
 """kb_search tool — general-purpose retrieval from the skincare knowledge base."""
 
+import json
 import logging
 
 from langchain_core.tools import tool
@@ -39,6 +40,17 @@ def kb_search(query: str) -> str:
         result = "\n\n---\n\n".join(parts)
         if sources:
             result += f"\n\nSources: {', '.join(sources)}"
+
+        # Structured metadata for RAG visualisation (parsed by the agent, not for the LLM)
+        rag_meta = [
+            {
+                "source": d.source_name,
+                "score": round(d.score, 3),
+                "snippet": d.content.strip()[:150],
+            }
+            for d in docs
+        ]
+        result += f"\n\n__RAG_CONTEXT_JSON__: {json.dumps(rag_meta)}"
 
         logger.info("kb_search: returned %d docs for query=%r", len(docs), query[:60])
         return result

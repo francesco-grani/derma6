@@ -55,6 +55,26 @@ if not st.session_state["messages"] and "_pending_prompt" not in st.session_stat
         st.rerun()
 
 # --------------------------------------------------------------------------
+# RAG visualisation helper
+# --------------------------------------------------------------------------
+def _render_rag_expander(rag_context: list) -> None:
+    with st.expander("🔍 RAG Retrieval"):
+        for item in rag_context:
+            source = item.get("source", "Unknown")
+            score = item.get("score", 0.0)
+            snippet = item.get("snippet", "")
+            col_name, col_score = st.columns([3, 1])
+            with col_name:
+                st.markdown(f"**{source}**")
+            with col_score:
+                st.markdown(f"`{score:.0%}`")
+            st.progress(min(max(score, 0.0), 1.0))
+            if snippet:
+                st.caption(snippet + ("…" if len(item.get("snippet", "")) >= 150 else ""))
+            st.divider()
+
+
+# --------------------------------------------------------------------------
 # Render existing chat history
 # --------------------------------------------------------------------------
 for msg in st.session_state["messages"]:
@@ -64,6 +84,8 @@ for msg in st.session_state["messages"]:
     else:
         with st.chat_message("assistant"):
             st.write(msg.get("content", ""))
+            if msg.get("rag_context"):
+                _render_rag_expander(msg["rag_context"])
             if msg.get("citations"):
                 with st.expander("📚 Knowledge Base Sources"):
                     for c in msg["citations"]:
@@ -93,8 +115,11 @@ def _call_backend(prompt: str) -> None:
             return
 
         citations = result.get("citations", [])
+        rag_context = result.get("rag_context", [])
         tool_results = result.get("tool_results", [])
 
+        if rag_context:
+            _render_rag_expander(rag_context)
         if citations:
             with st.expander("📚 Knowledge Base Sources"):
                 for c in citations:
@@ -108,6 +133,7 @@ def _call_backend(prompt: str) -> None:
             "role": "assistant",
             "content": answer or result.get("message", ""),
             "citations": citations,
+            "rag_context": rag_context,
             "tool_results": tool_results,
         })
 

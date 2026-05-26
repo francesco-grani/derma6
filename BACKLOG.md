@@ -123,7 +123,7 @@
 
 | Status | Task | Notes |
 |--------|------|-------|
-| ⬜ | **OPT-1** · RAG visualisation — show retrieved docs with similarity scores and content snippets in chat UI | Easy optional (assignment list) |
+| ✅ | **OPT-1** · RAG visualisation — show retrieved docs with similarity scores and content snippets in chat UI | Easy optional (assignment list) |
 
 ---
 

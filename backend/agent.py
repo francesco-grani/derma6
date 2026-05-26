@@ -451,6 +451,39 @@ def _extract_tool_results_from_messages(messages: list) -> list:
     return results
 
 
+def _extract_rag_context_from_messages(messages: list) -> list[dict]:
+    """Extract RAG retrieval metadata from kb_search ToolMessages.
+
+    Parses the __RAG_CONTEXT_JSON__ footer appended by kb_search and returns
+    a deduplicated list of {source, score, snippet} dicts ordered by score.
+    """
+    import json
+
+    seen: set[str] = set()
+    items: list[dict] = []
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        marker = "__RAG_CONTEXT_JSON__: "
+        idx = content.find(marker)
+        if idx == -1:
+            continue
+        try:
+            raw = json.loads(content[idx + len(marker):].strip())
+            for entry in raw:
+                key = entry.get("source", "")
+                if key and key not in seen:
+                    seen.add(key)
+                    items.append(entry)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    items.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return items
+
+
 def _extract_citations(result: dict) -> list[str]:
     """Extract deduplicated citations from an agent result dict.
 
@@ -696,17 +729,20 @@ class BackendService:
             answer = "".join(accumulated_text)
 
             citations = _extract_citations_from_messages(accumulated_messages)
+            rag_context = _extract_rag_context_from_messages(accumulated_messages)
 
             chat_history.add_user_message(request.message)
             chat_history.add_ai_message(answer)
 
             logger.info(
-                "build_stream complete for %s: citations=%d", username, len(citations)
+                "build_stream complete for %s: citations=%d rag_docs=%d",
+                username, len(citations), len(rag_context),
             )
 
             result.update({
                 "message": answer,
                 "citations": citations,
+                "rag_context": rag_context,
                 "tool_results": [],
                 "error": False,
             })
