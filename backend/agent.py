@@ -278,7 +278,7 @@ def build_system_prompt(profile: UserProfile) -> str:
             "Collect the following, one question at a time, in this order:\n"
             "1. Skin description → call skin_type_advisor_tool immediately with their answer.\n"
             "2. Skin concerns (e.g. acne, dryness, dark spots) → call update_skin_concerns_tool.\n"
-            "3. Shaving routine (yes/no) → call update_shaving_routine_tool.\n"
+            "3. Shaving (yes/no) → ask exactly 'Do you actively shave your beard or body?' → call update_shaving_routine_tool.\n"
             "4. Medical skin conditions: ask 'Do you have any diagnosed skin conditions such as "
             "eczema, rosacea, or psoriasis?' → if yes, call add_medical_flag_tool once per "
             "condition mentioned; if no, skip the tool and proceed.\n"
