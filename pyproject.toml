@@ -45,10 +45,8 @@ Repository = "https://github.com/fgrani/skincare-routine-builder"
 packages = ["backend", "frontend"]
 
 [tool.uv]
-# onnxruntime 1.24+ dropped macOS Intel (x86_64) wheels; pin to last supported version
-# chromadb 1.x introduced rust bindings with no macOS Intel wheel; pin to last 0.x
-# Packages with broken native extensions on macOS Intel (x86_64)
-override-dependencies = ["onnxruntime<=1.23.2", "chromadb<1.0", "pandas<3.0"]
+# chromadb 1.x introduced rust bindings; pin to last 0.x for compatibility
+override-dependencies = ["chromadb<1.0", "pandas<3.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
