@@ -61,9 +61,12 @@ def _tool_instructions(username: str) -> str:
         "Input: \"ingredient_a, ingredient_b\"\n"
         "- routine_sequencer: Order ingredients into the correct routine sequence. "
         "Input: comma-separated ingredient names\n"
-        "- save_routine_tool: ALWAYS call this after routine_sequencer to save the routine. "
-        "name: a descriptive name based on context, e.g. 'Morning Routine', 'Evening Routine', "
-        "'Basic Routine'. steps: comma-separated steps in application order.\n"
+        "- save_routine_tool: Save a routine to the user's profile. "
+        "NEVER call automatically — always ask first: 'Would you like me to save this routine to your profile?' "
+        "and only call if the user confirms. "
+        "name: if updating an existing routine use its EXACT existing name to replace it; "
+        "otherwise use a descriptive name, e.g. 'Morning Routine', 'Evening Routine', 'Basic Routine'. "
+        "steps: comma-separated steps in application order.\n"
         "- skin_type_advisor_tool: Classify the user's skin type and save it to their profile. "
         "MUST be called as soon as the user describes their skin. "
         "Input: free-text description of the user's skin, "
@@ -288,10 +291,16 @@ def build_system_prompt(profile: UserProfile) -> str:
     else:
         safe_skin_type = _sanitise(profile.skin_type) if profile.skin_type else profile.skin_type
         safe_concerns = [_sanitise(c) for c in profile.skin_concerns]
+        try:
+            existing_routines = [r.name for r in ProfileStore().get_all_routines(profile.username)]
+        except Exception:
+            existing_routines = []
+        routines_str = ", ".join(f"'{_sanitise(n)}'" for n in existing_routines) if existing_routines else "none"
         sections.append(
             f"USER PROFILE: skin_type={safe_skin_type}, "
             f"concerns={safe_concerns}, "
-            f"shaving={profile.has_shaving_routine}"
+            f"shaving={profile.has_shaving_routine}, "
+            f"saved_routines=[{routines_str}]"
         )
 
     # --- Medical flag rule (only when flags are present) ---
