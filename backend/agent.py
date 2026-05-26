@@ -37,6 +37,19 @@ _CITATION_RULE = (
     "document name at the end of your response."
 )
 
+_GROUNDING_RULE = (
+    "GROUNDING: Prefer to answer from information retrieved by kb_search. "
+    "If the retrieved context does not fully cover the question, you may supplement "
+    "with your general skincare knowledge — but clearly distinguish retrieved facts "
+    "from general guidance when both appear in the same answer."
+)
+
+_CONCISENESS_RULE = (
+    "STYLE: Answer the specific question asked. Be direct and concise. "
+    "Do not add unsolicited skincare tips or general education beyond what directly "
+    "addresses the question."
+)
+
 def _tool_instructions(username: str) -> str:
     """Return tool instructions. Username is pre-bound — tools need no username argument."""
     return (
@@ -263,7 +276,9 @@ def build_system_prompt(profile: UserProfile) -> str:
             f'please consult a qualified dermatologist before making changes to your routine."'
         )
 
-    # --- Citation rule ---
+    # --- Grounding, conciseness, and citation rules ---
+    sections.append(_GROUNDING_RULE)
+    sections.append(_CONCISENESS_RULE)
     sections.append(_CITATION_RULE)
 
     # --- Tool instructions (with username baked in) ---
@@ -519,6 +534,7 @@ class BackendService:
                 model=settings.llm_model,
                 openai_api_key=settings.openrouter_api_key,
                 openai_api_base=settings.openrouter_base_url,
+                temperature=0.3,
             )
             tools = _make_tools(username)
             agent = create_agent(
@@ -604,6 +620,7 @@ class BackendService:
                 model=settings.llm_model,
                 openai_api_key=settings.openrouter_api_key,
                 openai_api_base=settings.openrouter_base_url,
+                temperature=0.3,
             )
             tools = _make_tools(username)
             agent = create_agent(model=llm, tools=tools, system_prompt=system_prompt)
