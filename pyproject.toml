@@ -17,7 +17,7 @@ dependencies = [
     "langchain>=1.3.1",
     "langchain-community>=0.4.1",
     "langchain-openai>=1.2.1",
-    "chromadb>=0.4.0,<1.0",
+    "chromadb>=1.0",
     "sqlalchemy>=2.0.49",
     "pydantic-settings>=2.14.1",
     "streamlit>=1.57.0",
@@ -45,8 +45,7 @@ Repository = "https://github.com/fgrani/skincare-routine-builder"
 packages = ["backend", "frontend"]
 
 [tool.uv]
-# chromadb 1.x introduced rust bindings; pin to last 0.x for compatibility
-override-dependencies = ["chromadb<1.0", "pandas<3.0"]
+override-dependencies = ["pandas<3.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
