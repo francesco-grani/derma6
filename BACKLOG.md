@@ -80,7 +80,7 @@
 | Status | Task | Depends on |
 |--------|------|------------|
 | ✅ | **T18** · Integration tests | T16 + T17 |
-| 🔄 | **TA2** · Export download button | TA1 + T19 |
+| ✅ | **TA2** · Export download button | TA1 + T19 |
 | ✅ | **TB2** · RAGAs eval script | T16 + TB1 |
 
 ---
@@ -93,6 +93,15 @@
 
 ---
 
+## Wave 10 — RAG quality
+
+| Status | Task | Depends on |
+|--------|------|------------|
+| ✅ | **TB3** · RAG generation quality: soft grounding rule, temperature, conciseness | TB2 |
+| ✅ | **TB4** · KB document chunking for precision retrieval | T8 + TB3 |
+
+---
+
 ## Deferred
 
 | Status | Task | Depends on |
@@ -101,4 +110,4 @@
 
 ---
 
-_24 automated tasks · Updated in real time as tasks complete_
+_26 automated tasks · Updated in real time as tasks complete_
