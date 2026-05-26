@@ -11,13 +11,18 @@ Features:
 
 import os
 import sys
+from pathlib import Path
 
+from PIL import Image as _Image
 import streamlit as st
 
 sys.path.insert(0, os.path.abspath("."))
 
 from backend.agent import BackendService
 from backend.schemas import BackendRequest
+
+_AVATAR_ASSISTANT = _Image.open(Path(__file__).parent.parent / "assets" / "Derma6_favicon.png")
+_AVATAR_USER = ":material/account_circle:"
 
 SUGGESTIONS = [
     "Analyze my ingredients",
@@ -63,14 +68,18 @@ def _render_rag_expander(rag_context: list) -> None:
             source = item.get("source", "Unknown")
             score = item.get("score", 0.0)
             snippet = item.get("snippet", "")
+            # Strip markdown heading lines so they don't render as large headers
+            clean_snippet = " ".join(
+                line for line in snippet.splitlines() if not line.startswith("#")
+            ).strip()
             col_name, col_score = st.columns([3, 1])
             with col_name:
                 st.markdown(f"**{source}**")
             with col_score:
-                st.markdown(f"`{score:.0%}`")
+                st.caption(f"Similarity: {score:.0%}")
             st.progress(min(max(score, 0.0), 1.0))
-            if snippet:
-                st.caption(snippet + ("…" if len(item.get("snippet", "")) >= 150 else ""))
+            if clean_snippet:
+                st.caption(clean_snippet + ("…" if len(item.get("snippet", "")) >= 150 else ""))
             st.divider()
 
 
@@ -79,10 +88,10 @@ def _render_rag_expander(rag_context: list) -> None:
 # --------------------------------------------------------------------------
 for msg in st.session_state["messages"]:
     if msg["role"] == "user":
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=_AVATAR_USER):
             st.write(msg["content"])
     else:
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=_AVATAR_ASSISTANT):
             st.write(msg.get("content", ""))
             if msg.get("rag_context"):
                 _render_rag_expander(msg["rag_context"])
@@ -101,10 +110,10 @@ for msg in st.session_state["messages"]:
 def _call_backend(prompt: str) -> None:
     """Render user bubble, stream BackendService response, render citations."""
     st.session_state["messages"].append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=_AVATAR_USER):
         st.write(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=_AVATAR_ASSISTANT):
         result: dict = {}
         try:
             svc = BackendService()
