@@ -12,6 +12,19 @@ import logging
 import os
 import sys
 
+# chromadb imports opentelemetry's gRPC exporter at startup; that exporter contains
+# old-style protobuf descriptors incompatible with protobuf 5+ (used by streamlit).
+# Pre-populate sys.modules with mocks so the import short-circuits before any proto
+# code runs.  No telemetry is sent — that's fine for Streamlit Cloud deployment.
+from unittest.mock import MagicMock as _Mock
+for _m in [
+    "opentelemetry.exporter.otlp.proto.grpc",
+    "opentelemetry.exporter.otlp.proto.grpc.exporter",
+    "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+]:
+    sys.modules.setdefault(_m, _Mock())
+del _m, _Mock
+
 # Ensure project root is on sys.path so frontend.* and backend.* are importable
 # regardless of which directory Streamlit adds when executing this file.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
