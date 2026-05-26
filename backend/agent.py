@@ -227,6 +227,42 @@ def _sanitise(text: str) -> str:
     return text.strip()
 
 
+_MAX_MESSAGE_LENGTH = 500
+
+_INJECTION_PATTERNS = [
+    "ignore previous instructions",
+    "ignore all instructions",
+    "you are now",
+    "disregard",
+    "new persona",
+    "act as",
+    "jailbreak",
+    "dan",
+]
+
+
+def _check_message(message: str) -> BackendResponse | None:
+    """Return a blocking BackendResponse if the message fails a pre-LLM guard, else None.
+
+    Guards applied (in order):
+    1. Length cap — rejects messages over _MAX_MESSAGE_LENGTH characters.
+    2. Injection pattern block — rejects messages matching known injection phrases.
+    """
+    if len(message) > _MAX_MESSAGE_LENGTH:
+        return BackendResponse(
+            message=f"Your message is too long. Please keep it under {_MAX_MESSAGE_LENGTH} characters.",
+            error=False,
+        )
+    lowered = message.lower()
+    for pattern in _INJECTION_PATTERNS:
+        if pattern in lowered:
+            return BackendResponse(
+                message="I can only help with skincare questions.",
+                error=False,
+            )
+    return None
+
+
 def build_system_prompt(profile: UserProfile) -> str:
     """Build a system prompt string tailored to the user's profile."""
     username = _sanitise(profile.username) if profile.username else "unknown"
@@ -511,6 +547,12 @@ class BackendService:
                 error=False,
             )
         logger.info("Rate limit check: passed for %s", username)
+
+        # --- Message guard (length cap + injection patterns) ---
+        guard_response = _check_message(request.message)
+        if guard_response is not None:
+            logger.info("Message guard blocked request for %s", username)
+            return guard_response
 
         try:
             # --- Load profile ---
