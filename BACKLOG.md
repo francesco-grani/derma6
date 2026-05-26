@@ -119,4 +119,12 @@
 
 ---
 
+## Optional features (post-sprint)
+
+| Status | Task | Notes |
+|--------|------|-------|
+| ⬜ | **OPT-1** · RAG visualisation — show retrieved docs with similarity scores and content snippets in chat UI | Easy optional (assignment list) |
+
+---
+
 _28 automated tasks · Updated in real time as tasks complete_
