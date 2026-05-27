@@ -161,25 +161,40 @@ st.sidebar.divider()
 # 5. Profile row (avatar + username, no Beginner Track)
 render_sidebar_header(username)
 
-# 6. Download Plan button
+# 6. Download Plan button → dialog offering HTML or PDF
 from backend.db.chat_history import serialise_history
-from frontend.export import generate_export_html
+from frontend.export import generate_export_html, generate_export_pdf
 
 history_data = serialise_history(username)
+
+
+@st.dialog("Download Skincare Plan")
+def _download_dialog() -> None:
+    fmt = st.radio("Format", ["HTML", "PDF"], horizontal=True)
+    if fmt == "HTML":
+        st.download_button(
+            "⬇ Download HTML",
+            data=generate_export_html(username),
+            file_name=f"{username}_skincare_plan.html",
+            mime="text/html",
+        )
+    else:
+        try:
+            pdf_bytes = generate_export_pdf(username)
+            st.download_button(
+                "⬇ Download PDF",
+                data=pdf_bytes,
+                file_name=f"{username}_skincare_plan.pdf",
+                mime="application/pdf",
+            )
+        except RuntimeError as e:
+            st.error(str(e))
+
+
 if history_data:
-    st.sidebar.download_button(
-        "⬇ Download Plan",
-        data=generate_export_html(username),
-        file_name=f"{username}_skincare_plan.html",
-        mime="text/html",
-    )
+    if st.sidebar.button("⬇ Download Plan"):
+        _download_dialog()
 else:
-    st.sidebar.download_button(
-        "⬇ Download Plan",
-        data="",
-        file_name=f"{username}_skincare_plan.html",
-        mime="text/html",
-        disabled=True,
-    )
+    st.sidebar.button("⬇ Download Plan", disabled=True)
 
 page.run()

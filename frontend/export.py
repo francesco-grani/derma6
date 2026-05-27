@@ -395,3 +395,14 @@ def generate_export_html(username: str) -> str:
   </div>
 </body>
 </html>"""
+
+
+def generate_export_pdf(username: str) -> bytes:
+    try:
+        import weasyprint
+    except ImportError as exc:
+        raise RuntimeError(
+            "PDF export requires WeasyPrint. Run: pip install weasyprint"
+        ) from exc
+    html_content = generate_export_html(username)
+    return weasyprint.HTML(string=html_content).write_pdf()
