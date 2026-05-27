@@ -72,18 +72,30 @@
 User prompt
     │
     ▼
-Streamlit frontend  ──►  Chat / Routine Viewer / Conflict Checker
+Streamlit frontend  ──►  Chat / Routine Viewer / My Profile
     │
     ▼
-LangChain RAG chain
-    ├── Retriever  ──►  ChromaDB (20 KB documents, chunked at 1000 chars / 150 overlap)
-    └── LLM        ──►  OpenRouter (gpt-4o-mini)
+BackendService  (pure Python, fully decoupled from Streamlit)
     │
     ▼
-SQLite  ──►  user profile · conversation history · generated routines
+LangGraph ReAct agent
+    ├── Retriever  ──►  ChromaDB (1000-char chunks, 150-char overlap)
+    └── 10 Tools   ──►  conflict table · profile store · KB search
+    │
+    ▼
+SQLite  ──►  user profile · conversation history · routines
 ```
 
-KB documents are split with `RecursiveCharacterTextSplitter` (1000-char chunks, 150-char overlap) before embedding into ChromaDB. Chunking improved RAGAs scores to: faithfulness 0.80, answer relevancy 0.78, context precision 1.00, context recall 0.97.
+The agent runs as a **LangGraph ReAct loop** — the LLM decides which tool(s) to call, inspects each result, and either invokes more tools or generates a final answer. Responses stream token-by-token via `build_stream()`. `BackendService` is a pure Python layer; Streamlit is a thin presentation shell with no domain logic.
+
+KB documents are split with `RecursiveCharacterTextSplitter` (1000-char chunks, 150-char overlap) before embedding. The conflict table (`knowledge_base/conflict_table.json`) is queried deterministically — never through vector search.
+
+### Security
+
+- Messages capped at 500 characters
+- Prompt injection defence: the `SECURITY` instruction is placed last in the system prompt (sandwich pattern), so it is read immediately before the user message — no blocklist, which avoids false positives on common words like "mandate" or "brand"
+- Per-user rate limiting (10 requests / 60 s)
+- Medical flags trigger a `⚠️ Consult a dermatologist` notice only on specific recommendations; informational answers are unaffected
 
 ### Tools
 
@@ -101,6 +113,35 @@ Ten domain tools are registered with the LangGraph agent:
 | `update_skin_concerns_tool` | Saves identified skin concerns to profile |
 | `update_shaving_routine_tool` | Records shaving routine status to profile |
 | `add_medical_flag_tool` | Saves diagnosed skin conditions (eczema, rosacea, etc.) |
+
+---
+
+## Evaluation
+
+RAGAs evaluation against a 10-question golden dataset (`eval/golden_dataset.csv`):
+
+| Metric | Score |
+| --- | --- |
+| Faithfulness | 0.80 |
+| Answer relevancy | 0.78 |
+| Context precision | 1.00 |
+| Context recall | 0.97 |
+
+Run: `uv run python eval/eval_ragas.py`
+
+Context precision/recall at ≥ 0.97 confirm the retriever surfaces the right chunks. Faithfulness at 0.80 reflects intentional LLM supplementation where the narrow KB does not fully cover a question — see [ADR-0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md).
+
+---
+
+## Design Decisions
+
+Three architectural decisions are documented in [`docs/adr/`](docs/adr/):
+
+| ADR | Decision |
+| --- | --- |
+| [0001](docs/adr/0001-conflict-checker-uses-json-lookup-not-rag.md) | Conflict checker uses a JSON lookup table, not vector search — conflicts are a finite enumerable set; deterministic lookup avoids synonym mismatches and chunk boundary effects |
+| [0002](docs/adr/0002-backend-decoupled-from-frontend.md) | All business logic lives in a pure Python backend, decoupled from Streamlit — the frontend can be swapped without touching domain code |
+| [0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md) | LLM supplements retrieval gaps with training data — the narrow KB scope makes blending intentional; disclosure is binary (sources shown or not shown), not per-sentence |
 
 ---
 
@@ -152,11 +193,22 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
+The suite covers:
+
+| Layer | What is tested |
+| --- | --- |
+| Unit | All 10 tools in isolation |
+| Unit | Agent input validation (length cap, injection passthrough to LLM) |
+| Unit | System prompt construction (section order, medical flag instruction, SECURITY sandwich) |
+| Integration | Full chat turn via `BackendService` (tools mocked at the LangGraph boundary) |
+| Integration | Medical flag disclaimer delegation to LLM |
+| RAGAs | End-to-end retrieval quality — `uv run python eval/eval_ragas.py` |
+
 ---
 
 ## Knowledge Base
 
-The KB lives in `knowledge_base/` — 20 markdown documents, one per skincare active or rule set. Each document is embedded whole into ChromaDB. Sources are fetched from Paula's Choice, INCI Decoder, PubMed, and Reddit r/SkincareAddiction, then merged by an LLM normalisation pass.
+The KB lives in `knowledge_base/` — 20 markdown documents, one per skincare active or rule set. Each document is split into chunks and embedded into ChromaDB. Sources are fetched from Paula's Choice, INCI Decoder, PubMed, and Reddit r/SkincareAddiction, then merged by an LLM normalisation pass.
 
 Raw fetched data is stored in `data/raw/` (not committed — regenerate with `uv run scripts/enrich_kb.py`).
 
