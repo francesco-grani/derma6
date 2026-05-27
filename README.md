@@ -1,6 +1,6 @@
-<table width="100%"><tr><td align="center" bgcolor="#4B5A4C" style="padding:40px 0">
-<img src="frontend/assets/Derma6_logo.png" width="260" alt="Derma6"/>
-</td></tr></table>
+<p align="center">
+  <img src="frontend/assets/Derma6_banner.png" width="500" alt="Derma6"/>
+</p>
 
 <p align="center">
   Conversational RAG chatbot for male skincare beginners — diagnose your skin type, build a personalised routine, catch ingredient conflicts, and schedule active introductions.
