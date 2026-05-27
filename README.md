@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/assets/Derma6_banner.png" width="600" alt="Derma6"/>
+  <img src="frontend/assets/Derma6_banner_v2.png" width="600" alt="Derma6"/>
 </p>
 
 <p align="center">
