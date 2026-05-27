@@ -171,24 +171,27 @@ history_data = serialise_history(username)
 @st.dialog("Download Skincare Plan")
 def _download_dialog() -> None:
     fmt = st.radio("Format", ["HTML", "PDF"], horizontal=True)
-    if fmt == "HTML":
-        st.download_button(
-            "⬇ Download HTML",
-            data=generate_export_html(username),
-            file_name=f"{username}_skincare_plan.html",
-            mime="text/html",
-        )
-    else:
-        try:
-            pdf_bytes = generate_export_pdf(username)
+    if st.button("Generate", type="primary"):
+        if fmt == "HTML":
+            data = generate_export_html(username)
             st.download_button(
-                "⬇ Download PDF",
-                data=pdf_bytes,
-                file_name=f"{username}_skincare_plan.pdf",
-                mime="application/pdf",
+                "⬇ Save as HTML",
+                data=data,
+                file_name=f"{username}_skincare_plan.html",
+                mime="text/html",
             )
-        except RuntimeError as e:
-            st.error(str(e))
+        else:
+            try:
+                with st.spinner("Generating PDF…"):
+                    data = generate_export_pdf(username)
+                st.download_button(
+                    "⬇ Save as PDF",
+                    data=data,
+                    file_name=f"{username}_skincare_plan.pdf",
+                    mime="application/pdf",
+                )
+            except RuntimeError as e:
+                st.error(str(e))
 
 
 if history_data:
