@@ -332,15 +332,6 @@ def build_system_prompt(profile: UserProfile) -> str:
     return "\n\n".join(sections)
 
 
-def _build_medical_disclaimer(medical_flags: list[str]) -> str:
-    """Return the medical disclaimer string for appending to answers."""
-    flags_str = ", ".join(medical_flags)
-    return (
-        f"\n\n⚠️ I'm an AI assistant, not a dermatologist. "
-        f"Given your skin condition ({flags_str}), please consult a qualified "
-        "dermatologist before introducing new actives."
-    )
-
 
 def _extract_citations_from_messages(messages: list) -> list[str]:
     """Scan ToolMessage outputs for source names and return a deduplicated list.
@@ -639,10 +630,6 @@ class BackendService:
 
             # --- Extract answer ---
             answer = _get_answer_from_result(result)
-
-            # --- Append medical disclaimer when user has flagged conditions ---
-            if profile.medical_flags:
-                answer += _build_medical_disclaimer(profile.medical_flags)
 
             # --- Collect and deduplicate citations ---
             citations = _extract_citations(result)

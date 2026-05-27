@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
-from backend.agent import BackendService, build_system_prompt
+from backend.agent import BackendService, _check_message, build_system_prompt
 from backend.schemas import BackendRequest, BackendResponse, UserProfile
 
 
@@ -141,16 +141,34 @@ class TestBuildSystemPrompt:
 class TestBackendServiceRun:
     """Integration-style tests for BackendService.run with all deps mocked."""
 
-    # --- Task spec test 1: Medical flag disclaimer present when flags set ---
-    def test_medical_flag_disclaimer_appended_to_answer(self):
-        """When profile has medical_flags, answer must contain disclaimer symbols."""
+    # --- Task spec test 1: Medical flag disclaimer instruction in system prompt ---
+    def test_medical_flag_disclaimer_instruction_in_system_prompt(self):
+        """When profile has medical_flags, system prompt must instruct the LLM to add disclaimer."""
         profile = _make_profile(medical_flags=["eczema"])
-        result = _run_service(
-            profile,
-            agent_result=_agent_result("Use niacinamide."),
-        )
+        prompt = build_system_prompt(profile)
+        assert "MEDICAL FLAG" in prompt or "dermatologist" in prompt.lower()
+
+    def test_disclaimer_passed_through_when_llm_includes_it(self):
+        """When the LLM adds ⚠️ to a recommendation, BackendService passes it through unchanged."""
+        profile = _make_profile(medical_flags=["eczema"])
+        answer = "Use niacinamide. ⚠️ Consult a dermatologist before making routine changes."
+        result = _run_service(profile, agent_result=_agent_result(answer))
         assert "⚠️" in result.message
         assert "dermatologist" in result.message
+
+    def test_no_disclaimer_added_when_llm_omits_it(self):
+        """For informational answers, service must NOT append a disclaimer."""
+        profile = _make_profile(medical_flags=["rosacea"])
+        answer = "Niacinamide reduces redness and minimises pores."
+        result = _run_service(profile, agent_result=_agent_result(answer))
+        assert result.message == answer
+        assert "⚠️" not in result.message
+
+    def test_no_medical_disclaimer_when_no_flags(self):
+        """No disclaimer in system prompt when user has no medical flags."""
+        profile = _make_profile(medical_flags=[])
+        prompt = build_system_prompt(profile)
+        assert "MEDICAL FLAG" not in prompt
 
     # --- Task spec test 2: Onboarding instruction in system prompt ---
     def test_onboarding_instruction_in_system_prompt_when_incomplete(self):
@@ -388,17 +406,19 @@ class TestMessageGuards:
         assert result.error is False
 
     def test_message_over_limit_is_rejected(self):
-        """A message over 500 chars must be rejected with a user-facing error."""
-        profile = _make_profile()
-        message = "a" * 501
-        result = _run_service(profile, message=message)
-        assert "500" in result.message
-        assert result.error is False
+        """A message over the length cap must be rejected with a user-facing error."""
+        from backend.agent import _MAX_MESSAGE_LENGTH
+        message = "a" * (_MAX_MESSAGE_LENGTH + 1)
+        guard = _check_message(message)
+        assert guard is not None
+        assert str(_MAX_MESSAGE_LENGTH) in guard.message
+        assert guard.error is False
 
     def test_message_over_limit_does_not_invoke_agent(self):
         """Agent must never be invoked when the message exceeds the length cap."""
+        from backend.agent import _MAX_MESSAGE_LENGTH
         profile = _make_profile()
-        message = "a" * 600
+        message = "a" * (_MAX_MESSAGE_LENGTH + 100)
 
         with (
             patch("backend.agent.RateLimiter") as MockRL,
@@ -413,7 +433,7 @@ class TestMessageGuards:
             mock_gh.return_value.messages = []
 
             svc = BackendService()
-            svc.run(BackendRequest(username="testuser", message=message))
+            svc.run(BackendRequest.model_construct(username="testuser", message=message))
 
             mock_ca.return_value.invoke.assert_not_called()
 

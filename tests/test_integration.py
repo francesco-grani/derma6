@@ -301,28 +301,43 @@ class TestT18MissingEnvVar:
 # ---------------------------------------------------------------------------
 
 class TestT20MedicalFlagDisclaimer:
-    """T20-1: response includes disclaimer text whenever user has medical flags."""
+    """T20-1: medical flag disclaimer is delegated to the LLM via system prompt.
 
-    def test_disclaimer_appended_when_medical_flags_set(self):
+    The service itself never appends a disclaimer — the system prompt instructs
+    the LLM to add one only when making recommendations (routines, products).
+    """
+
+    def test_medical_flag_instruction_in_system_prompt(self):
         profile = _make_profile(medical_flags=["eczema"])
-        result = _run_service(profile, agent_result=_agent_result("Apply niacinamide."))
+        prompt = build_system_prompt(profile)
+        assert "MEDICAL FLAG" in prompt or "dermatologist" in prompt.lower()
+
+    def test_no_medical_instruction_when_no_flags(self):
+        profile = _make_profile(medical_flags=[])
+        prompt = build_system_prompt(profile)
+        assert "MEDICAL FLAG" not in prompt
+
+    def test_disclaimer_passed_through_when_llm_includes_it(self):
+        """When the LLM adds ⚠️ to a recommendation, BackendService passes it through."""
+        profile = _make_profile(medical_flags=["eczema"])
+        answer = "Apply niacinamide serum. ⚠️ Consult a dermatologist before making changes."
+        result = _run_service(profile, agent_result=_agent_result(answer))
         assert "⚠️" in result.message
         assert "dermatologist" in result.message
-        assert "eczema" in result.message
+
+    def test_no_disclaimer_added_when_llm_omits_it(self):
+        """For informational answers, LLM omits disclaimer; service must not add it."""
+        profile = _make_profile(medical_flags=["rosacea"])
+        answer = "Niacinamide reduces redness and minimises pores."
+        result = _run_service(profile, agent_result=_agent_result(answer))
+        assert result.message == answer
+        assert "⚠️" not in result.message
 
     def test_no_disclaimer_when_no_medical_flags(self):
         profile = _make_profile(medical_flags=[])
         result = _run_service(profile, agent_result=_agent_result("Apply niacinamide."))
         assert "⚠️" not in result.message
         assert "dermatologist" not in result.message
-
-    def test_response_still_delivered_alongside_disclaimer(self):
-        """No hard block: full answer is present together with the disclaimer."""
-        profile = _make_profile(medical_flags=["rosacea"])
-        answer_text = "Use a gentle cleanser and ceramide moisturiser."
-        result = _run_service(profile, agent_result=_agent_result(answer_text))
-        assert answer_text in result.message
-        assert "⚠️" in result.message
 
 
 # ---------------------------------------------------------------------------
