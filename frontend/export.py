@@ -397,6 +397,36 @@ def generate_export_html(username: str) -> str:
 </html>"""
 
 
+_PDF_CSS = """
+    body { background: #fff !important; color: #1C2520 !important; }
+
+    .header { background: #2E3D2F !important; }
+    .header-text h1 { color: #E0E8E0 !important; }
+    .header-text p  { color: #9EAD9E  !important; }
+
+    .index { background: #f4f6f4 !important; }
+    .index h2  { color: #5A6A5A !important; }
+    .index a   { color: #2E3D2F !important; }
+
+    .section-title { color: #2E3D2F !important; border-color: #ccc !important; }
+
+    .profile-card  { background: #f4f6f4 !important; }
+    .profile-label { color: #5A6A5A    !important; }
+    .profile-value { color: #1C2520    !important; }
+    .badge         { background: #dde5dd !important; color: #1C2520 !important; }
+    .badge-medical { background: #f5dede !important; color: #7A2020 !important; }
+
+    .routine-name  { color: #2E3D2F !important; }
+    .step-category { color: #5A6A5A !important; }
+
+    .role-label.user { color: #5A6A5A !important; }
+    .role-label.ai   { color: #5A6A5A !important; }
+    .bubble.ai { box-shadow: none !important; border: 1px solid #ddd !important; }
+
+    .footer { color: #5A6A5A !important; border-color: #ccc !important; }
+"""
+
+
 def generate_export_pdf(username: str) -> bytes:
     try:
         import weasyprint
@@ -405,4 +435,5 @@ def generate_export_pdf(username: str) -> bytes:
             "PDF export requires WeasyPrint. Run: pip install weasyprint"
         ) from exc
     html_content = generate_export_html(username)
-    return weasyprint.HTML(string=html_content).write_pdf()
+    override = weasyprint.CSS(string=_PDF_CSS)
+    return weasyprint.HTML(string=html_content).write_pdf(stylesheets=[override])
