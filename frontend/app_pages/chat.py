@@ -59,6 +59,29 @@ if not st.session_state["messages"] and "_pending_prompt" not in st.session_stat
         st.session_state["_pending_prompt"] = selected
         st.rerun()
 
+_TOOL_LABELS: dict[str, str] = {
+    "kb_search": "Knowledge Base Search",
+    "conflict_checker": "Conflict Checker",
+    "routine_sequencer": "Routine Sequencer",
+    "save_routine_tool": "Save Routine",
+    "skin_type_advisor": "Skin Type Advisor",
+    "spf_recommender": "SPF Recommender",
+    "introduction_scheduler": "Introduction Scheduler",
+    "update_skin_concerns_tool": "Update Skin Concerns",
+    "update_shaving_routine_tool": "Update Shaving Routine",
+    "add_medical_flag_tool": "Add Medical Flag",
+}
+
+
+def _render_tool_results_expander(tool_results: list) -> None:
+    with st.expander("🔧 Tool Results"):
+        for t in tool_results:
+            label = _TOOL_LABELS.get(t.tool_name, t.tool_name.replace("_", " ").title())
+            st.markdown(f"**{label}**")
+            st.code(t.summary, language=None)
+            st.divider()
+
+
 # --------------------------------------------------------------------------
 # RAG visualisation helper
 # --------------------------------------------------------------------------
@@ -100,9 +123,7 @@ for msg in st.session_state["messages"]:
                     for c in msg["citations"]:
                         st.caption(f"• {c}")
             if msg.get("tool_results"):
-                with st.expander("🔧 Ingredient Analysis Tools"):
-                    for t in msg["tool_results"]:
-                        st.caption(str(t))
+                _render_tool_results_expander(msg["tool_results"])
 
 # --------------------------------------------------------------------------
 # Backend call helper
@@ -134,9 +155,7 @@ def _call_backend(prompt: str) -> None:
                 for c in citations:
                     st.caption(f"• {c}")
         if tool_results:
-            with st.expander("🔧 Ingredient Analysis Tools"):
-                for t in tool_results:
-                    st.caption(str(t))
+            _render_tool_results_expander(tool_results)
 
         st.session_state["messages"].append({
             "role": "assistant",

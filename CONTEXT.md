@@ -5,7 +5,7 @@ A conversational RAG assistant that helps male skincare beginners diagnose and o
 ## Language
 
 **Tool**:
-A discrete Python function the LLM invokes with structured arguments, returning structured output. All five domain functions (conflict checker, routine sequencer, skin type advisor, introduction scheduler, SPF recommender) are Tools.
+A discrete Python function the LLM invokes with structured arguments, returning structured output. Ten Tools are registered: KB Search, Conflict Checker, Routine Sequencer, Save Routine, Skin Type Advisor, SPF Recommender, Introduction Scheduler, Update Skin Concerns, Update Shaving Routine, Add Medical Flag.
 _Avoid_: tool call, function, action
 
 **Knowledge Base**:
@@ -14,7 +14,7 @@ _Avoid_: KB, documents, index
 
 ## Relationships
 
-- Each **Knowledge Base** document maps to one chunk — whole-document retrieval, no section splitting
+- Each **Knowledge Base** document is split into overlapping chunks (1000 chars, 150 char overlap) before indexing
 - The **Knowledge Base** is backed by a persistent local ChromaDB instance (not rebuilt on every startup)
 - A **User Profile** contains one or more **Routines**
 - A **Tool** may query the **Knowledge Base** via retrieval, or call a **Conflict Table** directly
@@ -74,7 +74,7 @@ The language model powering the agent. Default: `openai/gpt-4o-mini` via OpenRou
 _Avoid_: model, AI, GPT
 
 **Medical Flag**:
-A skin condition (e.g., eczema, rosacea) recorded on the User Profile during the Onboarding Flow. When present, appends a dermatologist disclaimer to every Tool response via the system prompt. Does not block advice.
+A skin condition (e.g., eczema, rosacea) recorded on the User Profile during the Onboarding Flow. When present, the system prompt instructs the LLM to append a dermatologist disclaimer only when making specific recommendations (routine changes, product suggestions). Purely informational answers are not affected. Does not block advice.
 _Avoid_: health flag, condition, warning
 
 ## Flagged ambiguities

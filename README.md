@@ -29,6 +29,9 @@
 | ⚠️ | **Ingredient conflict checker** | Cross-references products against a compatibility matrix (e.g. Retinol + Salicylic Acid) |
 | 📅 | **Active scheduling** | Recommends a gradual introduction plan for strong actives to minimise irritation |
 | 📚 | **Focused knowledge base** | 20 documents on skincare actives, sourced from Paula's Choice, INCI Decoder, PubMed, and Reddit r/SkincareAddiction |
+| 🔍 | **RAG visualisation** | Inline expander shows retrieved KB chunks, similarity scores, and source snippets per answer |
+| 🔧 | **Tool call visualisation** | Expander shows which domain tools fired and their outputs for each assistant turn |
+| ⬇️ | **Conversation export** | Download full skincare plan (profile + routines + chat) as HTML or PDF |
 
 ---
 
@@ -73,14 +76,31 @@ Streamlit frontend  ──►  Chat / Routine Viewer / Conflict Checker
     │
     ▼
 LangChain RAG chain
-    ├── Retriever  ──►  ChromaDB (20 KB documents, no chunking)
+    ├── Retriever  ──►  ChromaDB (20 KB documents, chunked at 1000 chars / 150 overlap)
     └── LLM        ──►  OpenRouter (gpt-4o-mini)
     │
     ▼
 SQLite  ──►  user profile · conversation history · generated routines
 ```
 
-Documents are embedded whole into ChromaDB — no chunking — since each entry is already a compact, self-contained reference card (≤ 20 entries per project spec).
+KB documents are split with `RecursiveCharacterTextSplitter` (1000-char chunks, 150-char overlap) before embedding into ChromaDB. Chunking improved RAGAs scores to: faithfulness 0.80, answer relevancy 0.78, context precision 1.00, context recall 0.97.
+
+### Tools
+
+Ten domain tools are registered with the LangGraph agent:
+
+| Tool | Purpose |
+| --- | --- |
+| `kb_search` | Semantic search over the 20-document knowledge base |
+| `conflict_checker` | Deterministic lookup against the ingredient conflict matrix |
+| `routine_sequencer` | Orders ingredients by correct application step |
+| `save_routine_tool` | Persists a generated routine to the user's profile |
+| `skin_type_advisor` | Classifies skin type from KB evidence and conversation |
+| `spf_recommender` | Recommends SPF products suitable for the user's profile |
+| `introduction_scheduler` | Builds a gradual schedule for introducing strong actives |
+| `update_skin_concerns_tool` | Saves identified skin concerns to profile |
+| `update_shaving_routine_tool` | Records shaving routine status to profile |
+| `add_medical_flag_tool` | Saves diagnosed skin conditions (eczema, rosacea, etc.) |
 
 ---
 
