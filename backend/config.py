@@ -49,7 +49,7 @@ class Settings(BaseSettings):
         alias="CHROMA_PERSIST_DIR",
     )
     conflict_table_path: str = Field(
-        default="./conflict_table.json",
+        default="./knowledge_base/conflict_table.json",
         alias="CONFLICT_TABLE_PATH",
     )
 

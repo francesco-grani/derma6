@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 logger = logging.getLogger(__name__)
 
 # Load conflict_table.json at module import time
-_CONFLICT_TABLE_PATH = Path(__file__).parent.parent.parent / "conflict_table.json"
+_CONFLICT_TABLE_PATH = Path(__file__).parent.parent.parent / "knowledge_base" / "conflict_table.json"
 
 
 def _load_conflict_table() -> Dict[frozenset, Dict[str, str]]:
