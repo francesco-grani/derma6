@@ -61,6 +61,45 @@ A conversational skincare assistant that helps users build, diagnose, and optimi
 
 ---
 
+## Evaluation
+
+RAGAs evaluation is run against a 15-question golden dataset (`eval/eval_dataset.json`). Two evaluation modes are supported:
+
+### Agent mode (default)
+
+Calls `BackendService` end-to-end. The agent decides whether to invoke `kb_search` for each question. Measures overall system quality but may skip retrieval for questions the LLM already knows from training data — the agent then answers from parametric knowledge, which is intentional behaviour (see ADR-0003).
+
+```bash
+uv run python scripts/eval_rag.py
+```
+
+### Retriever mode
+
+Bypasses the agent entirely. For each question the retriever is called directly and the LLM is constrained to answer using only the retrieved chunks. This is a clean measure of RAG pipeline quality independent of agent tool-calling behaviour — it forces retrieval on every question and surfaces true precision/recall gaps.
+
+```bash
+uv run python scripts/eval_rag.py --retriever
+```
+
+### Results
+
+| Metric | Agent mode | Retriever mode |
+| --- | --- | --- |
+| Faithfulness | 0.88 | 0.86 |
+| Answer relevancy | 0.81 | 0.71 |
+| Context precision | 1.00 | 0.86 |
+| Context recall | 0.98 | 0.69 |
+
+**Reading the results:**
+
+- Agent mode scores higher on answer relevancy because the LLM supplements retrieval gaps with training knowledge, producing more complete answers.
+- Retriever mode exposes the true pipeline: context precision 0.86 and recall 0.69 indicate that 2 of 15 questions (AHA/BHA comparison and razor bumps) fell below the minimum score threshold (0.30) and received no retrieved context. These are candidates for KB expansion or threshold tuning.
+- Faithfulness is consistently high (0.86–0.88) across both modes, confirming answers stay grounded in source material regardless of how retrieval is invoked.
+
+Results are saved to `data/eval_results_agent.json` and `data/eval_results_retriever.json`.
+
+---
+
 ## Technical Feasibility
 
 ### What makes it strong

@@ -118,18 +118,25 @@ Ten domain tools are registered with the LangGraph agent:
 
 ## Evaluation
 
-RAGAs evaluation against a 15-question golden dataset (`eval/eval_dataset.json`):
+RAGAs evaluation against a 15-question golden dataset (`eval/eval_dataset.json`). Two evaluation modes are available:
 
-| Metric | Score |
-| --- | --- |
-| Faithfulness | 0.88 |
-| Answer relevancy | 0.81 |
-| Context precision | 1.00 |
-| Context recall | 0.98 |
+**Agent mode** (default) — runs the full end-to-end system. The agent decides whether to invoke `kb_search`. Measures overall system quality; the LLM may answer from parametric knowledge without retrieval for well-known questions.
 
-Run: `uv run python scripts/eval_rag.py`
+**Retriever mode** (`--retriever`) — bypasses the agent entirely. The retriever is called directly for every question and the LLM is constrained to answer from the retrieved chunks only. A clean measure of RAG pipeline quality independent of agent tool-calling behaviour.
 
-Context precision/recall at ≥ 0.98 confirm the retriever surfaces the right chunks. Faithfulness at 0.88 reflects intentional LLM supplementation where the narrow KB does not fully cover a question — see [ADR-0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md).
+| Metric | Agent mode | Retriever mode |
+| --- | --- | --- |
+| Faithfulness | 0.88 | 0.86 |
+| Answer relevancy | 0.81 | 0.71 |
+| Context precision | 1.00 | 0.86 |
+| Context recall | 0.98 | 0.69 |
+
+```bash
+uv run python scripts/eval_rag.py              # agent mode
+uv run python scripts/eval_rag.py --retriever  # retriever mode
+```
+
+Agent mode scores higher on answer relevancy because the LLM supplements retrieval gaps with training knowledge. Retriever mode exposes the true pipeline quality: context precision at 0.86 and recall at 0.69 show that 2 of 15 questions fell below the minimum score threshold (0.30) and received no retrieved context — a retrieval gap worth addressing with threshold tuning or KB expansion. Faithfulness at 0.88/0.86 across both modes confirms answers stay grounded in the source material — see [ADR-0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md).
 
 ---
 
@@ -202,7 +209,7 @@ The suite covers:
 | Unit | System prompt construction (section order, medical flag instruction, SECURITY sandwich) |
 | Integration | Full chat turn via `BackendService` (tools mocked at the LangGraph boundary) |
 | Integration | Medical flag disclaimer delegation to LLM |
-| RAGAs | End-to-end retrieval quality — `uv run python eval/eval_ragas.py` |
+| RAGAs | End-to-end retrieval quality — `uv run python scripts/eval_rag.py` |
 
 ---
 
