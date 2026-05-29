@@ -118,18 +118,18 @@ Ten domain tools are registered with the LangGraph agent:
 
 ## Evaluation
 
-RAGAs evaluation against a 10-question golden dataset (`eval/golden_dataset.csv`):
+RAGAs evaluation against a 15-question golden dataset (`eval/eval_dataset.json`):
 
 | Metric | Score |
 | --- | --- |
-| Faithfulness | 0.80 |
-| Answer relevancy | 0.78 |
+| Faithfulness | 0.88 |
+| Answer relevancy | 0.81 |
 | Context precision | 1.00 |
-| Context recall | 0.97 |
+| Context recall | 0.98 |
 
-Run: `uv run python eval/eval_ragas.py`
+Run: `uv run python scripts/eval_rag.py`
 
-Context precision/recall at ≥ 0.97 confirm the retriever surfaces the right chunks. Faithfulness at 0.80 reflects intentional LLM supplementation where the narrow KB does not fully cover a question — see [ADR-0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md).
+Context precision/recall at ≥ 0.98 confirm the retriever surfaces the right chunks. Faithfulness at 0.88 reflects intentional LLM supplementation where the narrow KB does not fully cover a question — see [ADR-0003](docs/adr/0003-llm-supplements-retrieval-gaps-with-training-data.md).
 
 ---
 
