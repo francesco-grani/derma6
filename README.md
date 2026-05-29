@@ -200,15 +200,19 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite covers:
+The suite covers **90% line coverage** across the `backend/` package:
 
 | Layer | What is tested |
 | --- | --- |
 | Unit | All 10 tools in isolation |
+| Unit | `kb_search` tool — normal retrieval, empty results, exception path, RAG metadata footer |
 | Unit | Agent input validation (length cap, injection passthrough to LLM) |
 | Unit | System prompt construction (section order, medical flag instruction, SECURITY sandwich) |
+| Unit | Citation and RAG context extraction helpers (`_extract_citations`, `_extract_rag_context_from_messages`, etc.) |
+| Unit | `ProfileStore` CRUD — skin type, concerns, shaving, medical flags, routines, introduction plans, rename/delete/list |
 | Integration | Full chat turn via `BackendService` (tools mocked at the LangGraph boundary) |
 | Integration | Medical flag disclaimer delegation to LLM |
+| Integration | Onboarding completion trigger (all 4 fields required) |
 | RAGAs | End-to-end retrieval quality — `uv run python scripts/eval_rag.py` |
 
 ---
