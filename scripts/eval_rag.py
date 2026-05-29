@@ -1,13 +1,25 @@
 """RAGAs evaluation script for the Derma6 RAG pipeline.
 
+Two evaluation modes:
+
+  Agent mode (default):
+    Calls BackendService end-to-end. The agent decides whether to use tools.
+    Measures overall system quality but may skip retrieval for questions
+    the LLM already knows from training data.
+
+  Retriever mode (--retriever):
+    Bypasses the agent. For each question the retriever is called directly,
+    then the LLM is prompted with the retrieved chunks as context.
+    Guarantees retrieval happens on every question — a clean measure of
+    RAG pipeline quality independent of agent tool-calling behaviour.
+
 Usage:
-    python scripts/eval_rag.py
+    python scripts/eval_rag.py              # agent mode
+    python scripts/eval_rag.py --retriever  # retriever mode
 
-Loads data/eval_dataset.json, calls BackendService on each question,
-maps reference_contexts to KB document text, then computes RAGAs metrics:
-  faithfulness, answer_relevancy, context_precision, context_recall.
-
-Prints a results table to stdout and saves data/eval_results.json.
+Results are saved to:
+  data/eval_results_agent.json
+  data/eval_results_retriever.json
 """
 
 from __future__ import annotations
@@ -20,7 +32,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 EVAL_DATASET_PATH = ROOT / "eval" / "eval_dataset.json"
-EVAL_RESULTS_PATH = ROOT / "data" / "eval_results.json"
+EVAL_RESULTS_AGENT_PATH = ROOT / "data" / "eval_results_agent.json"
+EVAL_RESULTS_RETRIEVER_PATH = ROOT / "data" / "eval_results_retriever.json"
 KB_ROOT = ROOT / "knowledge_base"
 TEST_USERNAME = "ragas_eval_bot"
 
@@ -67,8 +80,18 @@ def load_eval_dataset() -> list[dict]:
         return json.load(f)
 
 
-def run_evaluation(dataset: list[dict], service) -> tuple[list, list, list, list]:
-    """Call BackendService for each question; return parallel lists for ragas."""
+# ---------------------------------------------------------------------------
+# Agent mode
+# ---------------------------------------------------------------------------
+
+def run_agent_evaluation(dataset: list[dict], service) -> tuple[list, list, list, list]:
+    """Call BackendService end-to-end for each question.
+
+    The agent decides whether to invoke kb_search. Contexts passed to RAGAS
+    are the reference KB documents (not what the agent actually retrieved),
+    so faithfulness measures whether the answer aligns with the authoritative
+    source regardless of whether the agent used it.
+    """
     from backend.schemas import BackendRequest
 
     questions: list[str] = []
@@ -94,6 +117,74 @@ def run_evaluation(dataset: list[dict], service) -> tuple[list, list, list, list
     return questions, answers, contexts, ground_truths
 
 
+# ---------------------------------------------------------------------------
+# Retriever mode
+# ---------------------------------------------------------------------------
+
+def run_retriever_evaluation(dataset: list[dict]) -> tuple[list, list, list, list]:
+    """Bypass the agent: query the retriever directly, then call the LLM.
+
+    For each question:
+      1. Retrieve top-k chunks from ChromaDB.
+      2. Prompt the LLM with the retrieved chunks as context.
+      3. Pass the *retrieved* chunks (not the reference KB docs) to RAGAS
+         as contexts — this is what RAGAS was designed to evaluate.
+
+    This guarantees retrieval happens on every question and gives a clean
+    measure of pipeline quality independent of agent tool-calling behaviour.
+    """
+    from langchain_openai import ChatOpenAI
+
+    from backend.config import settings
+    from backend.rag.retriever import Retriever
+
+    retriever = Retriever()
+    llm = ChatOpenAI(
+        model=settings.llm_model,
+        openai_api_key=settings.openrouter_api_key,
+        openai_api_base=settings.openrouter_base_url,
+        temperature=0.3,
+    )
+
+    system = (
+        "You are a skincare assistant. Answer the question using ONLY the provided "
+        "context. If the context does not contain enough information, say so briefly."
+    )
+
+    questions: list[str] = []
+    answers: list[str] = []
+    contexts: list[list[str]] = []
+    ground_truths: list[str] = []
+
+    for i, entry in enumerate(dataset, 1):
+        q = entry["question"]
+        gt = entry["ground_truth_answer"]
+
+        print(f"  [{i}/{len(dataset)}] {q[:70]}")
+
+        docs = retriever.query(q)
+        retrieved_chunks = [d.content for d in docs]
+        context_block = "\n\n---\n\n".join(retrieved_chunks) if retrieved_chunks else "No relevant context found."
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+        response = llm.invoke([
+            SystemMessage(content=system),
+            HumanMessage(content=f"Context:\n{context_block}\n\nQuestion: {q}"),
+        ])
+        answer = response.content if hasattr(response, "content") else str(response)
+
+        questions.append(q)
+        answers.append(answer)
+        contexts.append(retrieved_chunks if retrieved_chunks else [context_block])
+        ground_truths.append(gt)
+
+    return questions, answers, contexts, ground_truths
+
+
+# ---------------------------------------------------------------------------
+# RAGAS metrics
+# ---------------------------------------------------------------------------
+
 def _build_ragas_llm_and_embeddings():
     """Return (ragas_llm, ragas_embeddings) wired to the project's OpenRouter key."""
     from openai import OpenAI
@@ -111,7 +202,6 @@ def _build_ragas_llm_and_embeddings():
         api_key=settings.openrouter_api_key,
         base_url=settings.openrouter_base_url,
     )
-    # max_tokens=4096 avoids truncation on long contexts (default 1024 is too small)
     llm = llm_factory(settings.llm_model, provider="openai", client=client, max_tokens=4096)
     lc_emb = LCEmbeddings(
         openai_api_key=settings.openrouter_api_key,
@@ -138,7 +228,6 @@ def compute_ragas_metrics(
 
     llm, emb = _build_ragas_llm_and_embeddings()
 
-    # Wire the OpenRouter LLM into each metric singleton
     for m in [faithfulness, context_precision, context_recall]:
         m.llm = llm
     answer_relevancy.llm = llm
@@ -161,8 +250,30 @@ def compute_ragas_metrics(
     )
 
 
+def _print_and_save(result, output_path: Path) -> dict[str, float]:
+    df = result.to_pandas()
+    metric_cols = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+    scores: dict[str, float] = {}
+    for col in metric_cols:
+        val = float(df[col].mean()) if col in df.columns else float("nan")
+        scores[col] = val
+        print(f"  {col:<25} {val:.4f}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(scores, f, indent=2)
+    print(f"\nSaved to {output_path}")
+    return scores
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 def main() -> None:
-    print("=== RAGAs Evaluation — Derma6 ===\n")
+    retriever_mode = "--retriever" in sys.argv
+
+    print("=== RAGAs Evaluation — Derma6 ===")
+    print(f"Mode: {'retriever (direct)' if retriever_mode else 'agent (end-to-end)'}\n")
 
     from backend.logging_config import init_langsmith, setup_logging
     setup_logging()
@@ -175,39 +286,31 @@ def main() -> None:
     dataset = load_eval_dataset()
     print(f"Loaded {len(dataset)} eval examples from {EVAL_DATASET_PATH}\n")
 
-    from backend.agent import BackendService
-    from backend.db.profile_store import ProfileStore
+    if retriever_mode:
+        print("Querying retriever directly for each question …")
+        questions, answers, contexts, ground_truths = run_retriever_evaluation(dataset)
+        output_path = EVAL_RESULTS_RETRIEVER_PATH
+    else:
+        from backend.agent import BackendService
+        from backend.db.profile_store import ProfileStore
 
-    store = ProfileStore()
-    store.get_or_create_user(TEST_USERNAME)
-    store.update_skin_type(TEST_USERNAME, "normal")
-    store.update_skin_concerns(TEST_USERNAME, ["general skincare"])
-    store.update_has_shaving_routine(TEST_USERNAME, False)
-    print(f"Eval profile seeded for '{TEST_USERNAME}' (onboarding bypassed)\n")
+        store = ProfileStore()
+        store.get_or_create_user(TEST_USERNAME)
+        store.update_skin_type(TEST_USERNAME, "normal")
+        store.update_skin_concerns(TEST_USERNAME, ["general skincare"])
+        store.update_has_shaving_routine(TEST_USERNAME, False)
+        print(f"Eval profile seeded for '{TEST_USERNAME}' (onboarding bypassed)\n")
 
-    service = BackendService()
-    print("Running BackendService on each question …")
-    questions, answers, contexts, ground_truths = run_evaluation(dataset, service)
+        service = BackendService()
+        print("Running BackendService on each question …")
+        questions, answers, contexts, ground_truths = run_agent_evaluation(dataset, service)
+        output_path = EVAL_RESULTS_AGENT_PATH
 
     print("\nComputing RAGAs metrics …")
     result = compute_ragas_metrics(questions, answers, contexts, ground_truths)
 
     print("\n=== Results ===")
-    df = result.to_pandas()
-    metric_cols = ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
-    scores: dict[str, float] = {}
-    for col in metric_cols:
-        if col in df.columns:
-            val = float(df[col].mean())
-        else:
-            val = float("nan")
-        scores[col] = val
-        print(f"  {col:<25} {val:.4f}")
-
-    EVAL_RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(EVAL_RESULTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(scores, f, indent=2)
-    print(f"\nFull results saved to {EVAL_RESULTS_PATH}")
+    _print_and_save(result, output_path)
 
 
 if __name__ == "__main__":
