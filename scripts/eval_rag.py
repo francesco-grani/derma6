@@ -164,10 +164,26 @@ def compute_ragas_metrics(
 def main() -> None:
     print("=== RAGAs Evaluation — Derma6 ===\n")
 
+    from backend.logging_config import init_langsmith, setup_logging
+    setup_logging()
+    init_langsmith()
+
+    from scripts.index_kb import main as _index_kb
+    _index_kb()
+    print("Knowledge base indexed.\n")
+
     dataset = load_eval_dataset()
     print(f"Loaded {len(dataset)} eval examples from {EVAL_DATASET_PATH}\n")
 
     from backend.agent import BackendService
+    from backend.db.profile_store import ProfileStore
+
+    store = ProfileStore()
+    store.get_or_create_user(TEST_USERNAME)
+    store.update_skin_type(TEST_USERNAME, "normal")
+    store.update_skin_concerns(TEST_USERNAME, ["general skincare"])
+    store.update_has_shaving_routine(TEST_USERNAME, False)
+    print(f"Eval profile seeded for '{TEST_USERNAME}' (onboarding bypassed)\n")
 
     service = BackendService()
     print("Running BackendService on each question …")

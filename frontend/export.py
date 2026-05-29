@@ -430,9 +430,10 @@ _PDF_CSS = """
 def generate_export_pdf(username: str) -> bytes:
     try:
         import weasyprint
-    except ImportError as exc:
+    except (ImportError, OSError) as exc:
         raise RuntimeError(
-            "PDF export requires WeasyPrint. Run: pip install weasyprint"
+            "PDF export requires WeasyPrint and its system libraries (pango, cairo). "
+            "This feature is available in the deployed app."
         ) from exc
     html_content = generate_export_html(username)
     override = weasyprint.CSS(string=_PDF_CSS)

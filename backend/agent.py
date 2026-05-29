@@ -1,7 +1,7 @@
 """BackendService: central integration layer for the Derma6 RAG chatbot.
 
 Wires together rate limiting, profile management, system-prompt construction,
-chat history, and the LangChain/LangGraph agent with all five domain tools.
+chat history, and the LangChain/LangGraph agent with all ten domain tools.
 """
 
 import logging
@@ -229,14 +229,11 @@ def _sanitise(text: str) -> str:
     return text.strip()
 
 
-_MAX_MESSAGE_LENGTH = 500
-
-
 def _check_message(message: str) -> BackendResponse | None:
     """Return a blocking BackendResponse if the message exceeds the length cap, else None."""
-    if len(message) > _MAX_MESSAGE_LENGTH:
+    if len(message) > settings.max_message_chars:
         return BackendResponse(
-            message=f"Your message is too long. Please keep it under {_MAX_MESSAGE_LENGTH} characters.",
+            message=f"Your message is too long. Please keep it under {settings.max_message_chars} characters.",
             error=False,
         )
     return None

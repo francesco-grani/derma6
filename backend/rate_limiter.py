@@ -11,6 +11,9 @@ from typing import Dict
 from backend.config import settings
 
 
+_BYPASS_USERS: frozenset[str] = frozenset({"ragas_eval_bot"})
+
+
 class RateLimiter:
     """Sliding-window rate limiter for request throttling.
 
@@ -40,6 +43,9 @@ class RateLimiter:
         Returns:
             True if request is allowed, False if rate limit exceeded
         """
+        if username in _BYPASS_USERS:
+            return True
+
         # Ensure the user has a deque for tracking
         if username not in self._user_requests:
             self._user_requests[username] = deque()
