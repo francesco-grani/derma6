@@ -85,10 +85,10 @@ uv run python scripts/eval_rag.py --retriever
 
 | Metric | Agent mode | Retriever mode |
 | --- | --- | --- |
-| Faithfulness | 0.88 | 0.86 |
-| Answer relevancy | 0.81 | 0.71 |
-| Context precision | 1.00 | 0.86 |
-| Context recall | 0.98 | 0.69 |
+| Faithfulness | 0.88 | 0.87 |
+| Answer relevancy | 0.81 | 0.84 |
+| Context precision | 1.00 | 0.93 |
+| Context recall | 0.98 | 0.87 |
 
 **Reading the results:**
 
