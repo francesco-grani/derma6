@@ -55,3 +55,8 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v"
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest-cov>=7.1.0",
+]

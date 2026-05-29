@@ -4,7 +4,10 @@ All tests use an in-memory SQLite database so they are isolated, fast,
 and leave no filesystem side-effects.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.db.profile_store import ProfileStore, ProfileStoreError
 from backend.schemas import (
@@ -235,3 +238,141 @@ def test_get_introduction_plan_not_found(store: ProfileStore) -> None:
     store.get_or_create_user("noah")
     result = store.get_introduction_plan("noah")
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Routine rename / delete / list
+# ---------------------------------------------------------------------------
+
+
+def _make_routine(name: str, *ingredients: str) -> RoutineSchema:
+    return RoutineSchema(
+        name=name,
+        steps=[
+            RoutineStepSchema(position=i + 1, ingredient=ing)
+            for i, ing in enumerate(ingredients)
+        ],
+    )
+
+
+def test_rename_routine(store: ProfileStore) -> None:
+    store.get_or_create_user("oliver")
+    store.save_routine("oliver", _make_routine("Morning", "Cleanser", "SPF"))
+    store.rename_routine("oliver", "Morning", "AM Routine")
+    assert store.get_routine("oliver", "Morning") is None
+    renamed = store.get_routine("oliver", "AM Routine")
+    assert renamed is not None
+    assert renamed.name == "AM Routine"
+
+
+def test_rename_routine_not_found_raises(store: ProfileStore) -> None:
+    store.get_or_create_user("petra")
+    with pytest.raises(ProfileStoreError):
+        store.rename_routine("petra", "Ghost", "New Name")
+
+
+def test_delete_routine(store: ProfileStore) -> None:
+    store.get_or_create_user("quinn")
+    store.save_routine("quinn", _make_routine("Evening", "Retinol", "Moisturiser"))
+    store.delete_routine("quinn", "Evening")
+    assert store.get_routine("quinn", "Evening") is None
+
+
+def test_delete_routine_not_found_raises(store: ProfileStore) -> None:
+    store.get_or_create_user("ruth")
+    with pytest.raises(ProfileStoreError):
+        store.delete_routine("ruth", "NonExistent")
+
+
+def test_get_all_routines_empty(store: ProfileStore) -> None:
+    store.get_or_create_user("sam")
+    assert store.get_all_routines("sam") == []
+
+
+def test_get_all_routines_multiple(store: ProfileStore) -> None:
+    store.get_or_create_user("tara")
+    store.save_routine("tara", _make_routine("Morning", "Cleanser", "SPF"))
+    store.save_routine("tara", _make_routine("Evening", "Retinol"))
+    routines = store.get_all_routines("tara")
+    assert len(routines) == 2
+    names = {r.name for r in routines}
+    assert names == {"Morning", "Evening"}
+
+
+# ---------------------------------------------------------------------------
+# Error paths (nonexistent user propagates ProfileStoreError)
+# ---------------------------------------------------------------------------
+
+
+def test_update_skin_type_missing_user_raises(store: ProfileStore) -> None:
+    with pytest.raises(ProfileStoreError):
+        store.update_skin_type("ghost", "oily")
+
+
+def test_update_skin_concerns_missing_user_raises(store: ProfileStore) -> None:
+    with pytest.raises(ProfileStoreError):
+        store.update_skin_concerns("ghost", ["acne"])
+
+
+def test_update_has_shaving_routine_missing_user_raises(store: ProfileStore) -> None:
+    with pytest.raises(ProfileStoreError):
+        store.update_has_shaving_routine("ghost", True)
+
+
+def test_add_medical_flag_missing_user_raises(store: ProfileStore) -> None:
+    with pytest.raises(ProfileStoreError):
+        store.add_medical_flag("ghost", "eczema")
+
+
+# ---------------------------------------------------------------------------
+# SQLAlchemy error propagation (engine-level errors wrapped as ProfileStoreError)
+# ---------------------------------------------------------------------------
+
+
+def _store_with_bad_commit() -> ProfileStore:
+    """Return a ProfileStore whose Session.commit always raises SQLAlchemyError."""
+    store = ProfileStore(db_url="sqlite:///:memory:")
+    original_session = store._engine.connect
+
+    real_session_cls = Session
+
+    class _BadSession(real_session_cls):
+        def commit(self):
+            raise SQLAlchemyError("simulated DB error")
+
+    return store, _BadSession
+
+
+def test_update_skin_type_sqlalchemy_error_raises(store: ProfileStore) -> None:
+    store.get_or_create_user("ua")
+    with patch("backend.db.profile_store.Session") as MockSession:
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=MagicMock(
+            query=MagicMock(return_value=MagicMock(
+                filter_by=MagicMock(return_value=MagicMock(first=MagicMock(return_value=MagicMock(id=1))))
+            )),
+            commit=MagicMock(side_effect=SQLAlchemyError("db error")),
+        ))
+        ctx.__exit__ = MagicMock(return_value=False)
+        MockSession.return_value = ctx
+        with pytest.raises(ProfileStoreError):
+            store.update_skin_type("ua", "oily")
+
+
+def test_save_routine_sqlalchemy_error_raises(store: ProfileStore) -> None:
+    store.get_or_create_user("ub")
+    with patch("backend.db.profile_store.Session") as MockSession:
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=MagicMock(
+            query=MagicMock(return_value=MagicMock(
+                filter_by=MagicMock(return_value=MagicMock(first=MagicMock(return_value=MagicMock(id=1))))
+            )),
+            commit=MagicMock(side_effect=SQLAlchemyError("db error")),
+            flush=MagicMock(),
+            add=MagicMock(),
+            delete=MagicMock(),
+        ))
+        ctx.__exit__ = MagicMock(return_value=False)
+        MockSession.return_value = ctx
+        with pytest.raises(ProfileStoreError):
+            store.save_routine("ub", _make_routine("Test", "Cleanser"))

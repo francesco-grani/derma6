@@ -100,6 +100,7 @@ class TestT18Onboarding:
         store.update_skin_type("newbie", "combination")
         store.update_skin_concerns("newbie", ["acne", "oiliness"])
         store.update_has_shaving_routine("newbie", True)
+        store.add_medical_flag("newbie", "none")
 
         profile = store.get_profile("newbie")
         assert profile.onboarding_complete is True

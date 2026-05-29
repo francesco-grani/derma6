@@ -7,9 +7,20 @@ ChatOpenAI, create_agent) are mocked.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from backend.agent import BackendService, _check_message, build_system_prompt
+from backend.agent import (
+    BackendService,
+    _check_message,
+    _extract_citations,
+    _extract_citations_from_intermediate_steps,
+    _extract_citations_from_messages,
+    _extract_rag_context_from_messages,
+    _extract_tool_results_from_messages,
+    _get_answer_from_result,
+    _make_tools,
+    build_system_prompt,
+)
 from backend.schemas import BackendRequest, BackendResponse, UserProfile
 
 
@@ -407,18 +418,19 @@ class TestMessageGuards:
 
     def test_message_over_limit_is_rejected(self):
         """A message over the length cap must be rejected with a user-facing error."""
-        from backend.agent import _MAX_MESSAGE_LENGTH
-        message = "a" * (_MAX_MESSAGE_LENGTH + 1)
+        from backend.config import settings
+        cap = settings.max_message_chars
+        message = "a" * (cap + 1)
         guard = _check_message(message)
         assert guard is not None
-        assert str(_MAX_MESSAGE_LENGTH) in guard.message
+        assert str(cap) in guard.message
         assert guard.error is False
 
     def test_message_over_limit_does_not_invoke_agent(self):
         """Agent must never be invoked when the message exceeds the length cap."""
-        from backend.agent import _MAX_MESSAGE_LENGTH
+        from backend.config import settings
         profile = _make_profile()
-        message = "a" * (_MAX_MESSAGE_LENGTH + 100)
+        message = "a" * (settings.max_message_chars + 100)
 
         with (
             patch("backend.agent.RateLimiter") as MockRL,
@@ -490,3 +502,233 @@ class TestMessageGuards:
         profile = _make_profile()
         result = _run_service(profile, message=safe_message)
         assert result.error is False
+
+
+# ---------------------------------------------------------------------------
+# _extract_citations_from_messages — pure function
+# ---------------------------------------------------------------------------
+
+class TestExtractCitationsFromMessages:
+    def test_extracts_sources_line(self):
+        msg = ToolMessage(content="Some text.\nSources: Retinol Profile, Niacinamide Guide", tool_call_id="x")
+        assert _extract_citations_from_messages([msg]) == ["Retinol Profile", "Niacinamide Guide"]
+
+    def test_extracts_source_name_pattern(self):
+        msg = ToolMessage(content='source_name: "SPF Guide"', tool_call_id="x")
+        result = _extract_citations_from_messages([msg])
+        assert "SPF Guide" in result
+
+    def test_deduplicates(self):
+        msg = ToolMessage(
+            content="Sources: Retinol Profile\nsource_name: Retinol Profile",
+            tool_call_id="x",
+        )
+        result = _extract_citations_from_messages([msg])
+        assert result.count("Retinol Profile") == 1
+
+    def test_skips_non_tool_messages(self):
+        ai = AIMessage(content="Sources: Should not appear")
+        assert _extract_citations_from_messages([ai]) == []
+
+    def test_skips_non_string_content(self):
+        msg = ToolMessage(content=["list", "content"], tool_call_id="x")
+        assert _extract_citations_from_messages([msg]) == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_citations_from_intermediate_steps — pure function
+# ---------------------------------------------------------------------------
+
+class TestExtractCitationsFromIntermediateSteps:
+    def test_extracts_from_sources_line(self):
+        steps = [("action", "Result text.\nSources: Ceramides Guide")]
+        assert _extract_citations_from_intermediate_steps(steps) == ["Ceramides Guide"]
+
+    def test_extracts_source_name_pattern(self):
+        steps = [("action", 'source_name: "Vitamin C Profile"')]
+        result = _extract_citations_from_intermediate_steps(steps)
+        assert "Vitamin C Profile" in result
+
+    def test_skips_short_steps(self):
+        assert _extract_citations_from_intermediate_steps([("single",)]) == []
+
+    def test_skips_non_string_output(self):
+        assert _extract_citations_from_intermediate_steps([("action", 42)]) == []
+
+    def test_deduplicates(self):
+        steps = [
+            ("a", "Sources: AHA Guide"),
+            ("b", "Sources: AHA Guide"),
+        ]
+        result = _extract_citations_from_intermediate_steps(steps)
+        assert result.count("AHA Guide") == 1
+
+
+# ---------------------------------------------------------------------------
+# _extract_citations — routes to correct sub-function
+# ---------------------------------------------------------------------------
+
+class TestExtractCitations:
+    def test_uses_messages_path(self):
+        msg = ToolMessage(content="Sources: Retinol Profile", tool_call_id="x")
+        result = _extract_citations({"messages": [msg]})
+        assert "Retinol Profile" in result
+
+    def test_uses_legacy_intermediate_steps_path(self):
+        steps = [("action", "Sources: Niacinamide Guide")]
+        result = _extract_citations({"intermediate_steps": steps})
+        assert "Niacinamide Guide" in result
+
+    def test_empty_dict_returns_empty(self):
+        assert _extract_citations({}) == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_rag_context_from_messages — pure function
+# ---------------------------------------------------------------------------
+
+class TestExtractRagContextFromMessages:
+    def _msg_with_rag(self, entries: list) -> ToolMessage:
+        import json
+        content = f"Some text.\n\n__RAG_CONTEXT_JSON__: {json.dumps(entries)}"
+        return ToolMessage(content=content, tool_call_id="x")
+
+    def test_extracts_rag_metadata(self):
+        entries = [{"source": "Retinol Profile", "score": 0.9, "snippet": "Retinol is..."}]
+        result = _extract_rag_context_from_messages([self._msg_with_rag(entries)])
+        assert len(result) == 1
+        assert result[0]["source"] == "Retinol Profile"
+
+    def test_deduplicates_by_source(self):
+        entries = [
+            {"source": "Retinol Profile", "score": 0.9, "snippet": "A"},
+            {"source": "Retinol Profile", "score": 0.8, "snippet": "B"},
+        ]
+        result = _extract_rag_context_from_messages([self._msg_with_rag(entries)])
+        assert len(result) == 1
+
+    def test_sorts_by_score_descending(self):
+        m1 = self._msg_with_rag([{"source": "Low", "score": 0.5, "snippet": ""}])
+        m2 = self._msg_with_rag([{"source": "High", "score": 0.9, "snippet": ""}])
+        result = _extract_rag_context_from_messages([m1, m2])
+        assert result[0]["source"] == "High"
+
+    def test_skips_message_without_marker(self):
+        msg = ToolMessage(content="No marker here.", tool_call_id="x")
+        assert _extract_rag_context_from_messages([msg]) == []
+
+    def test_skips_non_tool_messages(self):
+        ai = AIMessage(content="__RAG_CONTEXT_JSON__: []")
+        assert _extract_rag_context_from_messages([ai]) == []
+
+    def test_silently_skips_malformed_json(self):
+        msg = ToolMessage(content="__RAG_CONTEXT_JSON__: {not valid json", tool_call_id="x")
+        assert _extract_rag_context_from_messages([msg]) == []
+
+
+# ---------------------------------------------------------------------------
+# _extract_tool_results_from_messages — pure function
+# ---------------------------------------------------------------------------
+
+class TestExtractToolResultsFromMessages:
+    def test_extracts_tool_result_with_name_from_ai_message(self):
+        ai = AIMessage(content="", tool_calls=[{"id": "c1", "name": "kb_search", "args": {}}])
+        tm = ToolMessage(content="KB result", tool_call_id="c1")
+        results = _extract_tool_results_from_messages([ai, tm])
+        assert len(results) == 1
+        assert results[0].tool_name == "kb_search"
+        assert results[0].summary == "KB result"
+
+    def test_extracts_tool_result_from_ai_message_chunk(self):
+        chunk = AIMessageChunk(
+            content="",
+            tool_call_chunks=[{"id": "c2", "name": "conflict_checker", "args": ""}],
+        )
+        tm = ToolMessage(content="Safe together", tool_call_id="c2")
+        results = _extract_tool_results_from_messages([chunk, tm])
+        assert any(r.tool_name == "conflict_checker" for r in results)
+
+    def test_falls_back_to_unknown_tool_when_no_ai_message(self):
+        tm = ToolMessage(content="Output", tool_call_id="unknown-id")
+        results = _extract_tool_results_from_messages([tm])
+        assert len(results) == 1
+        assert results[0].tool_name == "unknown_tool"
+
+
+# ---------------------------------------------------------------------------
+# _get_answer_from_result — pure function
+# ---------------------------------------------------------------------------
+
+class TestGetAnswerFromResult:
+    def test_extracts_last_ai_message(self):
+        msgs = [AIMessage(content="First"), AIMessage(content="Final answer")]
+        assert _get_answer_from_result({"messages": msgs}) == "Final answer"
+
+    def test_handles_content_blocks(self):
+        msg = AIMessage(content=[{"type": "text", "text": "Block answer"}])
+        assert _get_answer_from_result({"messages": [msg]}) == "Block answer"
+
+    def test_returns_empty_when_no_ai_message(self):
+        tm = ToolMessage(content="tool output", tool_call_id="x")
+        assert _get_answer_from_result({"messages": [tm]}) == ""
+
+    def test_uses_legacy_output_key(self):
+        assert _get_answer_from_result({"output": "Legacy answer"}) == "Legacy answer"
+
+    def test_empty_dict_returns_empty(self):
+        assert _get_answer_from_result({}) == ""
+
+
+# ---------------------------------------------------------------------------
+# _make_tools tool closures
+# ---------------------------------------------------------------------------
+
+class TestMakeToolsClosures:
+    def test_save_routine_tool_valid(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        with patch("backend.agent.ProfileStore") as MockPS:
+            MockPS.return_value.save_routine.return_value = None
+            result = tools["save_routine_tool"].invoke({"name": "Morning", "steps": "Cleanser, SPF"})
+        assert "Morning" in result
+        assert "saved" in result.lower()
+
+    def test_save_routine_tool_empty_steps(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        result = tools["save_routine_tool"].invoke({"name": "Morning", "steps": "   "})
+        assert "Error" in result
+
+    def test_update_skin_concerns_tool_valid(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        with patch("backend.agent.ProfileStore") as MockPS:
+            MockPS.return_value.update_skin_concerns.return_value = None
+            result = tools["update_skin_concerns_tool"].invoke({"concerns": "acne, dryness"})
+        assert "saved" in result.lower()
+
+    def test_update_skin_concerns_tool_empty(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        result = tools["update_skin_concerns_tool"].invoke({"concerns": "   "})
+        assert "Error" in result
+
+    def test_update_shaving_routine_tool_yes(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        with patch("backend.agent.ProfileStore") as MockPS:
+            MockPS.return_value.update_has_shaving_routine.return_value = None
+            result = tools["update_shaving_routine_tool"].invoke({"has_shaving": "yes"})
+        assert "yes" in result
+
+    def test_update_shaving_routine_tool_invalid(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        result = tools["update_shaving_routine_tool"].invoke({"has_shaving": "maybe"})
+        assert "Error" in result
+
+    def test_add_medical_flag_tool_valid(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        with patch("backend.agent.ProfileStore") as MockPS:
+            MockPS.return_value.add_medical_flag.return_value = None
+            result = tools["add_medical_flag_tool"].invoke({"condition": "eczema"})
+        assert "eczema" in result
+
+    def test_add_medical_flag_tool_empty(self):
+        tools = {t.name: t for t in _make_tools("test_user")}
+        result = tools["add_medical_flag_tool"].invoke({"condition": "   "})
+        assert "Error" in result

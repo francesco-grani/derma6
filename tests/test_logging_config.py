@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from backend.logging_config import init_sentry, setup_logging
+from backend.logging_config import init_langsmith, init_sentry, log_new_session, setup_logging
 
 
 class TestSetupLogging:
@@ -38,17 +38,22 @@ class TestSetupLogging:
                 setup_logging()
 
                 root_logger = logging.getLogger()
-                # Check that handlers exist
                 assert len(root_logger.handlers) > 0, "No handlers added"
 
-                # Check formatter includes ISO timestamp and component
-                for handler in root_logger.handlers:
-                    assert handler.formatter is not None
-                    format_str = handler.formatter._fmt
-                    assert "%(asctime)s" in format_str
-                    assert "%(levelname)s" in format_str
-                    assert "%(name)s" in format_str  # component
-                    assert "%(message)s" in format_str
+                # At least one handler must have our format (pytest also adds its own
+                # StreamHandler with a different format, so check with any()).
+                def _has_our_format(h: logging.Handler) -> bool:
+                    fmt = getattr(h.formatter, "_fmt", "") or ""
+                    return (
+                        "%(asctime)s" in fmt
+                        and "%(levelname)s" in fmt
+                        and "%(name)s" in fmt
+                        and "%(message)s" in fmt
+                    )
+
+                assert any(_has_our_format(h) for h in root_logger.handlers), (
+                    "No handler with expected format found"
+                )
 
     def test_setup_logging_removes_duplicates(self) -> None:
         """Verify multiple calls to setup_logging don't accumulate handlers."""
@@ -91,6 +96,72 @@ class TestSetupLogging:
                 handler = rotating_handlers[0]
                 assert handler.maxBytes == 10_000_000, f"maxBytes is {handler.maxBytes}"
                 assert handler.backupCount == 3, f"backupCount is {handler.backupCount}"
+
+
+class TestLogNewSession:
+    def test_log_new_session_does_not_raise(self) -> None:
+        log_new_session("testuser")
+
+    def test_log_new_session_logs_username(self) -> None:
+        with mock.patch("backend.logging_config.logging.getLogger") as mock_get_logger:
+            mock_logger = mock.Mock()
+            mock_get_logger.return_value = mock_logger
+            log_new_session("alice")
+        calls = [str(c) for c in mock_logger.info.call_args_list]
+        assert any("alice" in c for c in calls)
+
+
+class TestInitLangsmith:
+    def setup_method(self):
+        import backend.logging_config
+        backend.logging_config._langsmith_initialised = False
+
+    def test_init_langsmith_sets_env_vars_when_key_present(self) -> None:
+        import os
+        import backend.logging_config
+        backend.logging_config._langsmith_initialised = False
+
+        with mock.patch("backend.logging_config.settings") as mock_settings:
+            mock_settings.langchain_api_key = "lsv2_test_key"
+            mock_settings.langchain_tracing_v2 = "true"
+            mock_settings.langchain_project = "my_project"
+            mock_settings.langchain_endpoint = "https://eu.api.smith.langchain.com"
+
+            with mock.patch.dict(os.environ, {}, clear=False):
+                init_langsmith()
+                assert os.environ.get("LANGCHAIN_API_KEY") == "lsv2_test_key"
+                assert os.environ.get("LANGCHAIN_PROJECT") == "my_project"
+                assert os.environ.get("LANGCHAIN_ENDPOINT") == "https://eu.api.smith.langchain.com"
+
+    def test_init_langsmith_skips_when_no_key(self) -> None:
+        import os
+        import backend.logging_config
+        backend.logging_config._langsmith_initialised = False
+
+        with mock.patch("backend.logging_config.settings") as mock_settings:
+            mock_settings.langchain_api_key = "   "
+
+            env_before = os.environ.get("LANGCHAIN_API_KEY")
+            init_langsmith()
+            assert os.environ.get("LANGCHAIN_API_KEY") == env_before
+
+    def test_init_langsmith_is_idempotent(self) -> None:
+        import backend.logging_config
+        backend.logging_config._langsmith_initialised = False
+
+        with mock.patch("backend.logging_config.settings") as mock_settings:
+            mock_settings.langchain_api_key = "lsv2_test_key"
+            mock_settings.langchain_tracing_v2 = "true"
+            mock_settings.langchain_project = "proj"
+            mock_settings.langchain_endpoint = "https://example.com"
+
+            init_langsmith()
+            assert backend.logging_config._langsmith_initialised is True
+
+            mock_settings.langchain_api_key = "different_key"
+            init_langsmith()
+            import os
+            assert os.environ.get("LANGCHAIN_API_KEY") == "lsv2_test_key"
 
 
 class TestInitSentry:

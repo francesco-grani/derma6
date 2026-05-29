@@ -7,6 +7,7 @@ or the Chroma vector store.
 from __future__ import annotations
 
 import json
+import pandas as pd
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -72,7 +73,7 @@ class TestLoadEvalDataset:
 class TestRunEvaluation:
     def test_returns_four_parallel_lists(self):
         svc = _fake_service(["Answer A.", "Answer B."])
-        qs, ans, ctx, gts = eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        qs, ans, ctx, gts = eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
 
         assert len(qs) == len(_FAKE_DATASET)
         assert len(ans) == len(_FAKE_DATASET)
@@ -81,29 +82,29 @@ class TestRunEvaluation:
 
     def test_questions_match_dataset(self):
         svc = _fake_service()
-        qs, _, _, _ = eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        qs, _, _, _ = eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
         assert qs[0] == _FAKE_DATASET[0]["question"]
         assert qs[1] == _FAKE_DATASET[1]["question"]
 
     def test_ground_truths_match_dataset(self):
         svc = _fake_service()
-        _, _, _, gts = eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        _, _, _, gts = eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
         assert gts[0] == _FAKE_DATASET[0]["ground_truth_answer"]
 
     def test_answers_come_from_service(self):
         svc = _fake_service(["Custom answer 1.", "Custom answer 2."])
-        _, ans, _, _ = eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        _, ans, _, _ = eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
         assert ans[0] == "Custom answer 1."
         assert ans[1] == "Custom answer 2."
 
     def test_service_called_once_per_entry(self):
         svc = _fake_service()
-        eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
         assert svc.run.call_count == len(_FAKE_DATASET)
 
     def test_contexts_are_lists_of_strings(self):
         svc = _fake_service()
-        _, _, ctx, _ = eval_rag.run_evaluation(_FAKE_DATASET, svc)
+        _, _, ctx, _ = eval_rag.run_agent_evaluation(_FAKE_DATASET, svc)
         for c in ctx:
             assert isinstance(c, list)
             assert all(isinstance(s, str) for s in c)
@@ -143,26 +144,31 @@ class TestComputeRagasMetrics:
 class TestMain:
     def test_main_runs_without_raising(self, tmp_path, monkeypatch):
         """main() must complete without raising when BackendService and ragas are mocked."""
-        # Point results output to tmp_path to avoid touching the real data/
-        monkeypatch.setattr(eval_rag, "EVAL_RESULTS_PATH", tmp_path / "eval_results.json")
+        monkeypatch.setattr(eval_rag, "EVAL_RESULTS_AGENT_PATH", tmp_path / "eval_results_agent.json")
+        monkeypatch.setattr(eval_rag, "EVAL_RESULTS_RETRIEVER_PATH", tmp_path / "eval_results_retriever.json")
 
-        fake_ragas_result = {
+        scores = {
             "faithfulness": 0.9,
             "answer_relevancy": 0.85,
             "context_precision": 0.8,
             "context_recall": 0.88,
         }
+        fake_ragas_result = MagicMock()
+        fake_ragas_result.to_pandas.return_value = pd.DataFrame([scores])
 
         svc = _fake_service(["Mocked answer."] * 20)
 
         with (
             patch("backend.agent.BackendService", return_value=svc),
             patch("ragas.evaluate", return_value=fake_ragas_result),
+            patch("backend.logging_config.setup_logging"),
+            patch("backend.logging_config.init_langsmith"),
+            patch("scripts.index_kb.main"),
+            patch("backend.db.profile_store.ProfileStore"),
         ):
             eval_rag.main()
 
-        # Results file must have been written
-        results_path = tmp_path / "eval_results.json"
+        results_path = tmp_path / "eval_results_agent.json"
         assert results_path.exists()
         saved = json.loads(results_path.read_text())
         assert "faithfulness" in saved

@@ -132,8 +132,14 @@ def skin_type_advisor(input_str: str) -> str:
 
         if skin_type is None and docs:
             skin_type = _classify_from_docs(docs)
+        if skin_type is None and not docs:
+            return (
+                "Could you describe your skin in a bit more detail? "
+                "For example: does it feel tight after washing, look shiny by midday, "
+                "or react easily to new products?"
+            )
         if skin_type is None:
-            skin_type = "oily"  # last-resort default
+            skin_type = "oily"  # last-resort default when docs present but inconclusive
 
         # --- Extract characteristics ---
         characteristic = _extract_characteristic(skin_type, docs) if docs else _CHARACTERISTICS.get(skin_type, "")

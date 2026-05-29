@@ -53,7 +53,7 @@ class ProfileStore:
                     user = User(
                         username=username,
                         onboarding_complete=False,
-                        medical_flags="[]",
+                        medical_flags=None,
                     )
                     session.add(user)
                     session.commit()
