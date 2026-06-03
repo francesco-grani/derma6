@@ -105,10 +105,18 @@ if "username" not in st.session_state:
         _logo_b64 = base64.b64encode(_logo_path.read_bytes()).decode()
         st.html(
             f'<img src="data:image/png;base64,{_logo_b64}"'
-            ' style="width:300px;display:block;margin:0 auto 8px auto;" />'
+            ' style="width:300px;display:block;margin:0 auto 4px auto;" />'
+            '<p style="text-align:center;color:#aaa;font-size:1.1rem;margin:0;">'
+            "Skincare advice built for guys who are ready to get it right."
+            "</p>"
         )
     else:
         st.title("Derma6")
+        st.html(
+            '<p style="text-align:center;color:#aaa;font-size:1.1rem;margin:0;">'
+            "Skincare advice built for guys who are ready to get it right."
+            "</p>"
+        )
     st.space("small")
     with st.form("login_form", border=False):
         username = st.text_input(

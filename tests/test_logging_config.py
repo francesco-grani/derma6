@@ -122,16 +122,16 @@ class TestInitLangsmith:
         backend.logging_config._langsmith_initialised = False
 
         with mock.patch("backend.logging_config.settings") as mock_settings:
-            mock_settings.langchain_api_key = "lsv2_test_key"
-            mock_settings.langchain_tracing_v2 = "true"
-            mock_settings.langchain_project = "my_project"
-            mock_settings.langchain_endpoint = "https://eu.api.smith.langchain.com"
+            mock_settings.langsmith_api_key = "lsv2_test_key"
+            mock_settings.langsmith_tracing = "true"
+            mock_settings.langsmith_project = "my_project"
+            mock_settings.langsmith_endpoint = "https://eu.api.smith.langchain.com"
 
             with mock.patch.dict(os.environ, {}, clear=False):
                 init_langsmith()
-                assert os.environ.get("LANGCHAIN_API_KEY") == "lsv2_test_key"
-                assert os.environ.get("LANGCHAIN_PROJECT") == "my_project"
-                assert os.environ.get("LANGCHAIN_ENDPOINT") == "https://eu.api.smith.langchain.com"
+                assert os.environ.get("LANGSMITH_API_KEY") == "lsv2_test_key"
+                assert os.environ.get("LANGSMITH_PROJECT") == "my_project"
+                assert os.environ.get("LANGSMITH_ENDPOINT") == "https://eu.api.smith.langchain.com"
 
     def test_init_langsmith_skips_when_no_key(self) -> None:
         import os
@@ -139,29 +139,29 @@ class TestInitLangsmith:
         backend.logging_config._langsmith_initialised = False
 
         with mock.patch("backend.logging_config.settings") as mock_settings:
-            mock_settings.langchain_api_key = "   "
+            mock_settings.langsmith_api_key = "   "
 
-            env_before = os.environ.get("LANGCHAIN_API_KEY")
+            env_before = os.environ.get("LANGSMITH_API_KEY")
             init_langsmith()
-            assert os.environ.get("LANGCHAIN_API_KEY") == env_before
+            assert os.environ.get("LANGSMITH_API_KEY") == env_before
 
     def test_init_langsmith_is_idempotent(self) -> None:
         import backend.logging_config
         backend.logging_config._langsmith_initialised = False
 
         with mock.patch("backend.logging_config.settings") as mock_settings:
-            mock_settings.langchain_api_key = "lsv2_test_key"
-            mock_settings.langchain_tracing_v2 = "true"
-            mock_settings.langchain_project = "proj"
-            mock_settings.langchain_endpoint = "https://example.com"
+            mock_settings.langsmith_api_key = "lsv2_test_key"
+            mock_settings.langsmith_tracing = "true"
+            mock_settings.langsmith_project = "proj"
+            mock_settings.langsmith_endpoint = "https://example.com"
 
             init_langsmith()
             assert backend.logging_config._langsmith_initialised is True
 
-            mock_settings.langchain_api_key = "different_key"
+            mock_settings.langsmith_api_key = "different_key"
             init_langsmith()
             import os
-            assert os.environ.get("LANGCHAIN_API_KEY") == "lsv2_test_key"
+            assert os.environ.get("LANGSMITH_API_KEY") == "lsv2_test_key"
 
 
 class TestInitSentry:

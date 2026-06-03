@@ -107,9 +107,9 @@ def log_new_session(username: str) -> None:
 
 
 def init_langsmith() -> None:
-    """Enable LangSmith tracing if LANGCHAIN_API_KEY is configured (idempotent).
+    """Enable LangSmith tracing if LANGSMITH_API_KEY is configured (idempotent).
 
-    LangChain reads these env vars directly from os.environ, so we must
+    LangSmith reads these env vars directly from os.environ, so we must
     set them explicitly — pydantic-settings loads them into the Settings
     object but does not write them back to os.environ.
 
@@ -123,19 +123,19 @@ def init_langsmith() -> None:
 
     logger = logging.getLogger(__name__)
 
-    if not settings.langchain_api_key.strip():
-        logger.debug("LangSmith tracing disabled (LANGCHAIN_API_KEY not set).")
+    if not settings.langsmith_api_key.strip():
+        logger.debug("LangSmith tracing disabled (LANGSMITH_API_KEY not set).")
         return
 
-    os.environ["LANGCHAIN_TRACING_V2"] = settings.langchain_tracing_v2
-    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-    os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
+    os.environ["LANGSMITH_TRACING"] = settings.langsmith_tracing
+    os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
+    os.environ["LANGSMITH_ENDPOINT"] = settings.langsmith_endpoint
 
     logger.info(
         "LangSmith tracing enabled — project: %s, endpoint: %s",
-        settings.langchain_project,
-        settings.langchain_endpoint,
+        settings.langsmith_project,
+        settings.langsmith_endpoint,
     )
 
     _langsmith_initialised = True
