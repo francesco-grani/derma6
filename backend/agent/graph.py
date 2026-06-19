@@ -21,9 +21,13 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from openai import AsyncOpenAI
+
 from backend.config import settings
+from backend.pricing import calculate_cost  # fallback only
 from backend.db.chat_history import get_history
 from backend.db.profile_store import ProfileStore
+from backend.db.session_store import SessionStore
 from backend.rate_limiter import RateLimiter
 from backend.schemas import BackendResponse, RoutineSchema, RoutineStepSchema, ToolResult, UserProfile
 from backend.tools.conflict_checker import conflict_checker
@@ -312,6 +316,7 @@ def build_graph(tools: list, system_prompt: str, checkpointer=None):
         openai_api_key=settings.openrouter_api_key,
         openai_api_base=settings.openrouter_base_url,
         temperature=0.3,
+        stream_usage=True,  # include usage_metadata on final streaming chunk
     )
     llm_with_tools = llm.bind_tools(tools)
 
@@ -402,6 +407,46 @@ def extract_tool_results(messages: list) -> list[ToolResult]:
     return results
 
 
+# ── Session title generation ─────────────────────────────────────────────────
+
+async def _generate_session_title(first_message: str) -> str:
+    """Ask the LLM to produce a concise 4-6 word title from the first user message."""
+    client = AsyncOpenAI(
+        api_key=settings.openrouter_api_key,
+        base_url=settings.openrouter_base_url,
+    )
+    try:
+        resp = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Generate a concise 4-6 word title that captures the main topic "
+                        "of the user message below. Return only the title, no quotes, "
+                        "no punctuation at the end."
+                    ),
+                },
+                {"role": "user", "content": first_message[:300]},
+            ],
+            max_tokens=20,
+            temperature=0.3,
+        )
+        return (resp.choices[0].message.content or "").strip()[:80]
+    except Exception as exc:
+        logger.warning("Title generation failed: %s", exc)
+        return ""
+
+
+async def _set_title_if_first_message(session_id: str, message: str) -> str:
+    """Generate and persist an LLM title for a new session. Returns the title."""
+    title = await _generate_session_title(message)
+    if title:
+        SessionStore().update_title(session_id, title)
+        logger.info("Title set for session %s: %r", session_id, title)
+    return title
+
+
 # ── Public streaming interface ────────────────────────────────────────────────
 
 _rate_limiter = RateLimiter()
@@ -410,6 +455,7 @@ _rate_limiter = RateLimiter()
 async def stream_agent_response(
     username: str,
     message: str,
+    session_id: str,
 ) -> AsyncIterator[str]:
     """Async generator that yields SSE-formatted lines for one chat turn.
 
@@ -436,12 +482,14 @@ async def stream_agent_response(
         store.get_or_create_user(username)
         profile = store.get_profile(username)
         system_prompt = build_system_prompt(profile)
-        chat_history = get_history(username)
+        chat_history = get_history(session_id)
+        prior_messages = list(chat_history.messages)
+        is_first_message = len(prior_messages) == 0
 
         tools = _make_tools(username)
         graph = build_graph(tools, system_prompt)
 
-        input_messages = list(chat_history.messages) + [HumanMessage(content=message)]
+        input_messages = prior_messages + [HumanMessage(content=message)]
 
         accumulated_text: list[str] = []
         accumulated_messages: list = []
@@ -473,6 +521,37 @@ async def stream_agent_response(
         chat_history.add_user_message(message)
         chat_history.add_ai_message(answer)
 
+        # ── Token accounting ────────────────────────────────────────────
+        # Prefer OpenRouter's own cost field (response_metadata["token_usage"]["cost"]).
+        # Fall back to our pricing table only if OpenRouter doesn't include it.
+        prompt_tokens = 0
+        completion_tokens = 0
+        openrouter_cost: float | None = None
+
+        for msg in accumulated_messages:
+            # usage_metadata is LangChain's standardised format (input/output tokens)
+            usage = getattr(msg, "usage_metadata", None)
+            if usage:
+                prompt_tokens += usage.get("input_tokens", 0)
+                completion_tokens += usage.get("output_tokens", 0)
+
+            # response_metadata["token_usage"] is the raw OpenRouter usage dict
+            token_usage = (getattr(msg, "response_metadata", None) or {}).get("token_usage") or {}
+            if isinstance(token_usage, dict) and "cost" in token_usage:
+                openrouter_cost = (openrouter_cost or 0.0) + float(token_usage["cost"])
+
+        if prompt_tokens or completion_tokens:
+            cost = openrouter_cost if openrouter_cost is not None else (
+                calculate_cost(settings.llm_model, prompt_tokens, completion_tokens)
+            )
+            source = "openrouter" if openrouter_cost is not None else "pricing_table"
+            SessionStore().add_token_usage(session_id, prompt_tokens, completion_tokens, cost)
+            logger.debug(
+                "Tokens (%s) — session=%s prompt=%d completion=%d cost=$%.6f",
+                source, session_id, prompt_tokens, completion_tokens, cost,
+            )
+
+        # Generate title from first message — fire-and-forget, never blocks stream
         logger.info(
             "stream_agent_response complete for %s: citations=%d rag_docs=%d tools=%d",
             username, len(citations), len(rag_context), len(tool_results_objs),
@@ -484,6 +563,13 @@ async def stream_agent_response(
             "rag_context": rag_context,
             "tool_results": [tr.model_dump() for tr in tool_results_objs],
         })
+
+        # Generate title after content is streamed; emit it so the frontend
+        # can update the sidebar without polling or a full page refresh.
+        if is_first_message:
+            title = await _set_title_if_first_message(session_id, message)
+            if title:
+                yield _sse({"type": "session_title", "session_id": session_id, "title": title})
 
     except Exception as exc:
         logger.error("stream_agent_response error for %s: %s", username, exc)

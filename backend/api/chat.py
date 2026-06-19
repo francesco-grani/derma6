@@ -13,12 +13,13 @@ router = APIRouter(tags=["chat"])
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str
 
 
 @router.post("/api/chat")
 async def chat(req: ChatRequest, username: str = Depends(get_current_user)):
     return StreamingResponse(
-        stream_agent_response(username, req.message),
+        stream_agent_response(username, req.message, req.session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -28,12 +29,9 @@ async def chat(req: ChatRequest, username: str = Depends(get_current_user)):
 
 
 @router.get("/api/me/chat/history")
-def chat_history(username: str = Depends(get_current_user)):
-    """Return persisted chat history for the current user.
-
-    Maps LangChain role names ('human'/'ai') to frontend names ('user'/'assistant').
-    """
-    messages = serialise_history(username)
+def chat_history(session_id: str, username: str = Depends(get_current_user)):
+    """Return persisted chat history for a session."""
+    messages = serialise_history(session_id)
     return [
         {
             "role": "user" if m["role"] == "human" else "assistant",

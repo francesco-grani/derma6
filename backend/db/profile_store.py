@@ -74,6 +74,15 @@ class ProfileStore:
                 user = session.query(User).filter_by(username=username).first()
                 if user is None:
                     raise ProfileStoreError(f"User '{username}' not found.")
+                # Lazy repair: correct the flag for accounts onboarded before the
+                # medical_flags bug was fixed (they have all 3 fields but flag=False).
+                if not user.onboarding_complete and (
+                    user.skin_type is not None
+                    and user.skin_concerns is not None
+                    and user.has_shaving_routine is not None
+                ):
+                    user.onboarding_complete = True
+                    session.commit()
                 return self._user_to_profile(user)
         except ProfileStoreError:
             raise
@@ -346,12 +355,15 @@ class ProfileStore:
         return user
 
     def _check_onboarding_complete(self, session: Session, user: User) -> None:
-        """Set onboarding_complete=True when all four profile fields are non-null."""
+        """Set onboarding_complete=True when the three mandatory profile fields are set.
+
+        medical_flags is intentionally excluded: the agent skips add_medical_flag_tool
+        when the user has no conditions, so it may remain None for healthy users.
+        """
         if (
             user.skin_type is not None
             and user.skin_concerns is not None
             and user.has_shaving_routine is not None
-            and user.medical_flags is not None
         ):
             user.onboarding_complete = True
 

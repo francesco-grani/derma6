@@ -123,6 +123,29 @@ export function exportUrl(format: 'html' | 'pdf') {
   return `/api/me/export?format=${format}`
 }
 
+// ── Sessions ──────────────────────────────────────────────────────────────
+
+export interface ChatSessionInfo {
+  session_id: string
+  title: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function apiGetSessions(): Promise<ChatSessionInfo[]> {
+  const res = await authedFetch('/api/me/sessions')
+  return res.json()
+}
+
+export async function apiCreateSession(): Promise<ChatSessionInfo> {
+  const res = await authedFetch('/api/me/sessions', { method: 'POST' })
+  return res.json()
+}
+
+export async function apiDeleteSession(session_id: string): Promise<void> {
+  await authedFetch(`/api/me/sessions/${encodeURIComponent(session_id)}`, { method: 'DELETE' })
+}
+
 // ── Skin Analysis ─────────────────────────────────────────────────────────
 
 export interface Alternative {

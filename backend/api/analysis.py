@@ -64,6 +64,10 @@ async def analyze_skin(
         )
 
     data = await file.read()
+    logger.info(
+        "analyze-skin: user=%s content_type=%r size_bytes=%d",
+        username, file.content_type, len(data),
+    )
     if len(data) > _MAX_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="Image too large. Max 10 MB.")
 
@@ -101,6 +105,7 @@ async def analyze_skin(
         ) from exc
 
     raw = (response.choices[0].message.content or "").strip()
+    logger.info("Vision raw response for %s: %r", username, raw[:500])
     try:
         parsed = json.loads(raw)
         result = SkinAnalysisResult(**parsed)
@@ -111,8 +116,8 @@ async def analyze_skin(
         ) from exc
 
     logger.info(
-        "Skin analysis for %s: condition=%s confidence=%.2f",
-        username, result.condition, result.confidence,
+        "Skin analysis for %s: condition=%s confidence=%.2f reasoning=%r",
+        username, result.condition, result.confidence, result.reasoning,
     )
     return result
 
