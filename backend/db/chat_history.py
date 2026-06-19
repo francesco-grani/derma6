@@ -1,7 +1,7 @@
 """Chat history management for conversation context.
 
-Uses LangChain's SQLChatMessageHistory to persist conversation messages
-keyed by session_id (username).
+History is keyed by session_id (UUID), not username. Each chat session has its
+own isolated message thread in LangChain's SQLChatMessageHistory / message_store.
 """
 
 from datetime import datetime, timezone
@@ -12,50 +12,29 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from backend.config import settings
 
 
-def get_history(username: str) -> BaseChatMessageHistory:
-    """Get or create chat history for a user.
+def get_history(session_id: str) -> BaseChatMessageHistory:
+    """Get or create chat history for a session_id.
 
-    Args:
-        username: The username to retrieve history for (used as session_id).
-
-    Returns:
-        A BaseChatMessageHistory object with .messages, .add_user_message(),
-        .add_ai_message(), and .clear() methods.
+    session_id can be a UUID (new sessions) or a legacy username string
+    (migrated from the pre-session architecture).
     """
     return SQLChatMessageHistory(
-        session_id=username,
+        session_id=session_id,
         connection=settings.sqlite_url,
     )
 
 
-def clear(username: str) -> None:
-    """Clear all chat history for a user.
-
-    Args:
-        username: The username whose history should be cleared.
-    """
-    history = get_history(username)
-    history.clear()
+def clear(session_id: str) -> None:
+    """Clear all messages for a session."""
+    get_history(session_id).clear()
 
 
-def serialise_history(username: str) -> list[dict]:
-    """Return chat history as a list of dicts suitable for JSON export.
-
-    Each message is returned as a dict with 'role', 'content', and 'timestamp'.
-    Note: SQLChatMessageHistory does not persist per-message timestamps; the
-    timestamp field is set to the serialisation time as a placeholder.
-
-    Returns:
-        A list of dicts with keys: role ("human"|"ai"), content (str),
-        timestamp (ISO8601). Empty list if no messages exist.
-    """
-    history = get_history(username)
+def serialise_history(session_id: str) -> list[dict]:
+    """Return history as a list of dicts for JSON export or API responses."""
+    history = get_history(session_id)
+    now = datetime.now(timezone.utc).isoformat()
     result = []
     for msg in history.messages:
         role = "human" if msg.type == "human" else "ai"
-        result.append({
-            "role": role,
-            "content": msg.content,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        result.append({"role": role, "content": msg.content, "timestamp": now})
     return result

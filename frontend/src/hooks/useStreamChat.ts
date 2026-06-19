@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { getToken } from '@/lib/api'
 
 export interface RagItem {
@@ -20,29 +21,31 @@ export interface ChatMessage {
   tool_results?: ToolResultItem[]
 }
 
-export function useStreamChat() {
+export function useStreamChat(sessionId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const qc = useQueryClient()
 
-  // Load persisted history from the server on mount so messages survive navigation
+  // Load history whenever sessionId changes
   useEffect(() => {
+    if (!sessionId) { setMessages([]); return }
     const token = getToken()
     if (!token) return
-    fetch('/api/me/chat/history', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/me/chat/history?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then(r => r.ok ? r.json() : [])
-      .then((history: ChatMessage[]) => { if (history.length > 0) setMessages(history) })
+      .then((history: ChatMessage[]) => setMessages(history))
       .catch(() => {})
-  }, [])
+  }, [sessionId])
 
   const sendMessage = useCallback(async (text: string) => {
-    if (streaming) return
+    if (streaming || !sessionId) return
 
     const userMsg: ChatMessage = { role: 'user', content: text }
     setMessages(prev => [...prev, userMsg])
     setStreaming(true)
-
-    // Placeholder for assistant streaming reply
     setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
     const ctrl = new AbortController()
@@ -55,7 +58,7 @@ export function useStreamChat() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, session_id: sessionId }),
         signal: ctrl.signal,
       })
 
@@ -99,6 +102,9 @@ export function useStreamChat() {
                 rag_context: event.rag_context ?? [],
                 tool_results: event.tool_results ?? [],
               }))
+            } else if (event.type === 'session_title') {
+              // Title just became available — refresh the sidebar session list
+              qc.invalidateQueries({ queryKey: ['sessions'] })
             } else if (event.type === 'error') {
               updateLast(msg => ({ ...msg, content: msg.content || `⚠️ ${event.content}` }))
             }
@@ -107,6 +113,8 @@ export function useStreamChat() {
           }
         }
       }
+
+      // Session list is refreshed via the 'session_title' SSE event (first message only)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setMessages(prev => {
@@ -122,7 +130,7 @@ export function useStreamChat() {
       setStreaming(false)
       abortRef.current = null
     }
-  }, [streaming])
+  }, [streaming, sessionId, qc])
 
   const clearMessages = useCallback(() => setMessages([]), [])
 

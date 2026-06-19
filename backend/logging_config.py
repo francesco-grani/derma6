@@ -127,7 +127,7 @@ def init_langsmith() -> None:
         logger.debug("LangSmith tracing disabled (LANGSMITH_API_KEY not set).")
         return
 
-    os.environ["LANGSMITH_TRACING"] = settings.langsmith_tracing
+    os.environ["LANGSMITH_TRACING"] = "true"  # key is present → always enable
     os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
     os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
     os.environ["LANGSMITH_ENDPOINT"] = settings.langsmith_endpoint

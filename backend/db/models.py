@@ -47,6 +47,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    chat_sessions: Mapped[list["ChatSession"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class Routine(Base):
@@ -84,6 +88,26 @@ class RoutineStep(Base):
 
     # Relationships
     routine: Mapped["Routine"] = relationship(back_populates="steps")
+
+
+class ChatSession(Base):
+    """Represents a named conversation session for a user."""
+
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[str] = mapped_column(primary_key=True)  # UUID string
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[Optional[str]] = mapped_column(default=None)
+    total_prompt_tokens: Mapped[int] = mapped_column(default=0)
+    total_completion_tokens: Mapped[int] = mapped_column(default=0)
+    total_cost_usd: Mapped[float] = mapped_column(default=0.0)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user: Mapped["User"] = relationship(back_populates="chat_sessions")
 
 
 class IntroductionPlan(Base):

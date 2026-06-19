@@ -5,11 +5,12 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import admin, analysis, auth, chat, export, profile, routines
-from backend.logging_config import setup_logging
+from backend.api import admin, analysis, auth, chat, export, profile, routines, sessions
+from backend.logging_config import init_langsmith, setup_logging
 from backend.middleware.auth import JWTAuthMiddleware
 
 setup_logging()
+init_langsmith()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -39,6 +40,7 @@ app.include_router(routines.router)
 app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(analysis.router)
+app.include_router(sessions.router)
 
 
 @app.get("/health")

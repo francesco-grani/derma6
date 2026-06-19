@@ -1,30 +1,41 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAnalyzeSkin, useSaveMedicalFlag } from '@/hooks/useSkinAnalysis'
+import { useSession } from '@/lib/sessionContext'
 import type { SkinAnalysisResult } from '@/lib/api'
 
 export default function SkinAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [result, setResult] = useState<SkinAnalysisResult | null>(null)
   const [saved, setSaved] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
 
   const analyze = useAnalyzeSkin()
   const saveFlag = useSaveMedicalFlag()
   const navigate = useNavigate()
+  const { startNewSession } = useSession()
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    applyFile(file)
+  }
+
+  function applyFile(file: File) {
     setSelectedFile(file)
     setResult(null)
     setSaved(false)
     const url = URL.createObjectURL(file)
     setPreview(url)
+  }
+
+  function handleCameraCapture(file: File) {
+    setCameraOpen(false)
+    applyFile(file)
   }
 
   async function handleAnalyze() {
@@ -46,7 +57,12 @@ export default function SkinAnalysisPage() {
     setSaved(false)
     analyze.reset()
     if (fileInputRef.current) fileInputRef.current.value = ''
-    if (cameraInputRef.current) cameraInputRef.current.value = ''
+  }
+
+  async function handleChatAbout(message: string) {
+    await startNewSession()
+    sessionStorage.setItem('derma6:initial-message', message)
+    navigate({ to: '/chat' })
   }
 
   const confidencePct = result ? Math.round(result.confidence * 100) : 0
@@ -62,7 +78,6 @@ export default function SkinAnalysisPage() {
         Upload or take a photo of your skin for AI-powered screening.
       </p>
 
-      {/* Hidden inputs */}
       <input
         ref={fileInputRef}
         type="file"
@@ -70,14 +85,10 @@ export default function SkinAnalysisPage() {
         style={{ display: 'none' }}
         onChange={handleFileSelect}
       />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        style={{ display: 'none' }}
-        onChange={handleFileSelect}
-      />
+
+      {cameraOpen && (
+        <CameraModal onCapture={handleCameraCapture} onClose={() => setCameraOpen(false)} />
+      )}
 
       {/* Upload area */}
       {!preview && (
@@ -97,7 +108,7 @@ export default function SkinAnalysisPage() {
               Upload Photo
             </Button>
             <Button
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => setCameraOpen(true)}
               variant="outline"
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', cursor: 'pointer' }}
             >
@@ -187,7 +198,6 @@ export default function SkinAnalysisPage() {
                 <p style={{ color: '#E0E8E0', fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
                   {result.condition}
                 </p>
-                {/* Confidence bar */}
                 <div style={{ marginBottom: 6 }}>
                   <div className="flex justify-between mb-1">
                     <span style={{ color: '#9EAD9E', fontSize: 11 }}>Confidence</span>
@@ -251,6 +261,42 @@ export default function SkinAnalysisPage() {
             </p>
           </div>
 
+          {/* Chat actions */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>
+              Continue in Chat
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                {
+                  label: 'Tell me more about this',
+                  message: `I just got my skin analysis result: ${result.condition} (${confidencePct}% confidence). ${result.reasoning} Can you explain what this condition means for my skin?`,
+                },
+                {
+                  label: 'Suggest a routine',
+                  message: `My skin analysis detected ${result.condition} (${confidencePct}% confidence). Can you build me a skincare routine tailored to this condition?`,
+                },
+                {
+                  label: 'Ingredients to avoid',
+                  message: `My skin analysis detected ${result.condition}. What ingredients should I avoid, and are there any common ingredient conflicts I should know about?`,
+                },
+                {
+                  label: 'Should I see a doctor?',
+                  message: `My skin analysis detected ${result.condition} with ${confidencePct}% confidence. How serious is this typically, and should I consult a dermatologist?`,
+                },
+              ].map(({ label, message }) => (
+                <button
+                  key={label}
+                  onClick={() => handleChatAbout(message)}
+                  className="px-3 py-2 rounded-xl text-xs text-left transition-opacity hover:opacity-80"
+                  style={{ background: '#2E3D2F', border: '1px solid #4B5A4C', color: '#E0E8E0', cursor: 'pointer' }}
+                >
+                  {label} →
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3 flex-wrap">
             {!saved ? (
@@ -289,6 +335,114 @@ export default function SkinAnalysisPage() {
         </div>
       )}
     </PageShell>
+  )
+}
+
+function CameraModal({ onCapture, onClose }: {
+  onCapture: (file: File) => void
+  onClose: () => void
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(s => {
+        if (!active) { s.getTracks().forEach(t => t.stop()); return }
+        setStream(s)
+        if (videoRef.current) videoRef.current.srcObject = s
+      })
+      .catch(err => {
+        if (!active) return
+        setError(
+          err.name === 'NotAllowedError'
+            ? 'Camera permission denied. Allow camera access and try again.'
+            : 'Camera not available on this device.'
+        )
+      })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    return () => { stream?.getTracks().forEach(t => t.stop()) }
+  }, [stream])
+
+  function capture() {
+    const video = videoRef.current
+    if (!video) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d')!.drawImage(video, 0, 0)
+    canvas.toBlob(blob => {
+      if (!blob) return
+      const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+      stream?.getTracks().forEach(t => t.stop())
+      onCapture(file)
+    }, 'image/jpeg', 0.92)
+  }
+
+  function close() {
+    stream?.getTracks().forEach(t => t.stop())
+    onClose()
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)',
+        zIndex: 50, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 20,
+      }}
+    >
+      {error ? (
+        <div style={{ color: '#F0B8B8', textAlign: 'center', padding: 24, maxWidth: 320 }}>
+          <p style={{ fontSize: 15, marginBottom: 16 }}>⚠️ {error}</p>
+          <Button
+            onClick={close}
+            variant="outline"
+            style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', cursor: 'pointer' }}
+          >
+            Close
+          </Button>
+        </div>
+      ) : (
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              borderRadius: 12,
+              maxWidth: '90vw',
+              maxHeight: '60vh',
+              background: '#1C2520',
+              display: 'block',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Button
+              onClick={capture}
+              disabled={!stream}
+              style={{ background: '#7A9B7D', color: '#1C2520', fontWeight: 600, cursor: 'pointer' }}
+            >
+              📸 Capture
+            </Button>
+            <Button
+              onClick={close}
+              variant="outline"
+              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', cursor: 'pointer' }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 

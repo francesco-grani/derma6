@@ -11,6 +11,7 @@ import {
 } from '@tanstack/react-router'
 import './index.css'
 import { AuthProvider } from './lib/auth'
+import { SessionProvider } from './lib/sessionContext'
 import Sidebar from './components/layout/Sidebar'
 import LoginPage from './pages/LoginPage'
 import ChatPage from './pages/ChatPage'
@@ -28,7 +29,9 @@ const rootRoute = createRootRoute({
   component: () => (
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
-        <Outlet />
+        <SessionProvider>
+          <Outlet />
+        </SessionProvider>
       </QueryClientProvider>
     </AuthProvider>
   ),

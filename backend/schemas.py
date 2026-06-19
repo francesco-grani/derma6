@@ -107,6 +107,15 @@ class BackendRequest(BaseModel):
         return v
 
 
+class ChatSessionInfo(BaseModel):
+    """Summary of a chat session for the session list."""
+
+    session_id: str
+    title: str | None = None
+    created_at: str
+    updated_at: str
+
+
 class BackendResponse(BaseModel):
     """API response schema for the RAG chatbot backend."""
 
