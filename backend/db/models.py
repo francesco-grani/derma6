@@ -34,6 +34,7 @@ class User(Base):
     location: Mapped[Optional[str]] = mapped_column(default=None)  # country / region
     medical_flags: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     onboarding_complete: Mapped[bool] = mapped_column(default=False)
+    is_admin: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(),
@@ -178,6 +179,9 @@ def _ensure_schema(eng) -> None:
             conn.commit()
         if "location" not in u_cols:
             conn.execute(text("ALTER TABLE users ADD COLUMN location VARCHAR"))
+            conn.commit()
+        if "is_admin" not in u_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
             conn.commit()
 
 

@@ -8,14 +8,20 @@ export function getUsername(): string | null {
   return localStorage.getItem('derma6_username')
 }
 
-export function setAuth(token: string, username: string) {
+export function getIsAdmin(): boolean {
+  return localStorage.getItem('derma6_is_admin') === 'true'
+}
+
+export function setAuth(token: string, username: string, isAdmin: boolean) {
   localStorage.setItem('derma6_token', token)
   localStorage.setItem('derma6_username', username)
+  localStorage.setItem('derma6_is_admin', String(isAdmin))
 }
 
 export function clearAuth() {
   localStorage.removeItem('derma6_token')
   localStorage.removeItem('derma6_username')
+  localStorage.removeItem('derma6_is_admin')
 }
 
 function handleUnauthorized() {
@@ -56,7 +62,7 @@ export async function apiRegister(username: string, password: string) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Registration failed')
   }
-  return res.json() as Promise<{ access_token: string; username: string }>
+  return res.json() as Promise<{ access_token: string; username: string; is_admin: boolean }>
 }
 
 export async function apiLogin(username: string, password: string) {
@@ -69,7 +75,7 @@ export async function apiLogin(username: string, password: string) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? 'Login failed')
   }
-  return res.json() as Promise<{ access_token: string; username: string }>
+  return res.json() as Promise<{ access_token: string; username: string; is_admin: boolean }>
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────

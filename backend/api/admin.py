@@ -40,8 +40,9 @@ _eval_state: dict[str, Any] = {
 
 # ── Auth guard ────────────────────────────────────────────────────────────────
 
-def require_admin(username: str = Depends(get_current_user)) -> str:
-    if username != "admin":
+def require_admin(username: str = Depends(get_current_user), db: Session = Depends(get_db)) -> str:
+    user = db.query(User).filter_by(username=username).first()
+    if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required.")
     return username
 
