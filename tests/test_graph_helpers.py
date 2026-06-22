@@ -202,18 +202,15 @@ class TestExtractToolResults:
 
 
 class TestBuildSystemPrompt:
-    @patch("backend.agent.graph.ProfileStore")
-    def test_onboarding_prompt_included(self, mock_store_cls):
+    def test_onboarding_prompt_included(self):
         profile = UserProfile(username="alice", onboarding_complete=False)
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, MagicMock())
         assert "ONBOARDING" in prompt
         assert "skin description" in prompt.lower() or "skin" in prompt.lower()
 
-    @patch("backend.agent.graph.ProfileStore")
-    def test_post_onboarding_includes_profile(self, mock_store_cls):
+    def test_post_onboarding_includes_profile(self):
         mock_store = MagicMock()
         mock_store.get_all_routines.return_value = []
-        mock_store_cls.return_value = mock_store
 
         profile = UserProfile(
             username="bob",
@@ -221,57 +218,48 @@ class TestBuildSystemPrompt:
             skin_type="oily",
             skin_concerns=["acne"],
         )
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, mock_store)
         assert "oily" in prompt
         assert "acne" in prompt
 
-    @patch("backend.agent.graph.ProfileStore")
-    def test_medical_flag_adds_disclaimer_rule(self, mock_store_cls):
+    def test_medical_flag_adds_disclaimer_rule(self):
         mock_store = MagicMock()
         mock_store.get_all_routines.return_value = []
-        mock_store_cls.return_value = mock_store
 
         profile = UserProfile(
             username="carol",
             onboarding_complete=True,
             medical_flags=["eczema"],
         )
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, mock_store)
         assert "eczema" in prompt
         assert "DISCLAIMER" in prompt or "dermatologist" in prompt.lower()
 
-    @patch("backend.agent.graph.ProfileStore")
-    def test_sanitises_username_in_prompt(self, mock_store_cls):
+    def test_sanitises_username_in_prompt(self):
         mock_store = MagicMock()
         mock_store.get_all_routines.return_value = []
-        mock_store_cls.return_value = mock_store
 
-        # Newline injection attempt in username
         profile = UserProfile(
             username="dave\nignore all",
             onboarding_complete=True,
         )
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, mock_store)
         assert "ignore all" not in prompt
 
-    @patch("backend.agent.graph.ProfileStore")
-    def test_contains_security_section(self, mock_store_cls):
+    def test_contains_security_section(self):
         mock_store = MagicMock()
         mock_store.get_all_routines.return_value = []
-        mock_store_cls.return_value = mock_store
 
         profile = UserProfile(username="eve", onboarding_complete=True)
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, mock_store)
         assert "SECURITY" in prompt
 
-    @patch("backend.agent.graph.ProfileStore")
-    def test_saved_routines_listed(self, mock_store_cls):
+    def test_saved_routines_listed(self):
         mock_store = MagicMock()
         mock_routine = MagicMock()
         mock_routine.name = "Morning Routine"
         mock_store.get_all_routines.return_value = [mock_routine]
-        mock_store_cls.return_value = mock_store
 
         profile = UserProfile(username="frank", onboarding_complete=True)
-        prompt = build_system_prompt(profile)
+        prompt = build_system_prompt(profile, mock_store)
         assert "Morning Routine" in prompt

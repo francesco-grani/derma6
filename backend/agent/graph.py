@@ -27,10 +27,10 @@ from langgraph.types import interrupt, Command
 from openai import AsyncOpenAI
 
 from backend.config import settings
-from backend.pricing import calculate_cost  # fallback only
 from backend.db.chat_history import get_history
+from backend.db.deps import get_profile_store, get_session_store
 from backend.db.profile_store import ProfileStore
-from backend.db.session_store import SessionStore
+from backend.pricing import calculate_cost
 from backend.rate_limiter import RateLimiter
 from backend.schemas import BackendResponse, RoutineSchema, RoutineStepSchema, ToolResult, UserProfile
 from backend.tools.conflict_checker import conflict_checker
@@ -44,9 +44,27 @@ logger = logging.getLogger(__name__)
 
 _AUDIT_LOGGER = logging.getLogger("derma6.audit")
 
+# ── Module-level singletons ───────────────────────────────────────────────────
+
 # Shared in-memory checkpointer — enables HITL interrupt/resume within a process lifetime.
 # Replace with AsyncSqliteSaver for persistence across restarts.
 _checkpointer = MemorySaver()
+
+_store = get_profile_store()
+_sess_store = get_session_store()
+
+_llm = ChatOpenAI(
+    model=settings.llm_model,
+    openai_api_key=settings.openrouter_api_key,
+    openai_api_base=settings.openrouter_base_url,
+    temperature=0.1,
+    stream_usage=True,  # include usage_metadata on final streaming chunk
+)
+
+_title_client = AsyncOpenAI(
+    api_key=settings.openrouter_api_key,
+    base_url=settings.openrouter_base_url,
+)
 
 # ── Prompt constants (ported verbatim from AE.2.5) ──────────────────────────
 
@@ -108,10 +126,7 @@ _HTML_CTRL = re.compile(r"[<>]")
 
 
 def _sanitise(text: str, max_len: int = 200) -> str:
-    """Sanitise user-controlled text before embedding in the system prompt.
-
-    Extended from AE.2.5: also strips HTML angle brackets and caps length.
-    """
+    """Sanitise user-controlled text before embedding in the system prompt."""
     for nl in ("\r\n", "\r", "\n"):
         idx = text.find(nl)
         if idx != -1:
@@ -190,8 +205,8 @@ def _tool_instructions(username: str) -> str:
 
 # ── Profile-writing tool closures ────────────────────────────────────────────
 
-def _make_tools(username: str) -> list:
-    """Return username-bound tool list. Username injected via closure — LLM never sees it."""
+def _make_tools(username: str, store: ProfileStore) -> list:
+    """Return username-bound tool list. Username and store injected via closure — LLM never sees them."""
 
     @lc_tool
     def skin_type_advisor_tool(description: str) -> str:
@@ -210,13 +225,11 @@ def _make_tools(username: str) -> list:
                Format: {"cleanser": {"suggested": "CeraVe Foaming", "budget": "Neutrogena OFW"}, ...}
                Omit or pass "" if no product suggestions are available."""
         _audit(username, "save_routine_tool", f"name={name[:50]}")
-        # Tolerate arrow/slash/newline separators in case the LLM ignores the comma rule.
         step_list = [s.strip() for s in re.split(r"[,→/\n]|->", steps) if s.strip()]
         if not step_list:
             return "Error: no steps provided."
         routine_name = name.strip() or "My Routine"
 
-        # Parse optional product suggestions.
         sugg_map: dict = {}
         if suggestions and suggestions.strip():
             try:
@@ -226,7 +239,6 @@ def _make_tools(username: str) -> list:
             except (json.JSONDecodeError, ValueError):
                 sugg_map = {}
 
-        # Build HITL preview items (include product info when available).
         preview_items = []
         for step in step_list:
             item: dict = {"ingredient": step}
@@ -237,10 +249,8 @@ def _make_tools(username: str) -> list:
                 item["budget"] = sugg["budget"]
             preview_items.append(item)
 
-        # Determine if a routine with this name already exists so we only offer
-        # "overwrite" when it makes sense.
         try:
-            existing_routine = ProfileStore().get_routine(username, routine_name)
+            existing_routine = store.get_routine(username, routine_name)
         except Exception:
             existing_routine = None
 
@@ -262,7 +272,6 @@ def _make_tools(username: str) -> list:
             "subtitle": "Discard this routine",
         })
 
-        # HITL: pause and surface the routine for user approval before persisting.
         decision: dict = interrupt({
             "kind": "routine_diff",
             "routine_name": routine_name,
@@ -278,10 +287,8 @@ def _make_tools(username: str) -> list:
             return "Routine not saved — cancelled by user."
 
         if chosen == "save_new":
-            # Use the user-supplied name if given; otherwise auto-suffix to avoid collision.
             routine_name = note if note else (f"{routine_name} (New)" if existing_routine else routine_name)
 
-        # "overwrite" keeps routine_name as-is; save_routine already upserts by name.
         step_schemas = [
             RoutineStepSchema(
                 position=i + 1,
@@ -293,7 +300,7 @@ def _make_tools(username: str) -> list:
         ]
         routine = RoutineSchema(name=routine_name, steps=step_schemas)
         try:
-            ProfileStore().save_routine(username, routine)
+            store.save_routine(username, routine)
             logger.info("Routine '%s' saved for %s: %d steps", routine_name, username, len(step_list))
             return f"✅ '{routine_name}' saved ({len(step_list)} steps). You can view it in the Routine Viewer."
         except Exception as exc:
@@ -316,7 +323,7 @@ def _make_tools(username: str) -> list:
         if not concern_list:
             return "Error: at least one concern is required."
         try:
-            ProfileStore().update_skin_concerns(username, concern_list)
+            store.update_skin_concerns(username, concern_list)
             return f"Skin concerns saved: {', '.join(concern_list)}."
         except Exception as exc:
             logger.error("update_skin_concerns_tool failed: %s", exc)
@@ -341,7 +348,7 @@ def _make_tools(username: str) -> list:
         chosen = decision.get("choice", "grow")
         labels = {"shave": "clean-shaven", "trim": "trims/maintains beard", "grow": "lets beard grow"}
         try:
-            ProfileStore().update_beard_style(username, chosen)
+            store.update_beard_style(username, chosen)
             return f"Facial hair style saved: {labels.get(chosen, chosen)}."
         except Exception as exc:
             logger.error("update_beard_style_tool failed: %s", exc)
@@ -366,7 +373,7 @@ def _make_tools(username: str) -> list:
         if not loc:
             return "Location not provided — skipped."
         try:
-            ProfileStore().update_location(username, loc)
+            store.update_location(username, loc)
             return f"Location saved: {loc}. I'll prioritise products available in your region."
         except Exception as exc:
             logger.error("update_location_tool failed: %s", exc)
@@ -382,15 +389,13 @@ def _make_tools(username: str) -> list:
             return "Error: condition name must not be empty."
         _audit(username, "add_medical_flag_tool", condition[:50])
 
-        # Guard: skip interrupt and save if condition is already recorded.
         try:
-            existing_flags = ProfileStore().get_profile(username).medical_flags
+            existing_flags = store.get_profile(username).medical_flags
             if any(f.lower() == condition.lower() for f in existing_flags):
                 return f"'{condition}' is already in your medical profile — no change needed."
         except Exception:
             pass
 
-        # HITL-C: hard confirmation gate before writing any medical flag.
         decision: dict = interrupt({
             "kind": "medical_flag_confirm",
             "condition": condition,
@@ -406,7 +411,7 @@ def _make_tools(username: str) -> list:
             return f"Medical condition '{condition}' not saved."
 
         try:
-            ProfileStore().add_medical_flag(username, condition)
+            store.add_medical_flag(username, condition)
             return (
                 f"Medical flag '{condition}' saved. A dermatologist disclaimer will appear "
                 "on responses that include specific recommendations."
@@ -423,7 +428,7 @@ def _make_tools(username: str) -> list:
         Input: pass the literal string 'ready'."""
         _audit(username, "finalize_onboarding_tool", ready[:20])
         try:
-            profile = ProfileStore().get_profile(username)
+            profile = store.get_profile(username)
         except Exception as exc:
             return f"Error reading profile: {exc}"
 
@@ -452,7 +457,7 @@ def _make_tools(username: str) -> list:
 
         if choice == "confirm":
             try:
-                ProfileStore().complete_onboarding(username)
+                store.complete_onboarding(username)
                 return "✅ Profile saved and onboarding complete! I'll now tailor all advice to your skin."
             except Exception as exc:
                 logger.error("finalize_onboarding_tool save failed: %s", exc)
@@ -494,7 +499,6 @@ def _make_tools(username: str) -> list:
         if choice in ("remove_a", "remove_b"):
             to_remove = ingredient_a.strip() if choice == "remove_a" else ingredient_b.strip()
             try:
-                store = ProfileStore()
                 routines = store.get_all_routines(username)
                 removed_from: list[str] = []
                 for routine in routines:
@@ -543,7 +547,7 @@ def _audit(username: str, tool_name: str, args_summary: str) -> None:
 
 # ── System prompt builder ────────────────────────────────────────────────────
 
-def build_system_prompt(profile: UserProfile) -> str:
+def build_system_prompt(profile: UserProfile, store: ProfileStore) -> str:
     username = _sanitise(profile.username) if profile.username else "unknown"
     sections: list[str] = [_PERSONA, f"CURRENT USER: username='{username}'"]
 
@@ -575,7 +579,7 @@ def build_system_prompt(profile: UserProfile) -> str:
         safe_concerns = [_sanitise(c) for c in profile.skin_concerns]
         safe_location = _sanitise(profile.location) if profile.location else None
         try:
-            existing_routines = [r.name for r in ProfileStore().get_all_routines(profile.username)]
+            existing_routines = [r.name for r in store.get_all_routines(profile.username)]
         except Exception:
             existing_routines = []
         routines_str = ", ".join(f"'{_sanitise(n)}'" for n in existing_routines) if existing_routines else "none"
@@ -625,14 +629,7 @@ def build_graph(tools: list, system_prompt: str):
     Uses the module-level _checkpointer (MemorySaver) so interrupt/resume works
     within a process lifetime. thread_id = session_id keeps runs isolated.
     """
-    llm = ChatOpenAI(
-        model=settings.llm_model,
-        openai_api_key=settings.openrouter_api_key,
-        openai_api_base=settings.openrouter_base_url,
-        temperature=0.1,
-        stream_usage=True,  # include usage_metadata on final streaming chunk
-    )
-    llm_with_tools = llm.bind_tools(tools)
+    llm_with_tools = _llm.bind_tools(tools)
 
     def agent_node(state: MessagesState):
         messages = [SystemMessage(content=system_prompt)] + state["messages"]
@@ -725,12 +722,8 @@ def extract_tool_results(messages: list) -> list[ToolResult]:
 
 async def _generate_session_title(first_message: str) -> str:
     """Ask the LLM to produce a concise 4-6 word title from the first user message."""
-    client = AsyncOpenAI(
-        api_key=settings.openrouter_api_key,
-        base_url=settings.openrouter_base_url,
-    )
     try:
-        resp = await client.chat.completions.create(
+        resp = await _title_client.chat.completions.create(
             model=settings.llm_model,
             messages=[
                 {
@@ -756,7 +749,7 @@ async def _set_title_if_first_message(session_id: str, message: str) -> str:
     """Generate and persist an LLM title for a new session. Returns the title."""
     title = await _generate_session_title(message)
     if title:
-        SessionStore().update_title(session_id, title)
+        _sess_store.update_title(session_id, title)
         logger.info("Title set for session %s: %r", session_id, title)
     return title
 
@@ -771,16 +764,7 @@ async def stream_agent_response(
     message: str,
     session_id: str,
 ) -> AsyncIterator[str]:
-    """Async generator that yields SSE-formatted lines for one chat turn.
-
-    Yields:
-        SSE data lines: ``data: <json>\\n\\n``
-        - ``{"type": "text", "content": "..."}`` — streamed text chunks
-        - ``{"type": "metadata", "citations": [...], "rag_context": [...], "tool_results": [...]}``
-        - ``data: [DONE]\\n\\n`` — stream terminator
-
-    On rate limit or error, yields a single error event followed by [DONE].
-    """
+    """Async generator that yields SSE-formatted lines for one chat turn."""
     if not _rate_limiter.check(username):
         yield _sse({"type": "error", "content": "Rate limit exceeded. Please wait before sending another message."})
         yield "data: [DONE]\n\n"
@@ -792,15 +776,14 @@ async def stream_agent_response(
         return
 
     try:
-        store = ProfileStore()
-        store.get_or_create_user(username)
-        profile = store.get_profile(username)
-        system_prompt = build_system_prompt(profile)
+        _store.get_or_create_user(username)
+        profile = _store.get_profile(username)
+        system_prompt = build_system_prompt(profile, _store)
         chat_history = get_history(session_id)
         prior_messages = list(chat_history.messages)
         is_first_message = len(prior_messages) == 0
 
-        tools = _make_tools(username)
+        tools = _make_tools(username, _store)
         graph = build_graph(tools, system_prompt)
 
         input_messages = prior_messages + [HumanMessage(content=message)]
@@ -808,9 +791,6 @@ async def stream_agent_response(
         accumulated_text: list[str] = []
         accumulated_messages: list = []
 
-        # Unique run_id per turn — prevents checkpointer state from accumulating
-        # across turns. Sent to the frontend in the interrupt event so it can be
-        # returned on resume without any server-side in-memory tracking.
         run_id = f"{session_id}-{uuid.uuid4().hex[:8]}"
         graph_config = {
             "configurable": {"thread_id": run_id},
@@ -836,12 +816,9 @@ async def stream_agent_response(
                                 accumulated_text.append(text)
                                 yield _sse({"type": "text", "content": text})
 
-        # Check for pending HITL interrupts before finalising the turn.
         snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
         for task in snapshot.tasks:
             for intr in task.interrupts:
-                # Embed run_id so the frontend can send it back on resume,
-                # removing the need for a server-side in-memory dict.
                 yield _sse({"type": "interrupt", "run_id": run_id, **intr.value})
                 yield "data: [DONE]\n\n"
                 return
@@ -854,21 +831,17 @@ async def stream_agent_response(
         chat_history.add_user_message(message)
         chat_history.add_ai_message(answer)
 
-        # ── Token accounting ────────────────────────────────────────────
-        # Prefer OpenRouter's own cost field (response_metadata["token_usage"]["cost"]).
-        # Fall back to our pricing table only if OpenRouter doesn't include it.
+        # ── Token accounting ────────────────────────────────────────
         prompt_tokens = 0
         completion_tokens = 0
         openrouter_cost: float | None = None
 
         for msg in accumulated_messages:
-            # usage_metadata is LangChain's standardised format (input/output tokens)
             usage = getattr(msg, "usage_metadata", None)
             if usage:
                 prompt_tokens += usage.get("input_tokens", 0)
                 completion_tokens += usage.get("output_tokens", 0)
 
-            # response_metadata["token_usage"] is the raw OpenRouter usage dict
             token_usage = (getattr(msg, "response_metadata", None) or {}).get("token_usage") or {}
             if isinstance(token_usage, dict) and "cost" in token_usage:
                 openrouter_cost = (openrouter_cost or 0.0) + float(token_usage["cost"])
@@ -878,13 +851,12 @@ async def stream_agent_response(
                 calculate_cost(settings.llm_model, prompt_tokens, completion_tokens)
             )
             source = "openrouter" if openrouter_cost is not None else "pricing_table"
-            SessionStore().add_token_usage(session_id, prompt_tokens, completion_tokens, cost)
+            _sess_store.add_token_usage(session_id, prompt_tokens, completion_tokens, cost)
             logger.debug(
                 "Tokens (%s) — session=%s prompt=%d completion=%d cost=$%.6f",
                 source, session_id, prompt_tokens, completion_tokens, cost,
             )
 
-        # Generate title from first message — fire-and-forget, never blocks stream
         logger.info(
             "stream_agent_response complete for %s: citations=%d rag_docs=%d tools=%d",
             username, len(citations), len(rag_context), len(tool_results_objs),
@@ -897,8 +869,6 @@ async def stream_agent_response(
             "tool_results": [tr.model_dump() for tr in tool_results_objs],
         })
 
-        # Generate title after content is streamed; emit it so the frontend
-        # can update the sidebar without polling or a full page refresh.
         if is_first_message:
             title = await _set_title_if_first_message(session_id, message)
             if title:
@@ -919,16 +889,12 @@ async def stream_resume_response(
     choice: str,
     note: str,
 ) -> AsyncIterator[str]:
-    """Resume a paused HITL graph with the user's decision.
-
-    Yields the same SSE event types as stream_agent_response.
-    """
+    """Resume a paused HITL graph with the user's decision."""
 
     try:
-        store = ProfileStore()
-        profile = store.get_profile(username)
-        system_prompt = build_system_prompt(profile)
-        tools = _make_tools(username)
+        profile = _store.get_profile(username)
+        system_prompt = build_system_prompt(profile, _store)
+        tools = _make_tools(username, _store)
         graph = build_graph(tools, system_prompt)
 
         graph_config = {
@@ -958,7 +924,6 @@ async def stream_resume_response(
                                 accumulated_text.append(text)
                                 yield _sse({"type": "text", "content": text})
 
-        # Check for a chained interrupt (e.g. save_routine firing after finalize_onboarding).
         snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
         for task in snapshot.tasks:
             for intr in task.interrupts:
@@ -971,7 +936,6 @@ async def stream_resume_response(
         rag_context = extract_rag_context(accumulated_messages)
         tool_results_objs = extract_tool_results(accumulated_messages)
 
-        from backend.db.chat_history import get_history
         chat_history = get_history(session_id)
         chat_history.add_ai_message(answer)
 

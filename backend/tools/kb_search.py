@@ -9,9 +9,9 @@ from backend.rag.retriever import Retriever
 
 logger = logging.getLogger(__name__)
 
-# Singleton: ChromaDB PersistentClient cannot be opened twice from the same process.
-# Creating Retriever() per-call causes the second concurrent kb_search to crash.
-_retriever = Retriever()
+# Shared singleton — ChromaDB PersistentClient must not be opened more than once
+# per process. All tools that need retrieval should import this object.
+retriever = Retriever()
 
 
 @tool
@@ -26,7 +26,7 @@ def kb_search(query: str) -> str:
     Input: the user's question or a concise search phrase.
     """
     try:
-        docs = _retriever.query(query)
+        docs = retriever.query(query)
 
         if not docs:
             logger.info("kb_search: no docs above threshold for query=%r", query[:60])

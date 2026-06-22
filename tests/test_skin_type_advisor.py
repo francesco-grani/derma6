@@ -33,7 +33,6 @@ class TestClassifyFromDescription:
         assert result is None
 
     def test_highest_score_wins(self):
-        # Multiple oily keywords should beat one dry keyword
         desc = "shiny greasy oily sebum, slightly tight"
         result = _classify_from_description(desc)
         assert result == "oily"
@@ -56,7 +55,6 @@ class TestClassifyFromDocs:
         assert result is None
 
     def test_empty_docs_list(self):
-        # Should handle empty list gracefully
         result = _classify_from_docs([])
         assert result is None
 
@@ -84,28 +82,24 @@ class TestExtractCharacteristic:
 
 
 class TestSkinTypeAdvisorTool:
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_classifies_oily_and_saves(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = [
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_classifies_oily_and_saves(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = [
             RetrievedDoc(content="oily skin oily skin", source_name="src", score=0.9)
         ]
-        mock_retriever_cls.return_value = mock_r
         mock_store = MagicMock()
-        mock_store_cls.return_value = mock_store
+        mock_get_store.return_value = mock_store
 
         result = skin_type_advisor.invoke("description: my face is shiny and greasy | username: alice")
         assert "oily" in result.lower()
         mock_store.update_skin_type.assert_called_once_with("alice", "oily")
 
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_classifies_dry_skin(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
-        mock_store_cls.return_value = MagicMock()
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_classifies_dry_skin(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
+        mock_get_store.return_value = MagicMock()
 
         result = skin_type_advisor.invoke("description: my skin is tight and flaky | username: bob")
         assert "dry" in result.lower()
@@ -124,43 +118,37 @@ class TestSkinTypeAdvisorTool:
         result = skin_type_advisor.invoke("description: | username: alice")
         assert "Error" in result
 
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_no_match_no_docs_asks_for_detail(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_no_match_no_docs_asks_for_detail(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
 
         result = skin_type_advisor.invoke("description: fine | username: carol")
         assert "detail" in result.lower() or "describe" in result.lower()
 
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_result_includes_profile_updated(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
-        mock_store_cls.return_value = MagicMock()
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_result_includes_profile_updated(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
+        mock_get_store.return_value = MagicMock()
 
         result = skin_type_advisor.invoke("description: shiny oily face | username: dave")
         assert "profile" in result.lower()
 
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_exception_returns_error_message(self, mock_retriever_cls, mock_store_cls):
-        mock_retriever_cls.side_effect = Exception("network error")
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_exception_returns_error_message(self, mock_retriever, mock_get_store):
+        mock_retriever.query.side_effect = Exception("network error")
         result = skin_type_advisor.invoke("description: oily skin | username: dave")
         assert "sorry" in result.lower() or "could not" in result.lower()
 
-    @patch("backend.tools.skin_type_advisor.ProfileStore")
-    @patch("backend.tools.skin_type_advisor.Retriever")
-    def test_doc_fallback_classifies_when_no_keyword_match(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = [
+    @patch("backend.tools.skin_type_advisor.get_profile_store")
+    @patch("backend.tools.skin_type_advisor.retriever")
+    def test_doc_fallback_classifies_when_no_keyword_match(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = [
             RetrievedDoc(content="sensitive sensitive sensitive skin type", source_name="src", score=0.9)
         ]
-        mock_retriever_cls.return_value = mock_r
-        mock_store_cls.return_value = MagicMock()
+        mock_get_store.return_value = MagicMock()
 
         result = skin_type_advisor.invoke("description: unusual skin | username: eve")
         assert "sensitive" in result.lower()
