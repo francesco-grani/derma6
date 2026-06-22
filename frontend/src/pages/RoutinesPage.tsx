@@ -7,6 +7,73 @@ import { useRoutines, useDeleteRoutine, useRenameRoutine } from '@/hooks/useRout
 import { useSession } from '@/lib/sessionContext'
 import type { Routine } from '@/lib/api'
 
+function buildRoutineDescription(routine: Routine): string {
+  return routine.steps
+    .sort((a, b) => a.position - b.position)
+    .map((step, i) => {
+      const label = CATEGORY_LABELS[step.ingredient.toLowerCase()] ?? 'STEP'
+      const name = step.ingredient.charAt(0).toUpperCase() + step.ingredient.slice(1)
+      let line = `${i + 1}. ${name} (${label})`
+      if (step.product_name) line += ` — ${step.product_name}`
+      else if (step.budget_product) line += ` — ${step.budget_product}`
+      return line
+    })
+    .join('\n')
+}
+
+function buildICS(routine: Routine, time: string): string {
+  const [hh, mm] = time.split(':').map(Number)
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+  const startTime = `${pad(hh)}${pad(mm)}00`
+  const endHH = hh + Math.floor((mm + 15) / 60)
+  const endMM = (mm + 15) % 60
+  const endTime = `${pad(endHH)}${pad(endMM)}00`
+  const description = buildRoutineDescription(routine).replace(/\n/g, '\\n')
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Derma6//RoutineExport//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${dateStr}T${startTime}`,
+    `DTEND:${dateStr}T${endTime}`,
+    'RRULE:FREQ=DAILY',
+    `SUMMARY:${routine.name}`,
+    `DESCRIPTION:${description}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n')
+}
+
+function buildGoogleCalendarUrl(routine: Routine, time: string): string {
+  const [hh, mm] = time.split(':').map(Number)
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const dateStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+  const endHH = hh + Math.floor((mm + 15) / 60)
+  const endMM = (mm + 15) % 60
+  const dates = `${dateStr}T${pad(hh)}${pad(mm)}00/${dateStr}T${pad(endHH)}${pad(endMM)}00`
+  const params = new URLSearchParams({
+    text: routine.name,
+    details: buildRoutineDescription(routine),
+    dates,
+    recur: 'RRULE:FREQ=DAILY',
+  })
+  return `https://calendar.google.com/calendar/r/eventedit?${params.toString()}`
+}
+
+function downloadICS(routine: Routine, time: string) {
+  const ics = buildICS(routine, time)
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${routine.name.replace(/\s+/g, '_')}.ics`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   cleanser: 'CLEANSE', toner: 'BALANCE', serum: 'TREATMENT',
   moisturiser: 'MOISTURE', moisturizer: 'MOISTURE',
@@ -29,6 +96,8 @@ export default function RoutinesPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [enhanceTarget, setEnhanceTarget] = useState<Routine | null>(null)
   const [enhanceGoal, setEnhanceGoal] = useState('')
+  const [exportTarget, setExportTarget] = useState<Routine | null>(null)
+  const [exportTime, setExportTime] = useState('07:00')
 
   if (isLoading) return <PageShell><p style={{ color: '#9EAD9E' }}>Loading routines…</p></PageShell>
 
@@ -126,14 +195,24 @@ export default function RoutinesPage() {
               ))}
             </div>
 
-            <Button
-              size="sm" variant="outline"
-              className="mt-3 cursor-pointer"
-              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', fontSize: 12 }}
-              onClick={() => { setEnhanceTarget(routine); setEnhanceGoal('') }}
-            >
-              ✨ Enhance this routine
-            </Button>
+            <div className="flex gap-2 mt-3">
+              <Button
+                size="sm" variant="outline"
+                className="cursor-pointer"
+                style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', fontSize: 12 }}
+                onClick={() => { setEnhanceTarget(routine); setEnhanceGoal('') }}
+              >
+                ✨ Enhance this routine
+              </Button>
+              <Button
+                size="sm" variant="outline"
+                className="cursor-pointer"
+                style={{ borderColor: '#3B5A8A', color: '#8AB4D4', background: 'transparent', fontSize: 12 }}
+                onClick={() => setExportTarget(routine)}
+              >
+                📅 Export to Calendar
+              </Button>
+            </div>
           </div>
         ))}
       </div>
@@ -178,6 +257,59 @@ export default function RoutinesPage() {
             <Button className="cursor-pointer" onClick={confirmDelete} disabled={deleteRoutine.isPending}
               style={{ background: '#7A4E4E', color: '#F0B8B8', borderColor: '#7A4E4E' }}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export to Calendar dialog */}
+      <Dialog open={!!exportTarget} onOpenChange={() => setExportTarget(null)}>
+        <DialogContent style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: '#E0E8E0' }}>Export "{exportTarget?.name}" as recurring event</DialogTitle>
+          </DialogHeader>
+          <p style={{ color: '#9EAD9E', fontSize: 13 }}>
+            Choose your daily reminder time. The event will repeat every day with your full routine as the description.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label style={{ color: '#9EAD9E', fontSize: 12 }}>Reminder time</label>
+            <input
+              type="time"
+              value={exportTime}
+              onChange={e => setExportTime(e.target.value)}
+              style={{
+                background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0',
+                borderRadius: 6, padding: '6px 10px', fontSize: 14, width: '100%',
+              }}
+            />
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="cursor-pointer" onClick={() => setExportTarget(null)}
+              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
+              Cancel
+            </Button>
+            <Button
+              className="cursor-pointer"
+              disabled={!exportTarget}
+              style={{ background: '#3B5A8A', color: '#D4E8F4', border: 'none' }}
+              onClick={() => {
+                if (!exportTarget) return
+                window.open(buildGoogleCalendarUrl(exportTarget, exportTime), '_blank')
+              }}
+            >
+              Google Calendar
+            </Button>
+            <Button
+              className="cursor-pointer"
+              disabled={!exportTarget}
+              style={{ background: '#4B5A4C', color: '#E0E8E0', border: 'none' }}
+              onClick={() => {
+                if (!exportTarget) return
+                downloadICS(exportTarget, exportTime)
+                setExportTarget(null)
+              }}
+            >
+              Apple Calendar (.ics)
             </Button>
           </DialogFooter>
         </DialogContent>
