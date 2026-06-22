@@ -25,6 +25,14 @@
 - [x] **HITL-C: Medical Flag Double-Confirm** — hard interrupt before writing any medical flag; explicit per-flag confirmation, cannot be overridden by prompt injection
 - [x] **HITL-D: Conflict Resolution Decision** — stack conflict detected → interrupt → agent proposes which ingredient to remove; user chooses remove/keep-with-warning per conflict
 
+### Routines
+
+- [ ] **Export routine as recurring calendar event** — "Export to Calendar" button per routine in RoutinesPage; user picks a daily/weekly reminder time; generates:
+  - A `.ics` file (RFC 5545, `RRULE:FREQ=DAILY`) for Apple Calendar (and any ICS-compatible client)
+  - A Google Calendar deep-link URL (`calendar.google.com/calendar/r/eventedit?…`) pre-filled with recurrence
+  - Event description contains full routine steps (product name, category label, order)
+  - Pure frontend — no backend endpoint needed; built with the native `Blob` + `URL.createObjectURL` pattern
+
 ### Infrastructure
 
 - [ ] Conditional routing / multi-agent graph topology
