@@ -1,0 +1,123 @@
+[
+  {
+    "id": "spf-01",
+    "tool": "spf_recommender",
+    "input": "What SPF sunscreen should I use daily?",
+    "actual_output": "SPF Recommendation (SPF 50+ / PA+++ standard):\n\nApply a broad-spectrum sunscreen with at least SPF 50+ and PA+++ rating every morning as the final step in your routine, about 15 minutes before sun exposure. Reapply every 2 hours outdoors.\n\nSources: WHO Sun Safety Guidelines",
+    "expected_output": "A recommendation for SPF 50+ with PA+++ as a minimum standard.",
+    "retrieval_context": [
+      "SPF 50+ provides approximately 98% UVB filtration. Apply as the last morning step.",
+      "PA+++ rating indicates strong UVA protection. WHO recommends SPF 50+ for daily use."
+    ],
+    "tags": ["spf", "recommendation"]
+  },
+  {
+    "id": "spf-02",
+    "tool": "spf_recommender",
+    "input": "Is SPF 30 enough for daily use?",
+    "actual_output": "SPF Standard: The recommended minimum is SPF 50+ with PA+++ or higher (EU/WHO standard). SPF 30 blocks ~97% of UVB vs SPF 50's ~98%, but the gap in real-world application is larger. I recommend SPF 50+ only.\n\nWould you like recommendations for lightweight SPF 50+ options instead?",
+    "expected_output": "Redirect to SPF 50+ explaining why SPF 30 is not recommended.",
+    "retrieval_context": [],
+    "tags": ["spf", "low-spf-redirect"]
+  },
+  {
+    "id": "conflict-01",
+    "tool": "conflict_checker",
+    "input": "retinol, vitamin c",
+    "actual_output": "Verdict: use-at-different-times\nReason: Both are potent actives with incompatible pH requirements. L-ascorbic acid works optimally at pH 3–3.5 while retinol is effective at pH 5–6. Use vitamin C in AM and retinol in PM.\nUnknown ingredients: []",
+    "expected_output": "Verdict of use-at-different-times with pH incompatibility explanation.",
+    "retrieval_context": [],
+    "tags": ["conflict", "known-pair"]
+  },
+  {
+    "id": "conflict-02",
+    "tool": "conflict_checker",
+    "input": "unknown_xyz, retinol",
+    "actual_output": "Verdict: unknown_ingredient\nReason: No conflict data for unknown_xyz + retinol. Consult a dermatologist.\nUnknown ingredients: [unknown_xyz, retinol]",
+    "expected_output": "unknown_ingredient verdict with recommendation to consult a professional.",
+    "retrieval_context": [],
+    "tags": ["conflict", "unknown-pair"]
+  },
+  {
+    "id": "routine-01",
+    "tool": "routine_sequencer",
+    "input": "spf, retinol, cleanser, moisturiser",
+    "actual_output": "Routine order:\n1. cleanser (cleanser)\n2. retinol (serum)\n3. moisturiser (moisturiser)\n4. spf (spf)\n\nUnclassifiable items: []",
+    "expected_output": "Steps ordered as cleanser → serum → moisturiser → spf.",
+    "retrieval_context": [],
+    "tags": ["routine", "ordering"]
+  },
+  {
+    "id": "routine-02",
+    "tool": "routine_sequencer",
+    "input": "cleanser, mystery_serum_xyz, spf",
+    "actual_output": "Routine order:\n1. cleanser (cleanser)\n2. spf (spf)\n\nUnclassifiable items: [mystery_serum_xyz]",
+    "expected_output": "Known items ordered correctly; unclassifiable items listed separately.",
+    "retrieval_context": [],
+    "tags": ["routine", "unclassifiable"]
+  },
+  {
+    "id": "skin-type-01",
+    "tool": "skin_type_advisor",
+    "input": "description: my face gets really shiny and greasy by noon, especially my forehead",
+    "actual_output": "Skin type: oily\n\nCharacteristics: Produces excess sebum throughout the day, leaving a shiny or greasy appearance.\n\nYour profile has been updated.",
+    "expected_output": "Skin type classified as oily with matching characteristics.",
+    "retrieval_context": [
+      "Oily skin produces excess sebum and appears shiny, especially in the T-zone."
+    ],
+    "tags": ["skin-type", "oily"]
+  },
+  {
+    "id": "skin-type-02",
+    "tool": "skin_type_advisor",
+    "input": "description: my skin turns red and stings whenever I try new products",
+    "actual_output": "Skin type: sensitive\n\nCharacteristics: Reacts easily to products or environmental triggers with redness, burning, or stinging.\n\nYour profile has been updated.",
+    "expected_output": "Skin type classified as sensitive with reactivity-focused characteristics.",
+    "retrieval_context": [
+      "Sensitive skin reacts to products with redness, burning, or stinging."
+    ],
+    "tags": ["skin-type", "sensitive"]
+  },
+  {
+    "id": "intro-01",
+    "tool": "introduction_scheduler",
+    "input": "actives: retinol, niacinamide | username: testuser",
+    "actual_output": "Introduction Schedule for: retinol, niacinamide\n\nWeek 1-2: Introduce retinol\n  → Introduce retinol — Use 2x/week initially. Patch test on a small area first.\n\nWeek 3-4: Introduce niacinamide\n  → Introduce niacinamide — Use 2x/week initially. Patch test on a small area first.\n\nYour introduction plan has been saved to your profile.",
+    "expected_output": "Phased week-by-week schedule with each active introduced separately over 2 weeks.",
+    "retrieval_context": [],
+    "tags": ["intro-scheduler", "phased"]
+  },
+  {
+    "id": "intro-02",
+    "tool": "introduction_scheduler",
+    "input": "actives: benzoyl peroxide, retinol | username: testuser",
+    "actual_output": "Introduction Schedule for: benzoyl peroxide, retinol\n\nWarning: benzoyl peroxide and retinol should not be used together — excluded from concurrent weeks.\n\nWeek 1-2: Introduce benzoyl peroxide\n  → Introduce benzoyl peroxide — Use 2x/week initially.\n\nWeek 3-4: Introduce retinol\n  → Introduce retinol — Use 2x/week initially.\n\nYour introduction plan has been saved to your profile.",
+    "expected_output": "Warning about the do-not-use conflict and separate weeks for each active.",
+    "retrieval_context": [],
+    "tags": ["intro-scheduler", "conflict-warning"]
+  },
+  {
+    "id": "kb-01",
+    "tool": "kb_search",
+    "input": "What are the benefits of niacinamide?",
+    "actual_output": "Niacinamide (vitamin B3) is a water-soluble vitamin that works with the natural substances in your skin to visibly minimise enlarged pores, tighten lax pores, improve uneven skin tone, soften fine lines and wrinkles, diminish dullness, and strengthen a weakened surface.\n\nIt can also reduce the impact of environmental damage and is suitable for all skin types including acne-prone and sensitive skin.\n\nSources: Paula's Choice Ingredient Dictionary\n\n__RAG_CONTEXT_JSON__: []",
+    "expected_output": "Benefits of niacinamide including pore minimisation, tone evening, and barrier strengthening.",
+    "retrieval_context": [
+      "Niacinamide minimises pores, evens skin tone, and strengthens the skin barrier.",
+      "Niacinamide is suitable for all skin types and is generally well-tolerated."
+    ],
+    "tags": ["kb-search", "ingredient"]
+  },
+  {
+    "id": "kb-02",
+    "tool": "kb_search",
+    "input": "How does SPF protect from UV damage?",
+    "actual_output": "Sunscreen works by absorbing, reflecting, or scattering UV radiation. SPF (Sun Protection Factor) measures protection against UVB rays that cause sunburn. Broad-spectrum sunscreens also protect against UVA rays, which cause premature aging. SPF 50+ filters about 98% of UVB rays.\n\nSources: WHO Sun Safety Guidelines",
+    "expected_output": "Explanation of UVB/UVA protection mechanisms and SPF 50+ filter rate.",
+    "retrieval_context": [
+      "SPF measures how well a sunscreen protects against UVB radiation.",
+      "Broad-spectrum sunscreens protect against both UVA and UVB radiation."
+    ],
+    "tags": ["kb-search", "spf"]
+  }
+]

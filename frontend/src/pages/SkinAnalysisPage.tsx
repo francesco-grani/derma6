@@ -270,19 +270,19 @@ export default function SkinAnalysisPage() {
               {[
                 {
                   label: 'Tell me more about this',
-                  message: `I just got my skin analysis result: ${result.condition} (${confidencePct}% confidence). ${result.reasoning} Can you explain what this condition means for my skin?`,
+                  message: `I just got my skin analysis result: ${result.condition} (${confidencePct}% confidence). The model's reasoning: "${result.reasoning}" Can you explain what this condition means for my skin?`,
                 },
                 {
                   label: 'Suggest a routine',
-                  message: `My skin analysis detected ${result.condition} (${confidencePct}% confidence). Can you build me a skincare routine tailored to this condition?`,
+                  message: `My skin analysis detected ${result.condition} (${confidencePct}% confidence). The model's reasoning: "${result.reasoning}" Can you build me a skincare routine tailored to this condition?`,
                 },
                 {
                   label: 'Ingredients to avoid',
-                  message: `My skin analysis detected ${result.condition}. What ingredients should I avoid, and are there any common ingredient conflicts I should know about?`,
+                  message: `My skin analysis detected ${result.condition} (${confidencePct}% confidence). The model's reasoning: "${result.reasoning}" What ingredients should I avoid, and are there any common ingredient conflicts I should know about?`,
                 },
                 {
                   label: 'Should I see a doctor?',
-                  message: `My skin analysis detected ${result.condition} with ${confidencePct}% confidence. How serious is this typically, and should I consult a dermatologist?`,
+                  message: `My skin analysis detected ${result.condition} (${confidencePct}% confidence). The model's reasoning: "${result.reasoning}" How serious is this typically, and should I consult a dermatologist?`,
                 },
               ].map(({ label, message }) => (
                 <button

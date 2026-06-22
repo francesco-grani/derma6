@@ -22,3 +22,57 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "weasyprint>=69.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "deepeval>=2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "eval"]
+addopts = "--tb=short -q"
+asyncio_mode = "auto"
+filterwarnings = [
+    # deepeval uses asyncio.get_event_loop() which is deprecated in Python 3.10+
+    # when there is no running loop; asyncio_mode=auto creates one, but deepeval
+    # still triggers the warning during its own import-time initialisation.
+    "ignore::DeprecationWarning:deepeval",
+]
+markers = [
+    "eval: deepeval LLM quality evaluations (require --run-eval flag and live API key)",
+]
+
+[dependency-groups]
+dev = [
+    "deepeval>=4.0.6",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    # FastAPI route handlers — thin wrappers, covered by integration tests
+    "backend/api/*",
+    "backend/main.py",
+    # Infrastructure / bootstrapping
+    "backend/logging_config.py",
+    "backend/middleware/*",
+    "backend/auth.py",
+    # LangGraph Studio config (not production code path)
+    "backend/agent/studio.py",
+    # Session/chat persistence — thin wrappers around LangChain/SQLAlchemy
+    "backend/db/session_store.py",
+    "backend/db/chat_history.py",
+    # LangGraph streaming (requires live LLM + graph runtime)
+    "backend/agent/graph.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 90

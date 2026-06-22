@@ -94,7 +94,7 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="px-5 pt-6 pb-4">
-        <img src="/Derma6_logo.png" alt="Derma6" style={{ height: 36, width: 'auto' }} />
+        <img src="/Derma6_logo.png" alt="Derma6" style={{ height: 52, width: 'auto' }} />
       </div>
 
       {/* Chat section: button + session list */}

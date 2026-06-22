@@ -74,7 +74,9 @@ class Retriever:
 
         retrieved: list[RetrievedDoc] = []
         for doc, meta, distance in zip(documents, metadatas, distances):
-            score = 1.0 - distance
+            # ChromaDB defaults to L2 distance. For unit-normalized vectors,
+            # cosine_sim = 1 - L2² / 2 (not 1 - L2).
+            score = 1.0 - (distance * distance) / 2.0
             if score >= settings.retrieval_min_score:
                 retrieved.append(
                     RetrievedDoc(

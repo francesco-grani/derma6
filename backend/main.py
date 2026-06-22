@@ -5,7 +5,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import admin, analysis, auth, chat, export, profile, routines, sessions
+from backend.api import admin, analysis, auth, chat, export, hitl, profile, routines, sessions
 from backend.logging_config import init_langsmith, setup_logging
 from backend.middleware.auth import JWTAuthMiddleware
 
@@ -35,6 +35,7 @@ app.add_middleware(JWTAuthMiddleware)
 # ── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(hitl.router)
 app.include_router(profile.router)
 app.include_router(routines.router)
 app.include_router(export.router)

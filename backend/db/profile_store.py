@@ -354,18 +354,25 @@ class ProfileStore:
             raise ProfileStoreError(f"User '{username}' not found.")
         return user
 
+    def complete_onboarding(self, username: str) -> None:
+        """Explicitly mark onboarding as complete (called by finalize_onboarding_tool after HITL review)."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                user.onboarding_complete = True
+                session.commit()
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("complete_onboarding failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
     def _check_onboarding_complete(self, session: Session, user: User) -> None:
-        """Set onboarding_complete=True when the three mandatory profile fields are set.
+        """No-op: onboarding_complete is now set only via complete_onboarding() after HITL review.
 
         medical_flags is intentionally excluded: the agent skips add_medical_flag_tool
         when the user has no conditions, so it may remain None for healthy users.
         """
-        if (
-            user.skin_type is not None
-            and user.skin_concerns is not None
-            and user.has_shaving_routine is not None
-        ):
-            user.onboarding_complete = True
 
     @staticmethod
     def _user_to_profile(user: User) -> UserProfile:

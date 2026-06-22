@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
+import InterruptCard from '@/components/chat/InterruptCard'
 import { useStreamChat, type ChatMessage } from '@/hooks/useStreamChat'
 import { useAuth } from '@/lib/auth'
 import { useSession } from '@/lib/sessionContext'
@@ -16,7 +17,7 @@ const SUGGESTIONS = [
 export default function ChatPage() {
   const { username } = useAuth()
   const { sessionId, resumeOrCreate } = useSession()
-  const { messages, streaming, sendMessage } = useStreamChat(sessionId)
+  const { messages, streaming, pendingInterrupt, sendMessage, resolveInterrupt } = useStreamChat(sessionId)
   const [input, setInput] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -53,7 +54,7 @@ export default function ChatPage() {
   }, [sessionId])
 
   function submit(text: string) {
-    if (!text.trim() || streaming) return
+    if (!text.trim() || streaming || pendingInterrupt) return
     setInput('')
     sendMessage(text.trim())
   }
@@ -83,6 +84,18 @@ export default function ChatPage() {
           {messages.map((msg, i) => (
             <MessageBubble key={i} msg={msg} username={username ?? ''} />
           ))}
+
+          {pendingInterrupt && (
+            <div className="flex flex-col items-start gap-1 max-w-2xl self-start w-full">
+              <span className="text-xs px-1" style={{ color: '#9EAD9E' }}>Derma6</span>
+              <InterruptCard
+                payload={pendingInterrupt.payload}
+                onResolve={(choice, note) => resolveInterrupt(choice, note, pendingInterrupt.run_id)}
+                disabled={streaming}
+              />
+            </div>
+          )}
+
           <div ref={bottomRef} />
         </div>
       </div>
@@ -107,7 +120,7 @@ export default function ChatPage() {
           />
           <Button
             type="submit"
-            disabled={!input.trim() || !sessionId}
+            disabled={!input.trim() || !sessionId || !!pendingInterrupt}
             style={{ background: '#7A9B7D', color: '#1C2520', fontWeight: 600, cursor: 'pointer' }}
             className="px-5"
           >
@@ -137,7 +150,17 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
         }
       >
         {!msg.content
-          ? <span style={{ opacity: 0.4 }}>●●●</span>
+          ? (
+            <span className="flex gap-1 items-center py-0.5">
+              {[0, 150, 300].map(delay => (
+                <span
+                  key={delay}
+                  className="inline-block w-2 h-2 rounded-full animate-bounce"
+                  style={{ background: '#1C2520', opacity: 0.35, animationDelay: `${delay}ms` }}
+                />
+              ))}
+            </span>
+          )
           : isUser
             ? msg.content
             : (
@@ -209,11 +232,6 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
         }
       </div>
 
-      {!isUser && msg.citations && msg.citations.length > 0 && (
-        <div className="text-xs px-1" style={{ color: '#9EAD9E' }}>
-          📚 {msg.citations.join(' · ')}
-        </div>
-      )}
 
       {!isUser && msg.rag_context && msg.rag_context.length > 0 && (
         <div className="w-full">

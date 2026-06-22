@@ -36,7 +36,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#3E4D3F' }}>
       <Card className="w-full max-w-sm shadow-xl" style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
         <CardHeader className="text-center pb-2">
-          <img src="/Derma6_logo.png" alt="Derma6" className="mx-auto mb-2" style={{ height: 48, width: 'auto' }} />
+          <img src="/Derma6_logo.png" alt="Derma6" className="mx-auto mb-2" style={{ height: 120, width: 'auto' }} />
           <p style={{ color: '#9EAD9E', fontSize: 13, marginTop: 4 }}>
             Skincare advice built for guys who are ready to get it right.
           </p>
