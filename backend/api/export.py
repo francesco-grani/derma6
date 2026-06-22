@@ -8,6 +8,7 @@ from backend.auth import get_current_user
 
 from backend.db.chat_history import serialise_history
 from backend.db.profile_store import ProfileStore, ProfileStoreError
+from backend.db.session_store import SessionStore, SessionStoreError
 from backend.schemas import RoutineSchema
 
 router = APIRouter(prefix="/api/me", tags=["export"])
@@ -82,7 +83,13 @@ def generate_export_html(username: str) -> str:  # noqa: C901
     except ProfileStoreError:
         routines = []
 
-    messages = serialise_history(username)
+    try:
+        session_ids = [s["session_id"] for s in SessionStore().get_sessions(username)]
+    except SessionStoreError:
+        session_ids = []
+    messages = []
+    for sid in session_ids:
+        messages.extend(serialise_history(sid))
     generated_at = datetime.now(timezone.utc).strftime("%d %B %Y, %H:%M UTC")
 
     css = """
