@@ -1,15 +1,20 @@
-"""Skin analysis — POST /api/me/analyze-skin and POST /api/me/medical-flags."""
+"""Skin analysis — POST /api/me/analyze-skin, GET /api/me/skin-analyses, POST /api/me/medical-flags."""
 
 import base64
+import io
 import json
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openai import AsyncOpenAI
+from PIL import Image, ImageOps
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.config import settings
+from backend.db.models import SkinAnalysis, User, engine
 from backend.db.profile_store import ProfileStore, ProfileStoreError
 
 logger = logging.getLogger(__name__)
@@ -18,6 +23,24 @@ router = APIRouter(prefix="/api/me", tags=["analysis"])
 
 _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+_VISION_MAX_PX = 2048  # longest side sent to the vision model
+_THUMB_MAX_PX = 256    # thumbnail stored for list view
+
+
+def _prepare_for_vision(data: bytes) -> tuple[bytes, str]:
+    """Resize and re-encode image so it fits comfortably in the API payload.
+
+    Returns (jpeg_bytes, "image/jpeg"). Capping at 1024px on the longest side
+    keeps the base64 payload under ~400 KB while preserving enough detail for
+    dermatology screening.
+    """
+    img = Image.open(io.BytesIO(data))
+    img = ImageOps.exif_transpose(img)  # apply EXIF rotation before anything else
+    img = img.convert("RGB")
+    img.thumbnail((_VISION_MAX_PX, _VISION_MAX_PX), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85, optimize=True)
+    return buf.getvalue(), "image/jpeg"
 
 _SYSTEM_PROMPT = (
     "You are a dermatology screening assistant. Analyse the skin image and return a JSON object "
@@ -48,6 +71,18 @@ class SkinAnalysisResult(BaseModel):
     disclaimer: str
 
 
+class SkinAnalysisRecord(BaseModel):
+    id: int
+    condition: str
+    confidence: float
+    alternatives: list[Alternative]
+    reasoning: str
+    disclaimer: str
+    image_b64: str | None
+    thumbnail_b64: str | None
+    created_at: datetime
+
+
 class SaveConditionRequest(BaseModel):
     condition: str
 
@@ -71,8 +106,14 @@ async def analyze_skin(
     if len(data) > _MAX_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="Image too large. Max 10 MB.")
 
+    try:
+        data, mime = _prepare_for_vision(data)
+    except Exception as exc:
+        logger.error("Image preparation failed for %s: %s", username, exc)
+        raise HTTPException(status_code=422, detail="Could not process image. Please upload a valid JPEG, PNG, or WebP file.") from exc
+
     b64 = base64.b64encode(data).decode()
-    mime = file.content_type
+    logger.info("analyze-skin: resized payload size_bytes=%d", len(data))
 
     client = AsyncOpenAI(
         api_key=settings.openrouter_api_key,
@@ -119,7 +160,83 @@ async def analyze_skin(
         "Skin analysis for %s: condition=%s confidence=%.2f reasoning=%r",
         username, result.condition, result.confidence, result.reasoning,
     )
+
+    # Build thumbnail (256px longest side)
+    img_full = Image.open(io.BytesIO(data))
+    thumb = img_full.copy()
+    thumb.thumbnail((_THUMB_MAX_PX, _THUMB_MAX_PX), Image.LANCZOS)
+    thumb_buf = io.BytesIO()
+    thumb.save(thumb_buf, format="JPEG", quality=80, optimize=True)
+    thumb_b64 = base64.b64encode(thumb_buf.getvalue()).decode()
+    full_b64 = base64.b64encode(data).decode()
+
+    try:
+        with Session(engine) as db:
+            user = db.query(User).filter(User.username == username).first()
+            if user:
+                record = SkinAnalysis(
+                    user_id=user.id,
+                    condition=result.condition,
+                    confidence=result.confidence,
+                    alternatives_json=json.dumps([a.model_dump() for a in result.alternatives]),
+                    reasoning=result.reasoning,
+                    disclaimer=result.disclaimer,
+                    image_b64=full_b64,
+                    thumbnail_b64=thumb_b64,
+                )
+                db.add(record)
+                db.commit()
+                logger.info("Saved skin analysis id=%d for %s", record.id, username)
+    except Exception as exc:
+        logger.error("Failed to persist skin analysis for %s: %s", username, exc)
+
     return result
+
+
+@router.get("/skin-analyses", response_model=list[SkinAnalysisRecord])
+def get_skin_analyses(username: str = Depends(get_current_user)):
+    with Session(engine) as db:
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            return []
+        rows = (
+            db.query(SkinAnalysis)
+            .filter(SkinAnalysis.user_id == user.id)
+            .order_by(SkinAnalysis.created_at.asc())
+            .all()
+        )
+        return [
+            SkinAnalysisRecord(
+                id=r.id,
+                condition=r.condition,
+                confidence=r.confidence,
+                alternatives=[Alternative(**a) for a in json.loads(r.alternatives_json)],
+                reasoning=r.reasoning,
+                disclaimer=r.disclaimer,
+                image_b64=r.image_b64,
+                thumbnail_b64=r.thumbnail_b64,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+
+
+@router.delete("/skin-analyses/{analysis_id}", status_code=204)
+def delete_skin_analysis(analysis_id: int, username: str = Depends(get_current_user)):
+    with Session(engine) as db:
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Not found.")
+        record = (
+            db.query(SkinAnalysis)
+            .filter(SkinAnalysis.id == analysis_id, SkinAnalysis.user_id == user.id)
+            .first()
+        )
+        if not record:
+            raise HTTPException(status_code=404, detail="Analysis not found.")
+        db.delete(record)
+        db.commit()
+        logger.info("Deleted skin analysis id=%d for %s", analysis_id, username)
 
 
 @router.post("/medical-flags")

@@ -30,6 +30,8 @@ class User(Base):
     skin_type: Mapped[Optional[str]] = mapped_column(default=None)
     skin_concerns: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     has_shaving_routine: Mapped[Optional[bool]] = mapped_column(default=None)
+    beard_style: Mapped[Optional[str]] = mapped_column(default=None)  # "shave" | "trim" | "grow"
+    location: Mapped[Optional[str]] = mapped_column(default=None)  # country / region
     medical_flags: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     onboarding_complete: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -50,6 +52,11 @@ class User(Base):
     chat_sessions: Mapped[list["ChatSession"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+    skin_analyses: Mapped[list["SkinAnalysis"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="SkinAnalysis.created_at",
     )
 
 
@@ -85,6 +92,7 @@ class RoutineStep(Base):
     position: Mapped[int]  # 1-based canonical order
     ingredient: Mapped[str]
     product_name: Mapped[Optional[str]] = mapped_column(default=None)
+    budget_product: Mapped[Optional[str]] = mapped_column(default=None)
 
     # Relationships
     routine: Mapped["Routine"] = relationship(back_populates="steps")
@@ -130,10 +138,49 @@ class IntroductionPlan(Base):
     user: Mapped["User"] = relationship(back_populates="introduction_plans")
 
 
+class SkinAnalysis(Base):
+    """Stores a skin analysis snapshot with both a full image and a thumbnail."""
+
+    __tablename__ = "skin_analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    condition: Mapped[str]
+    confidence: Mapped[float]
+    alternatives_json: Mapped[str]  # JSON-serialised list[{condition, probability}]
+    reasoning: Mapped[str]
+    disclaimer: Mapped[str]
+    image_b64: Mapped[Optional[str]] = mapped_column(default=None)      # full-size JPEG (≤2048px)
+    thumbnail_b64: Mapped[Optional[str]] = mapped_column(default=None)  # 256px JPEG for list view
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="skin_analyses")
+
+
 # Database engine and initialization
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 engine = create_engine(settings.sqlite_url)
 
 # Create all tables when module is imported
 Base.metadata.create_all(engine)
+
+
+def _ensure_schema(eng) -> None:
+    """Add columns introduced after initial deployment without full Alembic migrations."""
+    with eng.connect() as conn:
+        rs_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(routine_steps)"))}
+        if "budget_product" not in rs_cols:
+            conn.execute(text("ALTER TABLE routine_steps ADD COLUMN budget_product VARCHAR"))
+            conn.commit()
+
+        u_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+        if "beard_style" not in u_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN beard_style VARCHAR"))
+            conn.commit()
+        if "location" not in u_cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN location VARCHAR"))
+            conn.commit()
+
+
+_ensure_schema(engine)

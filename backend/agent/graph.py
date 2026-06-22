@@ -57,8 +57,8 @@ _PERSONA = (
 )
 
 _CITATION_RULE = (
-    "CITATIONS: When you use information retrieved by tools, always mention the source "
-    "document name at the end of your response."
+    "CITATIONS: Do NOT list source document names in your response text. "
+    "Sources are shown automatically in the UI below your message."
 )
 
 _GROUNDING_RULE = (
@@ -78,12 +78,21 @@ _SAVE_RULE = (
     "ROUTINE SAVE RULE — mandatory, no exceptions: whenever you present a skincare routine "
     "(morning, evening, basic, enhanced, or any named set of steps), you MUST call "
     "save_routine_tool in the SAME response turn immediately after presenting it. "
-    "save_routine_tool shows the user an interactive save/overwrite/cancel card — it IS the "
-    "save dialog. Calling the tool IS the save action — there is nothing to narrate. "
+    "save_routine_tool shows the user an interactive save card — it IS the save dialog. "
+    "Calling the tool IS the save action — there is nothing to narrate. "
+    "MULTIPLE ROUTINES: if your response contains more than one separately named routine "
+    "(e.g. a Morning Routine AND an Evening Routine), you MUST call save_routine_tool ONCE "
+    "PER ROUTINE — each call with only that routine's own steps. NEVER merge steps from "
+    "different routines into a single tool call. Example: call save_routine_tool for "
+    "'Morning Routine' with morning steps only, then call it again for 'Evening Routine' "
+    "with evening steps only. "
+    "PRODUCT SUGGESTIONS: before or alongside presenting the routine, you MAY offer specific "
+    "product picks for each step (one recommended + one budget option). If the user asked for "
+    "suggestions, or if you decide to include them, list them in your text response and pass "
+    "them as the `suggestions` JSON in save_routine_tool so they are saved with the routine. "
     "FORBIDDEN PHRASES — never write any of these: "
     "'Saving now', 'I will save', 'Now I will save', 'Let me save', 'I'll save this', "
     "'I am saving', 'Routine Name:', 'Steps:' (when about to save). "
-    "Writing any of these instead of calling save_routine_tool is always wrong. "
     "After the last step of your routine list, call the tool immediately — no extra text. "
     "Ending without calling save_routine_tool after presenting a routine is an error."
 )
@@ -134,25 +143,35 @@ def _tool_instructions(username: str) -> str:
         "Input: comma-separated ingredient names\n"
         "- save_routine_tool: Save a routine to the user's profile. "
         "MANDATORY TWO-STEP SEQUENCE — no exceptions:\n"
-        "  Step 1: Present the full routine in your text response (numbered list, every step).\n"
+        "  Step 1: Present the full routine in your text response (numbered list, every step). "
+        "You MAY also include product suggestions in the same response "
+        "(e.g. 'Cleanser — suggested: CeraVe Foaming | budget: Neutrogena Oil-Free Acne Wash'). "
+        "Include them only if the user asked for product picks or if it adds clear value.\n"
         "  Step 2: Call save_routine_tool IMMEDIATELY — your very next action after the list, "
-        "no additional text, no narration, no 'Saving now...', no 'Routine Name:'. "
-        "Just call the tool.\n"
+        "no additional text, no narration. Just call the tool.\n"
+        "  MULTIPLE ROUTINES: if you presented a Morning Routine AND an Evening Routine, call "
+        "save_routine_tool TWICE — once for each. Never combine their steps into a single call.\n"
+        "  name: descriptive, e.g. 'Morning Routine' or 'Evening Routine'.\n"
+        "  steps: COMMA-SEPARATED individual step names FOR THAT ROUTINE ONLY, no arrows, no slashes.\n"
+        "  suggestions (optional): JSON object mapping step name (lowercase) to products, e.g. "
+        '{\"cleanser\": {\"suggested\": \"CeraVe Foaming\", \"budget\": \"Neutrogena OFW\"}}. '
+        "Pass empty string if no suggestions are available.\n"
         "THE TOOL IS THE DIALOG: save_routine_tool shows the user an interactive save card. "
         "Calling the tool IS the save action. Never narrate it. "
         "FORBIDDEN after a routine list: 'Would you like to save', 'Shall I save', "
-        "'I will save', 'Saving now', 'Let me save', 'Routine Name:', 'Steps:'. "
-        "name: descriptive, e.g. 'Morning Routine'. "
-        "steps: COMMA-SEPARATED individual step names, no arrows, no slashes.\n"
+        "'I will save', 'Saving now', 'Let me save', 'Routine Name:', 'Steps:'.\n"
         "- skin_type_advisor_tool: Classify the user's skin type and save it to their profile. "
         "MUST be called as soon as the user describes their skin. "
         "Input: free-text description of the user's skin.\n"
         "- update_skin_concerns_tool: Save the user's skin concerns. "
         "MUST be called as soon as the user states their concerns. "
         "Input: comma-separated concerns, e.g. \"acne, dark spots\"\n"
-        "- update_shaving_routine_tool: Save whether the user shaves. "
-        "MUST be called as soon as the user answers the shaving question. "
-        "Input: 'yes' or 'no'\n"
+        "- update_beard_style_tool: Show an interactive card for the user to select their facial hair style "
+        "and save the result. Call with the literal string 'ask' — the tool shows the card itself. "
+        "NEVER ask a text question before calling this tool.\n"
+        "- update_location_tool: Show an interactive card for the user to enter their country or region "
+        "and save the result. Call with the literal string 'ask' — the card shows a text field. "
+        "NEVER ask a text question before calling this tool.\n"
         "- add_medical_flag_tool: Save a diagnosed skin condition. Call ONLY when the user "
         "explicitly states they have a NEW condition not already listed in their profile. "
         "NEVER call for conditions already in the user's medical flags. Input: condition name\n"
@@ -181,12 +200,15 @@ def _make_tools(username: str) -> list:
         return skin_type_advisor.invoke(f"description: {description} | username: {username}")
 
     @lc_tool
-    def save_routine_tool(name: str, steps: str) -> str:
+    def save_routine_tool(name: str, steps: str, suggestions: str = "") -> str:
         """Save a named skincare routine to the user's profile.
         name: descriptive name e.g. 'Morning Routine'.
         steps: COMMA-SEPARATED list of individual step names in application order.
                Each step must be a single ingredient or product name with NO arrows,
-               slashes, or other delimiters. Example: 'Cleanser,Niacinamide Serum,Moisturiser,SPF'"""
+               slashes, or other delimiters. Example: 'Cleanser,Niacinamide Serum,Moisturiser,SPF'
+        suggestions: optional JSON object mapping step name (lowercase) to product picks.
+               Format: {"cleanser": {"suggested": "CeraVe Foaming", "budget": "Neutrogena OFW"}, ...}
+               Omit or pass "" if no product suggestions are available."""
         _audit(username, "save_routine_tool", f"name={name[:50]}")
         # Tolerate arrow/slash/newline separators in case the LLM ignores the comma rule.
         step_list = [s.strip() for s in re.split(r"[,→/\n]|->", steps) if s.strip()]
@@ -194,17 +216,59 @@ def _make_tools(username: str) -> list:
             return "Error: no steps provided."
         routine_name = name.strip() or "My Routine"
 
+        # Parse optional product suggestions.
+        sugg_map: dict = {}
+        if suggestions and suggestions.strip():
+            try:
+                sugg_map = json.loads(suggestions)
+                if not isinstance(sugg_map, dict):
+                    sugg_map = {}
+            except (json.JSONDecodeError, ValueError):
+                sugg_map = {}
+
+        # Build HITL preview items (include product info when available).
+        preview_items = []
+        for step in step_list:
+            item: dict = {"ingredient": step}
+            sugg = sugg_map.get(step.lower(), {})
+            if sugg.get("suggested"):
+                item["suggested"] = sugg["suggested"]
+            if sugg.get("budget"):
+                item["budget"] = sugg["budget"]
+            preview_items.append(item)
+
+        # Determine if a routine with this name already exists so we only offer
+        # "overwrite" when it makes sense.
+        try:
+            existing_routine = ProfileStore().get_routine(username, routine_name)
+        except Exception:
+            existing_routine = None
+
+        options: list[dict] = []
+        if existing_routine is not None:
+            options.append({
+                "value": "overwrite",
+                "label": "Overwrite existing",
+                "subtitle": f'Replace "{routine_name}" with this version',
+            })
+        options.append({
+            "value": "save_new",
+            "label": "Save" if existing_routine is None else "Save as new",
+            "subtitle": "Save this routine" if existing_routine is None else "Keep the original and add this as a separate routine (name it below)",
+        })
+        options.append({
+            "value": "cancel",
+            "label": "Don't save",
+            "subtitle": "Discard this routine",
+        })
+
         # HITL: pause and surface the routine for user approval before persisting.
         decision: dict = interrupt({
             "kind": "routine_diff",
             "routine_name": routine_name,
             "title": "Save this routine?",
-            "preview": {"type": "tags", "items": step_list},
-            "options": [
-                {"value": "overwrite", "label": "Overwrite existing", "subtitle": f'Replace "{routine_name}" with this version'},
-                {"value": "save_new",  "label": "Save as new",        "subtitle": "Keep the original and add this as a separate routine (name it below)"},
-                {"value": "cancel",    "label": "Don't save",         "subtitle": "Discard this routine"},
-            ],
+            "preview": {"type": "routine_steps", "items": preview_items},
+            "options": options,
         })
 
         chosen = decision.get("choice", "cancel")
@@ -215,11 +279,16 @@ def _make_tools(username: str) -> list:
 
         if chosen == "save_new":
             # Use the user-supplied name if given; otherwise auto-suffix to avoid collision.
-            routine_name = note if note else f"{routine_name} (New)"
+            routine_name = note if note else (f"{routine_name} (New)" if existing_routine else routine_name)
 
         # "overwrite" keeps routine_name as-is; save_routine already upserts by name.
         step_schemas = [
-            RoutineStepSchema(position=i + 1, ingredient=step, product_name=None)
+            RoutineStepSchema(
+                position=i + 1,
+                ingredient=step,
+                product_name=sugg_map.get(step.lower(), {}).get("suggested"),
+                budget_product=sugg_map.get(step.lower(), {}).get("budget"),
+            )
             for i, step in enumerate(step_list)
         ]
         routine = RoutineSchema(name=routine_name, steps=step_schemas)
@@ -254,20 +323,54 @@ def _make_tools(username: str) -> list:
             return "Sorry, I could not save your skin concerns. Please try again."
 
     @lc_tool
-    def update_shaving_routine_tool(has_shaving: str) -> str:
-        """Save whether the user has a shaving routine to their profile.
-        Input: 'yes' or 'no'"""
-        _audit(username, "update_shaving_routine_tool", has_shaving[:10])
-        value = has_shaving.strip().lower()
-        if value not in ("yes", "no", "true", "false", "1", "0"):
-            return "Error: input must be 'yes' or 'no'."
-        bool_value = value in ("yes", "true", "1")
+    def update_beard_style_tool(trigger: str) -> str:
+        """Show the user an interactive card to select their facial hair style.
+        Always call with the literal string 'ask' — the card handles the selection."""
+        _audit(username, "update_beard_style_tool", "show_card")
+
+        decision: dict = interrupt({
+            "kind": "beard_style_select",
+            "title": "How do you manage your facial hair?",
+            "options": [
+                {"value": "shave", "label": "I shave clean",            "subtitle": "Regular clean shave"},
+                {"value": "trim",  "label": "I trim / maintain a beard", "subtitle": "Beard or stubble upkeep"},
+                {"value": "grow",  "label": "I let it grow",             "subtitle": "No active beard care"},
+            ],
+        })
+
+        chosen = decision.get("choice", "grow")
+        labels = {"shave": "clean-shaven", "trim": "trims/maintains beard", "grow": "lets beard grow"}
         try:
-            ProfileStore().update_has_shaving_routine(username, bool_value)
-            return f"Shaving routine preference saved: {'yes' if bool_value else 'no'}."
+            ProfileStore().update_beard_style(username, chosen)
+            return f"Facial hair style saved: {labels.get(chosen, chosen)}."
         except Exception as exc:
-            logger.error("update_shaving_routine_tool failed: %s", exc)
-            return "Sorry, I could not save your shaving preference. Please try again."
+            logger.error("update_beard_style_tool failed: %s", exc)
+            return "Sorry, I could not save your facial hair preference. Please try again."
+
+    @lc_tool
+    def update_location_tool(trigger: str) -> str:
+        """Show the user an interactive card to enter their country or region.
+        Always call with the literal string 'ask' — the card handles the input."""
+        _audit(username, "update_location_tool", "show_card")
+
+        decision: dict = interrupt({
+            "kind": "location_input",
+            "title": "Where are you based?",
+            "preview": {"type": "text", "content": "This helps me recommend products that are easy to find near you."},
+            "options": [
+                {"value": "confirm", "label": "Confirm", "subtitle": "Type your country or region in the field below"},
+            ],
+        })
+
+        loc = decision.get("note", "").strip()
+        if not loc:
+            return "Location not provided — skipped."
+        try:
+            ProfileStore().update_location(username, loc)
+            return f"Location saved: {loc}. I'll prioritise products available in your region."
+        except Exception as exc:
+            logger.error("update_location_tool failed: %s", exc)
+            return "Sorry, I could not save your location. Please try again."
 
     @lc_tool
     def add_medical_flag_tool(condition: str) -> str:
@@ -324,16 +427,18 @@ def _make_tools(username: str) -> list:
         except Exception as exc:
             return f"Error reading profile: {exc}"
 
+        beard_labels = {"shave": "Clean-shaven", "trim": "Trims/maintains beard", "grow": "Lets it grow"}
         decision: dict = interrupt({
             "kind": "onboarding_review",
             "title": "Does your profile look right?",
             "preview": {
                 "type": "kv",
                 "pairs": [
-                    {"label": "Skin type",        "value": profile.skin_type or ""},
-                    {"label": "Concerns",         "value": ", ".join(profile.skin_concerns) if profile.skin_concerns else ""},
-                    {"label": "Shaving routine",  "value": "Yes" if profile.has_shaving_routine else ("No" if profile.has_shaving_routine is False else "")},
-                    {"label": "Medical flags",    "value": ", ".join(profile.medical_flags) if profile.medical_flags else "None"},
+                    {"label": "Skin type",     "value": profile.skin_type or ""},
+                    {"label": "Concerns",      "value": ", ".join(profile.skin_concerns) if profile.skin_concerns else ""},
+                    {"label": "Facial hair",   "value": beard_labels.get(profile.beard_style or "", profile.beard_style or "")},
+                    {"label": "Location",      "value": profile.location or ""},
+                    {"label": "Medical flags", "value": ", ".join(profile.medical_flags) if profile.medical_flags else "None"},
                 ],
             },
             "options": [
@@ -420,7 +525,8 @@ def _make_tools(username: str) -> list:
         save_routine_tool,
         skin_type_advisor_tool,
         update_skin_concerns_tool,
-        update_shaving_routine_tool,
+        update_beard_style_tool,
+        update_location_tool,
         add_medical_flag_tool,
         spf_recommender,
         introduction_scheduler_tool,
@@ -447,11 +553,14 @@ def build_system_prompt(profile: UserProfile) -> str:
             "Collect the following, one question at a time, in this order:\n"
             "1. Skin description → call skin_type_advisor_tool immediately with their answer.\n"
             "2. Skin concerns (e.g. acne, dryness, dark spots) → call update_skin_concerns_tool.\n"
-            "3. Shaving (yes/no) → ask exactly 'Do you actively shave your beard or body?' → call update_shaving_routine_tool.\n"
-            "4. Medical skin conditions: ask 'Do you have any diagnosed skin conditions such as "
+            "3. Facial hair → call update_beard_style_tool('ask') immediately — "
+            "the tool shows the user an interactive selection card, no text question needed.\n"
+            "4. Location → call update_location_tool('ask') immediately — "
+            "the tool shows the user an interactive card with a text field for their country or region.\n"
+            "5. Medical skin conditions: ask 'Do you have any diagnosed skin conditions such as "
             "eczema, rosacea, or psoriasis?' → if yes, call add_medical_flag_tool once per "
             "condition mentioned; if no, skip the tool and proceed.\n"
-            "5. MANDATORY FINAL STEP: once all previous tool calls have returned, your ONLY "
+            "6. MANDATORY FINAL STEP: once all previous tool calls have returned, your ONLY "
             "allowed next action is to call finalize_onboarding_tool('ready'). "
             "You MUST NOT generate any text response, summarise the profile, suggest a routine, "
             "or do anything else before finalize_onboarding_tool returns. "
@@ -464,6 +573,7 @@ def build_system_prompt(profile: UserProfile) -> str:
     else:
         safe_skin_type = _sanitise(profile.skin_type) if profile.skin_type else profile.skin_type
         safe_concerns = [_sanitise(c) for c in profile.skin_concerns]
+        safe_location = _sanitise(profile.location) if profile.location else None
         try:
             existing_routines = [r.name for r in ProfileStore().get_all_routines(profile.username)]
         except Exception:
@@ -472,9 +582,16 @@ def build_system_prompt(profile: UserProfile) -> str:
         sections.append(
             f"USER PROFILE: skin_type={safe_skin_type}, "
             f"concerns={safe_concerns}, "
-            f"shaving={profile.has_shaving_routine}, "
+            f"beard_style={profile.beard_style}, "
+            f"location={safe_location or 'unknown'}, "
             f"saved_routines=[{routines_str}]"
         )
+        if safe_location:
+            sections.append(
+                f"PRODUCT LOCALISATION: The user is based in {safe_location}. "
+                "When recommending products, prioritise brands that are widely available there. "
+                "If a product is hard to find in that region, say so and suggest a locally available alternative."
+            )
 
     if profile.medical_flags:
         safe_flags = [_sanitise(f) for f in profile.medical_flags]
@@ -840,6 +957,14 @@ async def stream_resume_response(
                             if text:
                                 accumulated_text.append(text)
                                 yield _sse({"type": "text", "content": text})
+
+        # Check for a chained interrupt (e.g. save_routine firing after finalize_onboarding).
+        snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
+        for task in snapshot.tasks:
+            for intr in task.interrupts:
+                yield _sse({"type": "interrupt", "run_id": run_id, **intr.value})
+                yield "data: [DONE]\n\n"
+                return
 
         answer = "".join(accumulated_text)
         citations = extract_citations(accumulated_messages)

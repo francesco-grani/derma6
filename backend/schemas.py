@@ -16,6 +16,8 @@ class UserProfile(BaseModel):
     skin_type: str | None = None
     skin_concerns: list[str] = []
     has_shaving_routine: bool | None = None
+    beard_style: str | None = None  # "shave" | "trim" | "grow"
+    location: str | None = None
     medical_flags: list[str] = []
     onboarding_complete: bool = False
 
@@ -26,6 +28,7 @@ class RoutineStepSchema(BaseModel):
     position: int
     ingredient: str
     product_name: str | None = None
+    budget_product: str | None = None
 
 
 class RoutineSchema(BaseModel):

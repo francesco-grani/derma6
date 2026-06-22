@@ -136,6 +136,35 @@ class ProfileStore:
             logger.error("update_has_shaving_routine failed for '%s': %s", username, exc)
             raise ProfileStoreError(str(exc)) from exc
 
+    def update_beard_style(self, username: str, style: str) -> None:
+        """Set the user's facial hair style ('shave', 'trim', or 'grow')."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                user.beard_style = style
+                user.has_shaving_routine = style in ("shave", "trim")
+                self._check_onboarding_complete(session, user)
+                session.commit()
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("update_beard_style failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
+    def update_location(self, username: str, location: str) -> None:
+        """Set the user's country or region for product availability filtering."""
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, username)
+                user.location = location
+                self._check_onboarding_complete(session, user)
+                session.commit()
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("update_location failed for '%s': %s", username, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
     def add_medical_flag(self, username: str, flag: str) -> None:
         """Append a medical flag, ignoring duplicates."""
         try:
@@ -184,6 +213,7 @@ class ProfileStore:
                             position=step.position,
                             ingredient=step.ingredient,
                             product_name=step.product_name,
+                            budget_product=step.budget_product,
                         )
                     )
                 session.commit()
@@ -251,6 +281,7 @@ class ProfileStore:
                             position=s.position,
                             ingredient=s.ingredient,
                             product_name=s.product_name,
+                            budget_product=s.budget_product,
                         )
                         for s in sorted(routine.steps, key=lambda s: s.position)
                     ]
@@ -279,6 +310,7 @@ class ProfileStore:
                         position=s.position,
                         ingredient=s.ingredient,
                         product_name=s.product_name,
+                        budget_product=s.budget_product,
                     )
                     for s in sorted(routine.steps, key=lambda s: s.position)
                 ]
@@ -388,6 +420,8 @@ class ProfileStore:
             skin_type=user.skin_type,
             skin_concerns=skin_concerns,
             has_shaving_routine=user.has_shaving_routine,
+            beard_style=getattr(user, "beard_style", None),
+            location=getattr(user, "location", None),
             medical_flags=medical_flags,
             onboarding_complete=user.onboarding_complete,
         )

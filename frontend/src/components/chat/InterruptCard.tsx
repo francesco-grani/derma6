@@ -11,7 +11,9 @@ export interface InterruptOption {
 export interface PreviewTags { type: 'tags'; items: string[] }
 export interface PreviewKV   { type: 'kv';   pairs: { label: string; value: string }[] }
 export interface PreviewText { type: 'text'; content: string; emphasis?: string }
-export type InterruptPreview = PreviewTags | PreviewKV | PreviewText
+export interface PreviewRoutineStep { ingredient: string; suggested?: string; budget?: string }
+export interface PreviewRoutineSteps { type: 'routine_steps'; items: PreviewRoutineStep[] }
+export type InterruptPreview = PreviewTags | PreviewKV | PreviewText | PreviewRoutineSteps
 
 export interface InterruptPayload {
   kind: string
@@ -23,6 +25,30 @@ export interface InterruptPayload {
 // ── Preview renderers ─────────────────────────────────────────────────────────
 
 function Preview({ preview }: { preview: InterruptPreview }) {
+  if (preview.type === 'routine_steps') {
+    return (
+      <div className="flex flex-col gap-1.5 mt-2">
+        {preview.items.map((item, i) => (
+          <div key={i} className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium" style={{ color: '#1C2520' }}>
+              {i + 1}. {item.ingredient}
+            </span>
+            {item.suggested && (
+              <span className="text-xs pl-3" style={{ color: '#A0742A' }}>
+                ⭐ {item.suggested}
+              </span>
+            )}
+            {item.budget && (
+              <span className="text-xs pl-3" style={{ color: '#3A6B3D' }}>
+                💚 {item.budget}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   if (preview.type === 'tags') {
     return (
       <div className="flex flex-wrap gap-1 mt-2">
