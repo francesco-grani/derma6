@@ -37,7 +37,7 @@
 
 - [ ] Conditional routing / multi-agent graph topology
 - [ ] Persistent rate limiter — current in-memory limiter resets on restart *(defer to capstone: SQLite `rate_limit_events` table, swap `time.monotonic()` → `time.time()`)*
-- [ ] Deployment — target TBD (Cloudflare Pages + Railway likely); when confirmed: lock CORS origin, add `VITE_API_URL` build env var
+- [x] Deployment — Hetzner CAX11 (€3.29/mo) + sslip.io SSL; GitHub Actions CI/CD (rsync + docker compose); live at `https://167-233-84-81.sslip.io`
 
 ### Admin Features
 
