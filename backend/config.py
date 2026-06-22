@@ -4,7 +4,7 @@ Uses pydantic-settings for environment variable management with validation.
 Fails fast at import time if required variables are missing.
 """
 
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -77,6 +77,19 @@ class Settings(BaseSettings):
 
     # Input validation
     max_message_chars: int = Field(default=2000, alias="MAX_MESSAGE_CHARS")
+
+    # CORS
+    allowed_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://localhost:3000"],
+        alias="ALLOWED_ORIGINS",
+    )
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _parse_origins(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v  # type: ignore[return-value]
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

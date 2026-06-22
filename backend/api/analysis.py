@@ -4,18 +4,24 @@ import base64
 import io
 import json
 import logging
-from datetime import datetime
+from collections.abc import Generator
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from openai import AsyncOpenAI
 from PIL import Image, ImageOps
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.config import settings
-from backend.db.models import SkinAnalysis, User, engine
+from backend.db.deps import get_db, get_profile_store
+from backend.db.models import SkinAnalysis, User
 from backend.db.profile_store import ProfileStore, ProfileStoreError
+from backend.schemas import (
+    Alternative,
+    SaveConditionRequest,
+    SkinAnalysisRecord,
+    SkinAnalysisResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +34,9 @@ _THUMB_MAX_PX = 256    # thumbnail stored for list view
 
 
 def _prepare_for_vision(data: bytes) -> tuple[bytes, str]:
-    """Resize and re-encode image so it fits comfortably in the API payload.
-
-    Returns (jpeg_bytes, "image/jpeg"). Capping at 1024px on the longest side
-    keeps the base64 payload under ~400 KB while preserving enough detail for
-    dermatology screening.
-    """
+    """Resize and re-encode image so it fits comfortably in the API payload."""
     img = Image.open(io.BytesIO(data))
-    img = ImageOps.exif_transpose(img)  # apply EXIF rotation before anything else
+    img = ImageOps.exif_transpose(img)
     img = img.convert("RGB")
     img.thumbnail((_VISION_MAX_PX, _VISION_MAX_PX), Image.LANCZOS)
     buf = io.BytesIO()
@@ -58,39 +59,11 @@ _SYSTEM_PROMPT = (
 )
 
 
-class Alternative(BaseModel):
-    condition: str
-    probability: str
-
-
-class SkinAnalysisResult(BaseModel):
-    condition: str
-    confidence: float
-    alternatives: list[Alternative]
-    reasoning: str
-    disclaimer: str
-
-
-class SkinAnalysisRecord(BaseModel):
-    id: int
-    condition: str
-    confidence: float
-    alternatives: list[Alternative]
-    reasoning: str
-    disclaimer: str
-    image_b64: str | None
-    thumbnail_b64: str | None
-    created_at: datetime
-
-
-class SaveConditionRequest(BaseModel):
-    condition: str
-
-
 @router.post("/analyze-skin", response_model=SkinAnalysisResult)
 async def analyze_skin(
     file: UploadFile = File(...),
     username: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(
@@ -171,22 +144,21 @@ async def analyze_skin(
     full_b64 = base64.b64encode(data).decode()
 
     try:
-        with Session(engine) as db:
-            user = db.query(User).filter(User.username == username).first()
-            if user:
-                record = SkinAnalysis(
-                    user_id=user.id,
-                    condition=result.condition,
-                    confidence=result.confidence,
-                    alternatives_json=json.dumps([a.model_dump() for a in result.alternatives]),
-                    reasoning=result.reasoning,
-                    disclaimer=result.disclaimer,
-                    image_b64=full_b64,
-                    thumbnail_b64=thumb_b64,
-                )
-                db.add(record)
-                db.commit()
-                logger.info("Saved skin analysis id=%d for %s", record.id, username)
+        user = db.query(User).filter(User.username == username).first()
+        if user:
+            record = SkinAnalysis(
+                user_id=user.id,
+                condition=result.condition,
+                confidence=result.confidence,
+                alternatives_json=json.dumps([a.model_dump() for a in result.alternatives]),
+                reasoning=result.reasoning,
+                disclaimer=result.disclaimer,
+                image_b64=full_b64,
+                thumbnail_b64=thumb_b64,
+            )
+            db.add(record)
+            db.commit()
+            logger.info("Saved skin analysis id=%d for %s", record.id, username)
     except Exception as exc:
         logger.error("Failed to persist skin analysis for %s: %s", username, exc)
 
@@ -194,61 +166,67 @@ async def analyze_skin(
 
 
 @router.get("/skin-analyses", response_model=list[SkinAnalysisRecord])
-def get_skin_analyses(username: str = Depends(get_current_user)):
-    with Session(engine) as db:
-        user = db.query(User).filter(User.username == username).first()
-        if not user:
-            return []
-        rows = (
-            db.query(SkinAnalysis)
-            .filter(SkinAnalysis.user_id == user.id)
-            .order_by(SkinAnalysis.created_at.asc())
-            .all()
+def get_skin_analyses(
+    username: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        return []
+    rows = (
+        db.query(SkinAnalysis)
+        .filter(SkinAnalysis.user_id == user.id)
+        .order_by(SkinAnalysis.created_at.asc())
+        .all()
+    )
+    return [
+        SkinAnalysisRecord(
+            id=r.id,
+            condition=r.condition,
+            confidence=r.confidence,
+            alternatives=[Alternative(**a) for a in json.loads(r.alternatives_json)],
+            reasoning=r.reasoning,
+            disclaimer=r.disclaimer,
+            image_b64=r.image_b64,
+            thumbnail_b64=r.thumbnail_b64,
+            created_at=r.created_at,
         )
-        return [
-            SkinAnalysisRecord(
-                id=r.id,
-                condition=r.condition,
-                confidence=r.confidence,
-                alternatives=[Alternative(**a) for a in json.loads(r.alternatives_json)],
-                reasoning=r.reasoning,
-                disclaimer=r.disclaimer,
-                image_b64=r.image_b64,
-                thumbnail_b64=r.thumbnail_b64,
-                created_at=r.created_at,
-            )
-            for r in rows
-        ]
+        for r in rows
+    ]
 
 
 @router.delete("/skin-analyses/{analysis_id}", status_code=204)
-def delete_skin_analysis(analysis_id: int, username: str = Depends(get_current_user)):
-    with Session(engine) as db:
-        user = db.query(User).filter(User.username == username).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Not found.")
-        record = (
-            db.query(SkinAnalysis)
-            .filter(SkinAnalysis.id == analysis_id, SkinAnalysis.user_id == user.id)
-            .first()
-        )
-        if not record:
-            raise HTTPException(status_code=404, detail="Analysis not found.")
-        db.delete(record)
-        db.commit()
-        logger.info("Deleted skin analysis id=%d for %s", analysis_id, username)
+def delete_skin_analysis(
+    analysis_id: int,
+    username: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Not found.")
+    record = (
+        db.query(SkinAnalysis)
+        .filter(SkinAnalysis.id == analysis_id, SkinAnalysis.user_id == user.id)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Analysis not found.")
+    db.delete(record)
+    db.commit()
+    logger.info("Deleted skin analysis id=%d for %s", analysis_id, username)
 
 
 @router.post("/medical-flags")
 def save_medical_flag(
     body: SaveConditionRequest,
     username: str = Depends(get_current_user),
+    store: ProfileStore = Depends(get_profile_store),
 ):
     condition = body.condition.strip()
     if not condition:
         raise HTTPException(status_code=422, detail="Condition name is required.")
     try:
-        ProfileStore().add_medical_flag(username, condition)
+        store.add_medical_flag(username, condition)
         logger.info("Medical flag '%s' saved for %s via analysis page", condition, username)
         return {"saved": True, "condition": condition}
     except ProfileStoreError as exc:

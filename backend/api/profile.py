@@ -1,28 +1,23 @@
 """Profile routes: GET /api/me/profile, PATCH /api/me/profile."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from backend.auth import get_current_user
+from backend.db.deps import get_profile_store
 from backend.db.profile_store import ProfileStore, ProfileStoreError
-from backend.schemas import UserProfile
+from backend.schemas import ProfilePatch, UserProfile
 
 router = APIRouter(prefix="/api/me", tags=["profile"])
 
 VALID_BEARD_STYLES = {"shave", "trim", "grow"}
 
 
-class ProfilePatch(BaseModel):
-    skin_type: str | None = None
-    beard_style: str | None = None
-    location: str | None = None
-    skin_concerns: list[str] | None = None
-
-
 @router.get("/profile", response_model=UserProfile)
-def get_profile(username: str = Depends(get_current_user)):
+def get_profile(
+    username: str = Depends(get_current_user),
+    store: ProfileStore = Depends(get_profile_store),
+):
     try:
-        store = ProfileStore()
         store.get_or_create_user(username)
         return store.get_profile(username)
     except ProfileStoreError as exc:
@@ -30,9 +25,12 @@ def get_profile(username: str = Depends(get_current_user)):
 
 
 @router.patch("/profile", response_model=UserProfile)
-def patch_profile(patch: ProfilePatch, username: str = Depends(get_current_user)):
+def patch_profile(
+    patch: ProfilePatch,
+    username: str = Depends(get_current_user),
+    store: ProfileStore = Depends(get_profile_store),
+):
     try:
-        store = ProfileStore()
         if patch.skin_type is not None:
             store.update_skin_type(username, patch.skin_type.strip())
         if patch.beard_style is not None:

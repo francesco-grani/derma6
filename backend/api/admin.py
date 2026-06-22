@@ -9,16 +9,17 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.config import settings
-from backend.db.models import ChatSession, User, engine
+from backend.db.deps import get_db
+from backend.db.models import ChatSession, User
+from backend.schemas import UserSummary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 logger = logging.getLogger(__name__)
@@ -37,23 +38,6 @@ _eval_state: dict[str, Any] = {
 }
 
 
-# ── Models ────────────────────────────────────────────────────────────────────
-
-class UserSummary(BaseModel):
-    id: int
-    username: str
-    skin_type: Optional[str]
-    skin_concerns: Optional[str]
-    has_shaving_routine: Optional[bool]
-    medical_flags: Optional[str]
-    onboarding_complete: bool
-    total_prompt_tokens: int
-    total_completion_tokens: int
-    total_cost_usd: float
-
-    model_config = {"from_attributes": True}
-
-
 # ── Auth guard ────────────────────────────────────────────────────────────────
 
 def require_admin(username: str = Depends(get_current_user)) -> str:
@@ -65,35 +49,34 @@ def require_admin(username: str = Depends(get_current_user)) -> str:
 # ── Users ─────────────────────────────────────────────────────────────────────
 
 @router.get("/users", response_model=list[UserSummary])
-def list_users(_: str = Depends(require_admin)):
-    with Session(engine) as session:
-        users = session.query(User).order_by(User.id).all()
-        result: list[UserSummary] = []
-        for u in users:
-            agg = (
-                session.query(
-                    func.coalesce(func.sum(ChatSession.total_prompt_tokens), 0),
-                    func.coalesce(func.sum(ChatSession.total_completion_tokens), 0),
-                    func.coalesce(func.sum(ChatSession.total_cost_usd), 0.0),
-                )
-                .filter(ChatSession.user_id == u.id)
-                .one()
+def list_users(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    users = db.query(User).order_by(User.id).all()
+    result: list[UserSummary] = []
+    for u in users:
+        agg = (
+            db.query(
+                func.coalesce(func.sum(ChatSession.total_prompt_tokens), 0),
+                func.coalesce(func.sum(ChatSession.total_completion_tokens), 0),
+                func.coalesce(func.sum(ChatSession.total_cost_usd), 0.0),
             )
-            result.append(
-                UserSummary(
-                    id=u.id,
-                    username=u.username,
-                    skin_type=u.skin_type,
-                    skin_concerns=u.skin_concerns,
-                    has_shaving_routine=u.has_shaving_routine,
-                    medical_flags=u.medical_flags,
-                    onboarding_complete=u.onboarding_complete,
-                    total_prompt_tokens=int(agg[0]),
-                    total_completion_tokens=int(agg[1]),
-                    total_cost_usd=float(agg[2]),
-                )
+            .filter(ChatSession.user_id == u.id)
+            .one()
+        )
+        result.append(
+            UserSummary(
+                id=u.id,
+                username=u.username,
+                skin_type=u.skin_type,
+                skin_concerns=u.skin_concerns,
+                has_shaving_routine=u.has_shaving_routine,
+                medical_flags=u.medical_flags,
+                onboarding_complete=u.onboarding_complete,
+                total_prompt_tokens=int(agg[0]),
+                total_completion_tokens=int(agg[1]),
+                total_cost_usd=float(agg[2]),
             )
-        return result
+        )
+    return result
 
 
 # ── Eval dashboard ────────────────────────────────────────────────────────────

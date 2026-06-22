@@ -26,11 +26,15 @@ class SessionStoreError(Exception):
 
 
 class SessionStore:
-    def __init__(self, db_url: Optional[str] = None) -> None:
-        resolved_url = db_url or settings.sqlite_url
-        self._engine = create_engine(resolved_url)
-        Base.metadata.create_all(self._engine)
-        self._migrate_token_columns()
+    def __init__(self, db_url: Optional[str] = None, engine=None) -> None:
+        if engine is not None:
+            # Shared engine path: init_db() already ran create_all + migrations.
+            self._engine = engine
+        else:
+            url = db_url or settings.sqlite_url
+            self._engine = create_engine(url)
+            Base.metadata.create_all(self._engine)
+            self._migrate_token_columns()
 
     # ── Public API ──────────────────────────────────────────────────────────
 

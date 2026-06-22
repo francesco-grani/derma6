@@ -2,19 +2,12 @@
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from backend.agent.graph import stream_resume_response
 from backend.auth import get_current_user
+from backend.schemas import ResumeRequest
 
 router = APIRouter(tags=["hitl"])
-
-
-class ResumeRequest(BaseModel):
-    session_id: str
-    run_id: str
-    choice: str  # "confirm" | "rename" | "cancel"
-    note: str = ""
 
 
 @router.post("/api/chat/resume")
