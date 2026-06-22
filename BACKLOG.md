@@ -14,10 +14,19 @@
 - [x] Skin analysis feature — vision LLM endpoint, condition + confidence + differential diagnoses
 - [x] Auto 401 logout — frontend intercepts expired tokens and redirects to login
 - [x] Camera modal (`getUserMedia`) in Skin Analysis — `capture="environment"` is mobile-only; replaced with live video stream + canvas snapshot so it works on desktop too
+- [x] Test suite — 233 unit tests, 91% coverage on business logic; deepeval evaluation suite (12 LLM-quality tests) with golden dataset at `tests/eval/golden_dataset.json`
 
 ## Pending
 
-- [ ] HITL interrupts — requires `AsyncSqliteSaver`, `thread_id` on graph, resume endpoint on API, frontend pause/resume UI
+### HITL Features
+
+- [x] **HITL-A: Routine Diff Approval** — agent proposes routine, graph interrupts, user sees before/after diff with approve/rename/cancel options
+- [x] **HITL-B: Onboarding Profile Review** — after collecting all 4 onboarding answers, interrupt before `onboarding_complete` is set; user reviews and corrects collected data
+- [x] **HITL-C: Medical Flag Double-Confirm** — hard interrupt before writing any medical flag; explicit per-flag confirmation, cannot be overridden by prompt injection
+- [x] **HITL-D: Conflict Resolution Decision** — stack conflict detected → interrupt → agent proposes which ingredient to remove; user chooses remove/keep-with-warning per conflict
+
+### Infrastructure
+
 - [ ] Conditional routing / multi-agent graph topology
 - [ ] WebSockets upgrade — needed for bidirectional mid-stream signals once HITL lands (SSE is one-way)
 - [ ] Persistent rate limiter — current in-memory limiter resets on restart

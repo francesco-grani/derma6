@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useRoutines, useDeleteRoutine, useRenameRoutine } from '@/hooks/useRoutines'
+import { useSession } from '@/lib/sessionContext'
 import type { Routine } from '@/lib/api'
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -21,10 +22,13 @@ export default function RoutinesPage() {
   const deleteRoutine = useDeleteRoutine()
   const renameRoutine = useRenameRoutine()
   const navigate = useNavigate()
+  const { startNewSession } = useSession()
 
   const [renameTarget, setRenameTarget] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [enhanceTarget, setEnhanceTarget] = useState<Routine | null>(null)
+  const [enhanceGoal, setEnhanceGoal] = useState('')
 
   if (isLoading) return <PageShell><p style={{ color: '#9EAD9E' }}>Loading routines…</p></PageShell>
 
@@ -60,11 +64,13 @@ export default function RoutinesPage() {
               <h3 style={{ color: '#E0E8E0', fontSize: 17, fontWeight: 600 }}>{routine.name}</h3>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline"
+                  className="cursor-pointer"
                   style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', fontSize: 12 }}
                   onClick={() => { setRenameTarget(routine.name); setNewName(routine.name) }}>
                   Rename
                 </Button>
                 <Button size="sm" variant="outline"
+                  className="cursor-pointer"
                   style={{ borderColor: '#7A4E4E', color: '#F0B8B8', background: 'transparent', fontSize: 12 }}
                   onClick={() => setDeleteTarget(routine.name)}>
                   Delete
@@ -99,9 +105,9 @@ export default function RoutinesPage() {
 
             <Button
               size="sm" variant="outline"
-              className="mt-3"
+              className="mt-3 cursor-pointer"
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', fontSize: 12 }}
-              onClick={() => navigate({ to: '/chat', search: { prompt: `Enhance my ${routine.name}` } })}
+              onClick={() => { setEnhanceTarget(routine); setEnhanceGoal('') }}
             >
               ✨ Enhance this routine
             </Button>
@@ -122,11 +128,11 @@ export default function RoutinesPage() {
             onKeyDown={e => e.key === 'Enter' && confirmRename()}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameTarget(null)}
+            <Button variant="outline" className="cursor-pointer" onClick={() => setRenameTarget(null)}
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
               Cancel
             </Button>
-            <Button onClick={confirmRename} disabled={renameRoutine.isPending}
+            <Button className="cursor-pointer" onClick={confirmRename} disabled={renameRoutine.isPending}
               style={{ background: '#7A9B7D', color: '#1C2520' }}>
               Save
             </Button>
@@ -142,13 +148,65 @@ export default function RoutinesPage() {
           </DialogHeader>
           <p style={{ color: '#9EAD9E', fontSize: 14 }}>This cannot be undone.</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}
+            <Button variant="outline" className="cursor-pointer" onClick={() => setDeleteTarget(null)}
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
               Cancel
             </Button>
-            <Button onClick={confirmDelete} disabled={deleteRoutine.isPending}
+            <Button className="cursor-pointer" onClick={confirmDelete} disabled={deleteRoutine.isPending}
               style={{ background: '#7A4E4E', color: '#F0B8B8', borderColor: '#7A4E4E' }}>
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enhance dialog */}
+      <Dialog open={!!enhanceTarget} onOpenChange={() => setEnhanceTarget(null)}>
+        <DialogContent style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: '#E0E8E0' }}>Enhance "{enhanceTarget?.name}"</DialogTitle>
+          </DialogHeader>
+          <p style={{ color: '#9EAD9E', fontSize: 13 }}>What would you like to improve? (optional)</p>
+          <Input
+            value={enhanceGoal}
+            onChange={e => setEnhanceGoal(e.target.value)}
+            placeholder="e.g. add anti-aging, improve hydration…"
+            style={{ background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
+            onKeyDown={async e => {
+              if (e.key === 'Enter' && enhanceTarget) {
+                const target = enhanceTarget
+                const goal = enhanceGoal
+                setEnhanceTarget(null)
+                const steps = target.steps.map(s => s.ingredient).join(', ')
+                const msg = `Please enhance my "${target.name}" routine. Current steps: ${steps}.${goal ? ` I'd like to focus on: ${goal}.` : ' Suggest improvements based on my skin profile.'}`
+                await startNewSession()
+                sessionStorage.setItem('derma6:initial-message', msg)
+                navigate({ to: '/chat' })
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" className="cursor-pointer" onClick={() => setEnhanceTarget(null)}
+              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
+              Cancel
+            </Button>
+            <Button
+              className="cursor-pointer"
+              disabled={!enhanceTarget}
+              style={{ background: '#7A9B7D', color: '#1C2520' }}
+              onClick={async () => {
+                if (!enhanceTarget) return
+                const target = enhanceTarget
+                const goal = enhanceGoal
+                setEnhanceTarget(null)
+                const steps = target.steps.map(s => s.ingredient).join(', ')
+                const msg = `Please enhance my "${target.name}" routine. Current steps: ${steps}.${goal ? ` I'd like to focus on: ${goal}.` : ' Suggest improvements based on my skin profile.'}`
+                await startNewSession()
+                sessionStorage.setItem('derma6:initial-message', msg)
+                navigate({ to: '/chat' })
+              }}
+            >
+              Enhance ✨
             </Button>
           </DialogFooter>
         </DialogContent>
