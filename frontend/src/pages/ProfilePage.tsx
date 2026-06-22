@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useProfile } from '@/hooks/useProfile'
 import { useDeleteSkinAnalysis, useSkinAnalyses } from '@/hooks/useSkinAnalysis'
@@ -34,40 +33,42 @@ export default function ProfilePage() {
 
   return (
     <PageShell>
-      <h2 style={{ color: '#E0E8E0', fontSize: 20, fontWeight: 700, marginBottom: 20 }}>My Profile</h2>
+      <div style={{ maxWidth: 480 }}>
+        <h2 style={{ color: '#E0E8E0', fontSize: 20, fontWeight: 700, marginBottom: 16 }}>My Profile</h2>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <EditableTextCard
-          label="Skin Type"
-          value={profile.skin_type ?? ''}
-          display={profile.skin_type ? capitalize(profile.skin_type) : '—'}
-          onSave={v => save({ skin_type: v })}
-        />
-        <BeardStyleCard
-          value={profile.beard_style ?? null}
-          onSave={v => save({ beard_style: v })}
-        />
-        <EditableTextCard
-          label="Location"
-          value={profile.location ?? ''}
-          display={profile.location ?? '—'}
-          onSave={v => save({ location: v })}
-        />
-        <MetricCard label="Onboarding" value={profile.onboarding_complete ? '✅ Complete' : '⏳ In progress'} />
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <EditableTextCard
+            label="Skin Type"
+            value={profile.skin_type ?? ''}
+            display={profile.skin_type ? capitalize(profile.skin_type) : '—'}
+            onSave={v => save({ skin_type: v })}
+          />
+          <BeardStyleCard
+            value={profile.beard_style ?? null}
+            onSave={v => save({ beard_style: v })}
+          />
+          <EditableTextCard
+            label="Location"
+            value={profile.location ?? ''}
+            display={profile.location ?? '—'}
+            onSave={v => save({ location: v })}
+          />
+          <MetricCard label="Onboarding" value={profile.onboarding_complete ? '✅ Complete' : '⏳ In progress'} />
 
-        <SkinConcernsCard
-          concerns={profile.skin_concerns}
-          onSave={concerns => save({ skin_concerns: concerns })}
-        />
-      </div>
-
-      {profile.medical_flags.length > 0 && (
-        <div className="mb-6 p-4 rounded-xl" style={{ background: '#5A3E3E', border: '1px solid #7A4E4E' }}>
-          <p style={{ color: '#F0B8B8', fontSize: 13 }}>
-            ⚠️ Medical flags: {profile.medical_flags.join(', ')}. Please consult a dermatologist before making changes to your routine.
-          </p>
+          <SkinConcernsCard
+            concerns={profile.skin_concerns}
+            onSave={concerns => save({ skin_concerns: concerns })}
+          />
         </div>
-      )}
+
+        {profile.medical_flags.length > 0 && (
+          <div className="mb-6 p-3 rounded-xl" style={{ background: '#5A3E3E', border: '1px solid #7A4E4E' }}>
+            <p style={{ color: '#F0B8B8', fontSize: 12 }}>
+              ⚠️ Medical flags: {profile.medical_flags.join(', ')}. Please consult a dermatologist before making changes to your routine.
+            </p>
+          </div>
+        )}
+      </div>
 
       {analyses && analyses.length > 0 && (
         <SkinAnalysisTimeline analyses={analyses} />
@@ -382,6 +383,11 @@ function ConfidenceBar({ pct }: { pct: number }) {
   )
 }
 
+const CARD = { background: '#2E3D2F', border: '1px solid #4B5A4C', borderRadius: 12 } as const
+const LABEL_STYLE = { color: '#9EAD9E', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' as const }
+const VALUE_STYLE = { color: '#E0E8E0', fontSize: 14, fontWeight: 500 }
+const EDIT_BTN = { color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: 12, lineHeight: 1, padding: 0 }
+
 function EditableTextCard({ label, value, display, onSave }: {
   label: string
   value: string
@@ -404,35 +410,29 @@ function EditableTextCard({ label, value, display, onSave }: {
   }
 
   return (
-    <Card style={{ background: '#2E3D2F', border: '1px solid #4B5A4C', minHeight: 88 }}>
-      <CardHeader className="pb-1 pt-3 px-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>{label}</CardTitle>
-          {!editing && (
-            <button onClick={startEdit} className="text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
-          )}
+    <div style={CARD} className="p-3">
+      <div className="flex justify-between items-center mb-1">
+        <span style={LABEL_STYLE}>{label}</span>
+        {!editing && <button onClick={startEdit} style={EDIT_BTN} className="hover:opacity-100 transition-opacity">✏️</button>}
+      </div>
+      {editing ? (
+        <div className="flex gap-1.5 items-center mt-1">
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
+            disabled={saving}
+            className="flex-1 px-2 py-1 rounded text-sm outline-none"
+            style={{ background: '#1C2520', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
+          />
+          <button onClick={commit} disabled={saving} style={{ color: '#7A9B7D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✓</button>
+          <button onClick={cancel} disabled={saving} style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
         </div>
-      </CardHeader>
-      <CardContent className="pb-3 px-4">
-        {editing ? (
-          <div className="flex gap-2 items-center">
-            <input
-              ref={inputRef}
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel() }}
-              disabled={saving}
-              className="flex-1 px-2 py-1 rounded text-sm outline-none"
-              style={{ background: '#1C2520', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
-            />
-            <button onClick={commit} disabled={saving} style={{ color: '#7A9B7D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✓</button>
-            <button onClick={cancel} disabled={saving} style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
-          </div>
-        ) : (
-          <span style={{ color: '#E0E8E0', fontSize: 15, fontWeight: 500 }}>{display}</span>
-        )}
-      </CardContent>
-    </Card>
+      ) : (
+        <span style={VALUE_STYLE}>{display}</span>
+      )}
+    </div>
   )
 }
 
@@ -453,42 +453,36 @@ function BeardStyleCard({ value, onSave }: {
   }
 
   return (
-    <Card style={{ background: '#2E3D2F', border: '1px solid #4B5A4C', minHeight: 88 }}>
-      <CardHeader className="pb-1 pt-3 px-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>Facial Hair</CardTitle>
-          {!editing && (
-            <button onClick={() => { setDraft(value ?? ''); setEditing(true) }} className="text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
-          )}
+    <div style={CARD} className="p-3">
+      <div className="flex justify-between items-center mb-1">
+        <span style={LABEL_STYLE}>Facial Hair</span>
+        {!editing && <button onClick={() => { setDraft(value ?? ''); setEditing(true) }} style={EDIT_BTN} className="hover:opacity-100 transition-opacity">✏️</button>}
+      </div>
+      {editing ? (
+        <div className="flex flex-col gap-1 mt-1">
+          {(['shave', 'trim', 'grow'] as const).map(opt => (
+            <button
+              key={opt}
+              onClick={() => pick(opt)}
+              disabled={saving}
+              className="text-left text-xs px-2 py-1.5 rounded-lg transition-colors"
+              style={{
+                background: draft === opt ? '#3A6B3D' : '#1C2520',
+                color: draft === opt ? '#fff' : '#9EAD9E',
+                border: `1px solid ${draft === opt ? '#3A6B3D' : '#4B5A4C'}`,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={() => setDraft(opt)}
+            >
+              {BEARD_LABELS[opt]}
+            </button>
+          ))}
+          <button onClick={() => setEditing(false)} style={{ ...EDIT_BTN, opacity: 1, fontSize: 11, marginTop: 2 }}>Cancel</button>
         </div>
-      </CardHeader>
-      <CardContent className="pb-3 px-4">
-        {editing ? (
-          <div className="flex flex-col gap-1.5">
-            {(['shave', 'trim', 'grow'] as const).map(opt => (
-              <button
-                key={opt}
-                onClick={() => pick(opt)}
-                disabled={saving}
-                className="text-left text-xs px-2 py-1.5 rounded-lg transition-colors"
-                style={{
-                  background: draft === opt ? '#3A6B3D' : '#1C2520',
-                  color: draft === opt ? '#fff' : '#9EAD9E',
-                  border: `1px solid ${draft === opt ? '#3A6B3D' : '#4B5A4C'}`,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={() => setDraft(opt)}
-              >
-                {BEARD_LABELS[opt]}
-              </button>
-            ))}
-            <button onClick={() => setEditing(false)} style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, textAlign: 'left', marginTop: 2 }}>Cancel</button>
-          </div>
-        ) : (
-          <span style={{ color: '#E0E8E0', fontSize: 15, fontWeight: 500 }}>{BEARD_LABELS[value ?? ''] ?? '—'}</span>
-        )}
-      </CardContent>
-    </Card>
+      ) : (
+        <span style={VALUE_STYLE}>{BEARD_LABELS[value ?? ''] ?? '—'}</span>
+      )}
+    </div>
   )
 }
 
@@ -518,63 +512,53 @@ function SkinConcernsCard({ concerns, onSave }: {
   }
 
   return (
-    <Card className="col-span-2" style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
-      <CardHeader className="pb-1 pt-3 px-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>Skin Concerns</CardTitle>
-          {!editing && (
-            <button onClick={startEdit} className="text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer' }}>✏️</button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pb-3 px-4">
-        {editing ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap gap-1 min-h-[24px]">
-              {draft.map(c => (
-                <span key={c} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs" style={{ background: '#3A4A3B', color: '#E0E8E0' }}>
-                  {c}
-                  <button onClick={() => remove(c)} style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 0 }}>×</button>
-                </span>
-              ))}
-              {draft.length === 0 && <span style={{ color: '#9EAD9E', fontSize: 13 }}>No concerns</span>}
-            </div>
-            <div className="flex gap-2">
-              <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } if (e.key === 'Escape') cancel() }}
-                placeholder="Add a concern…"
-                className="flex-1 px-2 py-1 rounded text-xs outline-none"
-                style={{ background: '#1C2520', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
-              />
-              <button onClick={add} style={{ color: '#7A9B7D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>+</button>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={commit} disabled={saving} className="text-xs px-3 py-1 rounded-lg" style={{ background: '#3A6B3D', color: '#fff', border: 'none', cursor: 'pointer' }}>Save</button>
-              <button onClick={cancel} disabled={saving} className="text-xs px-3 py-1 rounded-lg" style={{ background: 'none', color: '#9EAD9E', border: '1px solid #4B5A4C', cursor: 'pointer' }}>Cancel</button>
-            </div>
+    <div style={CARD} className="col-span-2 p-3">
+      <div className="flex justify-between items-center mb-1.5">
+        <span style={LABEL_STYLE}>Skin Concerns</span>
+        {!editing && <button onClick={startEdit} style={EDIT_BTN} className="hover:opacity-100 transition-opacity">✏️</button>}
+      </div>
+      {editing ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-1 min-h-[20px]">
+            {draft.map(c => (
+              <span key={c} className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs" style={{ background: '#3A4A3B', color: '#E0E8E0' }}>
+                {c}
+                <button onClick={() => remove(c)} style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: 0 }}>×</button>
+              </span>
+            ))}
+            {draft.length === 0 && <span style={{ color: '#9EAD9E', fontSize: 12 }}>No concerns</span>}
           </div>
-        ) : (
-          concerns.length > 0
-            ? <div className="flex flex-wrap gap-1">{concerns.map(c => <Badge key={c} variant="secondary">{c}</Badge>)}</div>
-            : <span style={{ color: '#9EAD9E', fontSize: 14 }}>None recorded yet</span>
-        )}
-      </CardContent>
-    </Card>
+          <div className="flex gap-1.5">
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } if (e.key === 'Escape') cancel() }}
+              placeholder="Add a concern…"
+              className="flex-1 px-2 py-1 rounded text-xs outline-none"
+              style={{ background: '#1C2520', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
+            />
+            <button onClick={add} style={{ color: '#7A9B7D', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>+</button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={commit} disabled={saving} className="text-xs px-3 py-1 rounded-lg" style={{ background: '#3A6B3D', color: '#fff', border: 'none', cursor: 'pointer' }}>Save</button>
+            <button onClick={cancel} disabled={saving} className="text-xs px-3 py-1 rounded-lg" style={{ background: 'none', color: '#9EAD9E', border: '1px solid #4B5A4C', cursor: 'pointer' }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        concerns.length > 0
+          ? <div className="flex flex-wrap gap-1">{concerns.map(c => <Badge key={c} variant="secondary">{c}</Badge>)}</div>
+          : <span style={{ color: '#9EAD9E', fontSize: 13 }}>None recorded yet</span>
+      )}
+    </div>
   )
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card style={{ background: '#2E3D2F', border: '1px solid #4B5A4C', minHeight: 88 }}>
-      <CardHeader className="pb-1 pt-3 px-4">
-        <CardTitle className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>{label}</CardTitle>
-      </CardHeader>
-      <CardContent className="pb-3 px-4">
-        <span style={{ color: '#E0E8E0', fontSize: 15, fontWeight: 500 }}>{value}</span>
-      </CardContent>
-    </Card>
+    <div style={CARD} className="p-3">
+      <span style={LABEL_STYLE} className="block mb-1">{label}</span>
+      <span style={VALUE_STYLE}>{value}</span>
+    </div>
   )
 }
 

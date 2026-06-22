@@ -27,7 +27,7 @@
 
 ### Routines
 
-- [ ] **Export routine as recurring calendar event** — "Export to Calendar" button per routine in RoutinesPage; user picks a daily/weekly reminder time; generates:
+- [x] **Export routine as recurring calendar event** — "Export to Calendar" button per routine in RoutinesPage; user picks a daily/weekly reminder time; generates:
   - A `.ics` file (RFC 5545, `RRULE:FREQ=DAILY`) for Apple Calendar (and any ICS-compatible client)
   - A Google Calendar deep-link URL (`calendar.google.com/calendar/r/eventedit?…`) pre-filled with recurrence
   - Event description contains full routine steps (product name, category label, order)
