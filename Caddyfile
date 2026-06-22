@@ -1,5 +1,4 @@
-# Replace YOUR_IP with your Hetzner server IP (e.g. 1-2-3-4.sslip.io)
-YOUR_IP.sslip.io {
+167-233-84-81.sslip.io {
     # Proxy API requests to FastAPI backend
     handle /api/* {
         reverse_proxy backend:8000

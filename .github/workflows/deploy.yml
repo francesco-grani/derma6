@@ -24,24 +24,37 @@ jobs:
           npm ci
           npm run build
 
-      - name: Copy frontend to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: root
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: frontend/dist/
-          target: /app/www
-          strip_components: 2
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HETZNER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy backend
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HETZNER_HOST }}
-          username: root
-          key: ${{ secrets.HETZNER_SSH_KEY }}
-          script: |
-            cd /app
-            git pull origin main
-            docker compose up --build -d
-            docker compose ps
+      - name: Sync backend + config
+        run: |
+          rsync -az --delete \
+            --exclude='.env' \
+            --exclude='data/' \
+            --exclude='logs/' \
+            --exclude='www/' \
+            --exclude='.venv/' \
+            --exclude='__pycache__/' \
+            --exclude='*.pyc' \
+            --exclude='.claude/' \
+            --exclude='frontend/' \
+            --exclude='.deepeval/' \
+            --exclude='.langgraph_api/' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ root@${{ secrets.HETZNER_HOST }}:/app/
+
+      - name: Sync frontend build
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            frontend/dist/ root@${{ secrets.HETZNER_HOST }}:/app/www/
+
+      - name: Restart services
+        run: |
+          ssh -i ~/.ssh/deploy_key root@${{ secrets.HETZNER_HOST }} \
+            "cd /app && docker compose up --build -d && docker compose ps"
