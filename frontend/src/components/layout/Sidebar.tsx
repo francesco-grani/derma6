@@ -101,7 +101,7 @@ export default function Sidebar() {
       <div className="px-3 mb-1">
         <div className="flex items-center justify-between mb-1">
           <button
-            onClick={() => handleSelectSession(sessions[0]?.session_id ?? '') || handleNewChat()}
+            onClick={() => sessions[0]?.session_id ? handleSelectSession(sessions[0].session_id) : handleNewChat()}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium flex-1 text-left transition-colors"
             style={{ color: '#E0E8E0' }}
           >

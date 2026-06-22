@@ -44,8 +44,8 @@ export default function ProfilePage() {
             onSave={v => save({ skin_type: v })}
           />
           <BeardStyleCard
-            value={profile.beard_style ?? null}
-            onSave={v => save({ beard_style: v })}
+            value={(profile.beard_style ?? null) as 'shave' | 'trim' | 'grow' | null}
+            onSave={v => save({ beard_style: v as 'shave' | 'trim' | 'grow' })}
           />
           <EditableTextCard
             label="Location"

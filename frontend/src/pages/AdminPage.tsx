@@ -178,7 +178,7 @@ function EvalTab() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <h2 style={{ color: C.textPrimary, fontSize: 20, fontWeight: 700 }}>Eval Dashboard</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <StatusBadge status={status} startedAt={evalStatus?.started_at} completedAt={evalStatus?.completed_at} />
+          <StatusBadge status={status} startedAt={evalStatus?.started_at ?? null} completedAt={evalStatus?.completed_at ?? null} />
           <Button
             onClick={() => runMutation.mutate()}
             disabled={status === 'running' || runMutation.isPending}
