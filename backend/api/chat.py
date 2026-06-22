@@ -2,18 +2,13 @@
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from backend.agent.graph import stream_agent_response
 from backend.auth import get_current_user
 from backend.db.chat_history import serialise_history
+from backend.schemas import ChatHistoryMessage, ChatRequest
 
 router = APIRouter(tags=["chat"])
-
-
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str
 
 
 @router.post("/api/chat")
@@ -28,14 +23,14 @@ async def chat(req: ChatRequest, username: str = Depends(get_current_user)):
     )
 
 
-@router.get("/api/me/chat/history")
+@router.get("/api/me/chat/history", response_model=list[ChatHistoryMessage])
 def chat_history(session_id: str, username: str = Depends(get_current_user)):
     """Return persisted chat history for a session."""
     messages = serialise_history(session_id)
     return [
-        {
-            "role": "user" if m["role"] == "human" else "assistant",
-            "content": m["content"],
-        }
+        ChatHistoryMessage(
+            role="user" if m["role"] == "human" else "assistant",
+            content=m["content"],
+        )
         for m in messages
     ]

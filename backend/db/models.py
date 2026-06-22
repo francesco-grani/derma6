@@ -157,13 +157,11 @@ class SkinAnalysis(Base):
     user: Mapped["User"] = relationship(back_populates="skin_analyses")
 
 
-# Database engine and initialization
+# Database engine — module-level singleton; tables are NOT created here.
+# Call init_db() once at application startup (via FastAPI lifespan).
 from sqlalchemy import create_engine, text
 
 engine = create_engine(settings.sqlite_url)
-
-# Create all tables when module is imported
-Base.metadata.create_all(engine)
 
 
 def _ensure_schema(eng) -> None:
@@ -183,4 +181,24 @@ def _ensure_schema(eng) -> None:
             conn.commit()
 
 
-_ensure_schema(engine)
+def _migrate_chat_session_columns(eng) -> None:
+    """Add token/cost columns to chat_sessions if they don't exist yet."""
+    cols = {
+        "total_prompt_tokens": "INTEGER DEFAULT 0",
+        "total_completion_tokens": "INTEGER DEFAULT 0",
+        "total_cost_usd": "REAL DEFAULT 0.0",
+    }
+    with Session(eng) as session:
+        for col, definition in cols.items():
+            try:
+                session.execute(text(f"SELECT {col} FROM chat_sessions LIMIT 1"))
+            except Exception:
+                session.execute(text(f"ALTER TABLE chat_sessions ADD COLUMN {col} {definition}"))
+                session.commit()
+
+
+def init_db() -> None:
+    """Create all tables and apply schema migrations. Call once at application startup."""
+    Base.metadata.create_all(engine)
+    _ensure_schema(engine)
+    _migrate_chat_session_columns(engine)

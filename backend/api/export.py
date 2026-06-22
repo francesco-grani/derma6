@@ -4,9 +4,10 @@ import html as html_lib
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
-from backend.auth import get_current_user
 
+from backend.auth import get_current_user
 from backend.db.chat_history import serialise_history
+from backend.db.deps import get_profile_store, get_session_store
 from backend.db.profile_store import ProfileStore, ProfileStoreError
 from backend.db.session_store import SessionStore, SessionStoreError
 from backend.schemas import RoutineSchema
@@ -69,10 +70,9 @@ def _e(text: str) -> str:
 
 # ── HTML generation ───────────────────────────────────────────────────────────
 
-def generate_export_html(username: str) -> str:  # noqa: C901
+def generate_export_html(username: str, store: ProfileStore, session_store: SessionStore) -> str:  # noqa: C901
     from datetime import datetime, timezone
 
-    store = ProfileStore()
     try:
         profile = store.get_profile(username)
     except ProfileStoreError:
@@ -84,7 +84,7 @@ def generate_export_html(username: str) -> str:  # noqa: C901
         routines = []
 
     try:
-        sessions_meta = SessionStore().get_sessions(username)
+        sessions_meta = session_store.get_sessions(username)
     except SessionStoreError:
         sessions_meta = []
     chat_sessions = [
@@ -251,7 +251,7 @@ def generate_export_html(username: str) -> str:  # noqa: C901
 </html>"""
 
 
-def generate_export_pdf(username: str) -> bytes:  # noqa: C901
+def generate_export_pdf(username: str, store: ProfileStore, session_store: SessionStore) -> bytes:  # noqa: C901
     """Generate a PDF export using xhtml2pdf (pure Python, no system libs)."""
     try:
         import io
@@ -261,7 +261,6 @@ def generate_export_pdf(username: str) -> bytes:  # noqa: C901
 
     from datetime import datetime, timezone
 
-    store = ProfileStore()
     try:
         profile = store.get_profile(username)
     except ProfileStoreError:
@@ -273,7 +272,7 @@ def generate_export_pdf(username: str) -> bytes:  # noqa: C901
         routines = []
 
     try:
-        sessions_meta = SessionStore().get_sessions(username)
+        sessions_meta = session_store.get_sessions(username)
     except SessionStoreError:
         sessions_meta = []
     chat_sessions = [(s, serialise_history(s["session_id"])) for s in sessions_meta]
@@ -417,10 +416,15 @@ def generate_export_pdf(username: str) -> bytes:  # noqa: C901
 # ── FastAPI routes ────────────────────────────────────────────────────────────
 
 @router.get("/export")
-def export(format: str = Query(default="html", pattern="^(html|pdf)$"), username: str = Depends(get_current_user)):
+def export(
+    format: str = Query(default="html", pattern="^(html|pdf)$"),
+    username: str = Depends(get_current_user),
+    store: ProfileStore = Depends(get_profile_store),
+    session_store: SessionStore = Depends(get_session_store),
+):
     if format == "pdf":
         try:
-            pdf_bytes = generate_export_pdf(username)
+            pdf_bytes = generate_export_pdf(username, store, session_store)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return Response(
@@ -428,7 +432,7 @@ def export(format: str = Query(default="html", pattern="^(html|pdf)$"), username
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.pdf"'},
         )
-    html_content = generate_export_html(username)
+    html_content = generate_export_html(username, store, session_store)
     return HTMLResponse(
         content=html_content,
         headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.html"'},

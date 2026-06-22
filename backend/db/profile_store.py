@@ -35,10 +35,13 @@ class ProfileStoreError(Exception):
 class ProfileStore:
     """CRUD interface over the SQLite user/profile tables."""
 
-    def __init__(self, db_url: Optional[str] = None) -> None:
-        resolved_url = db_url or settings.sqlite_url
-        self._engine = create_engine(resolved_url)
-        Base.metadata.create_all(self._engine)
+    def __init__(self, db_url: Optional[str] = None, engine=None) -> None:
+        if engine is not None:
+            self._engine = engine
+        else:
+            url = db_url or settings.sqlite_url
+            self._engine = create_engine(url)
+            Base.metadata.create_all(self._engine)
 
     # ------------------------------------------------------------------
     # User helpers
