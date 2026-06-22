@@ -283,13 +283,9 @@ export default function RoutinesPage() {
               }}
             />
           </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button variant="outline" className="cursor-pointer" onClick={() => setExportTarget(null)}
-              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
-              Cancel
-            </Button>
+          <div className="flex flex-col gap-2 pt-2">
             <Button
-              className="cursor-pointer"
+              className="cursor-pointer w-full"
               disabled={!exportTarget}
               style={{ background: '#3B5A8A', color: '#D4E8F4', border: 'none' }}
               onClick={() => {
@@ -300,7 +296,7 @@ export default function RoutinesPage() {
               Google Calendar
             </Button>
             <Button
-              className="cursor-pointer"
+              className="cursor-pointer w-full"
               disabled={!exportTarget}
               style={{ background: '#4B5A4C', color: '#E0E8E0', border: 'none' }}
               onClick={() => {
@@ -311,7 +307,11 @@ export default function RoutinesPage() {
             >
               Apple Calendar (.ics)
             </Button>
-          </DialogFooter>
+            <Button variant="outline" className="cursor-pointer w-full" onClick={() => setExportTarget(null)}
+              style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>
+              Cancel
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
