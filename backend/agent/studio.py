@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from backend.agent.graph import _make_tools, build_system_prompt
+from backend.agent.graph import _make_tools, _store, build_system_prompt
 from backend.config import settings
 from backend.schemas import UserProfile
 
@@ -21,8 +21,8 @@ _profile = UserProfile(
     onboarding_complete=True,
 )
 
-_tools = _make_tools("studio_user")
-_system_prompt = build_system_prompt(_profile)
+_tools = _make_tools("studio_user", _store)
+_system_prompt = build_system_prompt(_profile, _store)
 
 _llm = ChatOpenAI(
     model=settings.llm_model,

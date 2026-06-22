@@ -75,11 +75,10 @@ def conflict_checker(ingredients: str) -> str:
         verdict = entry["verdict"]
         reason = entry["reason"]
 
-        # Log the result
-        logger.info(f"Conflict check: {ingredient_a} + {ingredient_b} = {verdict}")
+        logger.info("Conflict check: %s + %s = %s", ingredient_a, ingredient_b, verdict)
 
         return f"Verdict: {verdict}\nReason: {reason}\nUnknown ingredients: []"
     else:
         # Unknown pair
-        logger.warning(f"Unknown ingredients in conflict check: {ingredient_a} + {ingredient_b}")
+        logger.warning("Unknown ingredients in conflict check: %s + %s", ingredient_a, ingredient_b)
         return f"Verdict: unknown_ingredient\nReason: No conflict data for {ingredient_a} + {ingredient_b}. Consult a dermatologist.\nUnknown ingredients: [{ingredient_a}, {ingredient_b}]"

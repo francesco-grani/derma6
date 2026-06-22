@@ -4,8 +4,8 @@ import logging
 
 from langchain_core.tools import tool
 
-from backend.db.profile_store import ProfileStore
-from backend.rag.retriever import Retriever
+from backend.db.deps import get_profile_store
+from backend.tools.kb_search import retriever
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,6 @@ def skin_type_advisor(input_str: str) -> str:
     Input format: 'description: <symptom description> | username: <username>'
     """
     try:
-        # --- Parse input ---
         description = ""
         username = ""
 
@@ -123,11 +122,8 @@ def skin_type_advisor(input_str: str) -> str:
         if not username:
             return "Error: 'username' is required and must not be empty."
 
-        # --- Classify from keywords first (no retrieval needed) ---
         skin_type = _classify_from_description(description)
 
-        # --- Retrieve docs for richer classification and characteristics ---
-        retriever = Retriever()
         docs = retriever.query(f"skin type classification {description}")
 
         if skin_type is None and docs:
@@ -139,13 +135,11 @@ def skin_type_advisor(input_str: str) -> str:
                 "or react easily to new products?"
             )
         if skin_type is None:
-            skin_type = "oily"  # last-resort default when docs present but inconclusive
+            skin_type = "oily"
 
-        # --- Extract characteristics ---
         characteristic = _extract_characteristic(skin_type, docs) if docs else _CHARACTERISTICS.get(skin_type, "")
 
-        # --- Persist ---
-        ProfileStore().update_skin_type(username, skin_type)
+        get_profile_store().update_skin_type(username, skin_type)
 
         logger.info(
             "skin_type_advisor: classified '%s' as '%s' for user '%s'.",

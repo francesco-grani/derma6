@@ -5,10 +5,10 @@ from itertools import combinations
 
 from langchain_core.tools import tool
 
-from backend.db.profile_store import ProfileStore
-from backend.rag.retriever import Retriever
+from backend.db.deps import get_profile_store
 from backend.schemas import IntroductionPlanSchema, IntroductionWeek
 from backend.tools.conflict_checker import conflict_checker
+from backend.tools.kb_search import retriever
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,6 @@ def _get_active_note(active: str) -> str:
         A guidance string — either from KB or a generic fallback.
     """
     try:
-        retriever = Retriever()
         results = retriever.query(f"{active} introduction rate how to use")
         if results:
             # Use the first retrieved document content as guidance
@@ -252,7 +251,7 @@ def introduction_scheduler(input_str: str) -> str:
         )
 
         # 5. Persist to ProfileStore
-        ProfileStore().save_introduction_plan(username, plan)
+        get_profile_store().save_introduction_plan(username, plan)
 
         # 6. Format and return
         result = _format_output(actives, weeks, warnings)

@@ -136,25 +136,21 @@ class TestFormatOutput:
 
 
 class TestIntroductionSchedulerTool:
-    @patch("backend.tools.introduction_scheduler.ProfileStore")
-    @patch("backend.tools.introduction_scheduler.Retriever")
-    def test_single_active_produces_plan(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = [MagicMock(content="Start with 2x per week")]
-        mock_retriever_cls.return_value = mock_r
-        mock_store_cls.return_value = MagicMock()
+    @patch("backend.tools.introduction_scheduler.get_profile_store")
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_single_active_produces_plan(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = [MagicMock(content="Start with 2x per week")]
+        mock_get_store.return_value = MagicMock()
 
         result = introduction_scheduler.invoke("actives: retinol | username: alice")
         assert "Introduction Schedule" in result
         assert "retinol" in result
 
-    @patch("backend.tools.introduction_scheduler.ProfileStore")
-    @patch("backend.tools.introduction_scheduler.Retriever")
-    def test_multiple_actives_ordered(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
-        mock_store_cls.return_value = MagicMock()
+    @patch("backend.tools.introduction_scheduler.get_profile_store")
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_multiple_actives_ordered(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
+        mock_get_store.return_value = MagicMock()
 
         result = introduction_scheduler.invoke("actives: retinol, niacinamide | username: alice")
         assert "retinol" in result
@@ -164,28 +160,23 @@ class TestIntroductionSchedulerTool:
         result = introduction_scheduler.invoke("bad input format")
         assert "Error" in result
 
-    @patch("backend.tools.introduction_scheduler.ProfileStore")
-    @patch("backend.tools.introduction_scheduler.Retriever")
-    def test_plan_saved_to_store(self, mock_retriever_cls, mock_store_cls):
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
+    @patch("backend.tools.introduction_scheduler.get_profile_store")
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_plan_saved_to_store(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
         mock_store = MagicMock()
-        mock_store_cls.return_value = mock_store
+        mock_get_store.return_value = mock_store
 
         introduction_scheduler.invoke("actives: retinol | username: bob")
         mock_store.save_introduction_plan.assert_called_once()
 
-    @patch("backend.tools.introduction_scheduler.ProfileStore")
-    @patch("backend.tools.introduction_scheduler.Retriever")
-    def test_exception_returns_safe_error(self, mock_retriever_cls, mock_store_cls):
-        # Retriever exception is caught inside _get_active_note; fail at persist layer instead
-        mock_r = MagicMock()
-        mock_r.query.return_value = []
-        mock_retriever_cls.return_value = mock_r
+    @patch("backend.tools.introduction_scheduler.get_profile_store")
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_exception_returns_safe_error(self, mock_retriever, mock_get_store):
+        mock_retriever.query.return_value = []
         mock_store = MagicMock()
         mock_store.save_introduction_plan.side_effect = Exception("DB persist error")
-        mock_store_cls.return_value = mock_store
+        mock_get_store.return_value = mock_store
         result = introduction_scheduler.invoke("actives: retinol | username: alice")
         assert "sorry" in result.lower() or "could not" in result.lower()
 

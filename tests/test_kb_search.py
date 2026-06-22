@@ -27,7 +27,7 @@ class TestKbSearch:
             _doc("Retinol boosts cell turnover.", "Paula's Choice", 0.88),
             _doc("Apply at night.", "INCIDecoder", 0.80),
         ]
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("retinol benefits")
@@ -41,7 +41,7 @@ class TestKbSearch:
 
         mock_r = MagicMock()
         mock_r.query.return_value = []
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("completely unrelated query")
@@ -54,7 +54,7 @@ class TestKbSearch:
         mock_r.query.return_value = [
             _doc("Niacinamide content.", "AAD", 0.82),
         ]
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("niacinamide")
@@ -76,7 +76,7 @@ class TestKbSearch:
             _doc("   ", "Source A", 0.9),  # whitespace-only content
             _doc("Real content here.", "Source B", 0.8),
         ]
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("query")
@@ -90,7 +90,7 @@ class TestKbSearch:
             _doc("Content 1.", "Same Source", 0.9),
             _doc("Content 2.", "Same Source", 0.8),
         ]
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("query")
@@ -103,7 +103,7 @@ class TestKbSearch:
 
         mock_r = MagicMock()
         mock_r.query.side_effect = Exception("ChromaDB offline")
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("any query")
@@ -117,7 +117,7 @@ class TestKbSearch:
             _doc("First doc.", "Src A", 0.9),
             _doc("Second doc.", "Src B", 0.8),
         ]
-        monkeypatch.setattr(kb_module, "_retriever", mock_r)
+        monkeypatch.setattr(kb_module, "retriever", mock_r)
 
         from backend.tools.kb_search import kb_search
         result = kb_search.invoke("query")
