@@ -86,17 +86,40 @@ export default function RoutinesPage() {
                     style={{ background: '#2E3D2F', color: '#fff' }}>
                     {i + 1}
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center">
                       <span style={{ color: '#1C2520', fontWeight: 600, fontSize: 14 }}>
                         {step.ingredient.charAt(0).toUpperCase() + step.ingredient.slice(1)}
                       </span>
-                      <span style={{ color: '#9EAD9E', fontSize: 11, letterSpacing: '0.08em' }}>
+                      <span style={{ color: '#9EAD9E', fontSize: 11, letterSpacing: '0.08em', flexShrink: 0, marginLeft: 8 }}>
                         {categoryLabel(step.ingredient)}
                       </span>
                     </div>
-                    {step.product_name && (
-                      <p style={{ color: '#4A5748', fontSize: 12, marginTop: 2 }}>{step.product_name}</p>
+                    {(step.product_name || step.budget_product) && (
+                      <div className="flex flex-col gap-1 mt-2">
+                        {step.product_name && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded font-medium"
+                              style={{ background: '#FFF3DC', color: '#A0742A', fontSize: 10, letterSpacing: '0.04em' }}>
+                              ⭐ pick
+                            </span>
+                            <span style={{ color: '#3A2A0A', fontSize: 12 }} className="truncate">
+                              {step.product_name}
+                            </span>
+                          </div>
+                        )}
+                        {step.budget_product && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded font-medium"
+                              style={{ background: '#E8F0E8', color: '#2E5A31', fontSize: 10, letterSpacing: '0.04em' }}>
+                              💚 budget
+                            </span>
+                            <span style={{ color: '#1C3D1E', fontSize: 12 }} className="truncate">
+                              {step.budget_product}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

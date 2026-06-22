@@ -2,22 +2,48 @@ import { useRef, useState, useEffect } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAnalyzeSkin, useSaveMedicalFlag } from '@/hooks/useSkinAnalysis'
+import { useAnalyzeSkin } from '@/hooks/useSkinAnalysis'
 import { useSession } from '@/lib/sessionContext'
 import type { SkinAnalysisResult } from '@/lib/api'
+
+const SESSION_KEY = 'derma6:skin-analysis'
+
+function readSession(): { result: SkinAnalysisResult; imageDataUrl: string } | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSession(result: SkinAnalysisResult, imageDataUrl: string) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ result, imageDataUrl }))
+}
+
+function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY)
+}
 
 export default function SkinAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [result, setResult] = useState<SkinAnalysisResult | null>(null)
-  const [saved, setSaved] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
 
   const analyze = useAnalyzeSkin()
-  const saveFlag = useSaveMedicalFlag()
   const navigate = useNavigate()
   const { startNewSession } = useSession()
+
+  // Restore last result when navigating back to this page
+  useEffect(() => {
+    const saved = readSession()
+    if (saved) {
+      setResult(saved.result)
+      setPreview(saved.imageDataUrl)
+    }
+  }, [])
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -28,9 +54,10 @@ export default function SkinAnalysisPage() {
   function applyFile(file: File) {
     setSelectedFile(file)
     setResult(null)
-    setSaved(false)
-    const url = URL.createObjectURL(file)
-    setPreview(url)
+    clearSession()
+    const reader = new FileReader()
+    reader.onload = (e) => setPreview(e.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
   function handleCameraCapture(file: File) {
@@ -42,19 +69,14 @@ export default function SkinAnalysisPage() {
     if (!selectedFile) return
     const data = await analyze.mutateAsync(selectedFile)
     setResult(data)
-  }
-
-  async function handleSaveToProfile() {
-    if (!result) return
-    await saveFlag.mutateAsync(result.condition)
-    setSaved(true)
+    if (preview) writeSession(data, preview)
   }
 
   function handleReset() {
     setPreview(null)
     setSelectedFile(null)
     setResult(null)
-    setSaved(false)
+    clearSession()
     analyze.reset()
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -261,8 +283,8 @@ export default function SkinAnalysisPage() {
             </p>
           </div>
 
-          {/* Chat actions */}
-          <div className="flex flex-col gap-2">
+          {/* Chat actions — hidden when result is unclear */}
+          {result.condition.toLowerCase() !== 'unclear' && <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#9EAD9E' }}>
               Continue in Chat
             </p>
@@ -295,43 +317,24 @@ export default function SkinAnalysisPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Actions */}
-          <div className="flex gap-3 flex-wrap">
-            {!saved ? (
-              <Button
-                onClick={handleSaveToProfile}
-                disabled={saveFlag.isPending}
-                style={{ background: '#7A9B7D', color: '#1C2520', fontWeight: 600, cursor: 'pointer' }}
-              >
-                {saveFlag.isPending ? 'Saving…' : 'Save to My Profile'}
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span style={{ color: '#7A9B7D', fontSize: 14 }}>✅ Saved to profile</span>
-                <button
-                  onClick={() => navigate({ to: '/profile' })}
-                  style={{ color: '#9EAD9E', fontSize: 13, cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline' }}
-                >
-                  View profile →
-                </button>
-              </div>
-            )}
+          <div className="flex items-center gap-4 flex-wrap">
             <Button
               onClick={handleReset}
               variant="outline"
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', cursor: 'pointer' }}
             >
-              Analyse another photo
+              Analyse another photo →
             </Button>
+            <button
+              onClick={() => navigate({ to: '/profile' })}
+              style={{ color: '#9EAD9E', fontSize: 13, cursor: 'pointer', background: 'none', border: 'none', textDecoration: 'underline' }}
+            >
+              View history in profile →
+            </button>
           </div>
-
-          {saveFlag.isError && (
-            <p style={{ color: '#F0B8B8', fontSize: 13 }}>
-              ⚠️ {saveFlag.error?.message ?? 'Could not save. Please try again.'}
-            </p>
-          )}
         </div>
       )}
     </PageShell>

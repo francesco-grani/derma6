@@ -79,6 +79,8 @@ export interface UserProfile {
   skin_type: string | null
   skin_concerns: string[]
   has_shaving_routine: boolean | null
+  beard_style: 'shave' | 'trim' | 'grow' | null
+  location: string | null
   medical_flags: string[]
   onboarding_complete: boolean
 }
@@ -88,12 +90,23 @@ export async function apiGetProfile(): Promise<UserProfile> {
   return res.json()
 }
 
+export type ProfilePatch = Partial<Pick<UserProfile, 'skin_type' | 'beard_style' | 'location' | 'skin_concerns'>>
+
+export async function apiPatchProfile(patch: ProfilePatch): Promise<UserProfile> {
+  const res = await authedFetch('/api/me/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+  return res.json()
+}
+
 // ── Routines ──────────────────────────────────────────────────────────────
 
 export interface RoutineStep {
   position: number
   ingredient: string
   product_name: string | null
+  budget_product: string | null
 }
 
 export interface Routine {
@@ -159,6 +172,27 @@ export interface SkinAnalysisResult {
   alternatives: Alternative[]
   reasoning: string
   disclaimer: string
+}
+
+export interface SkinAnalysisRecord {
+  id: number
+  condition: string
+  confidence: number
+  alternatives: Alternative[]
+  reasoning: string
+  disclaimer: string
+  image_b64: string | null
+  thumbnail_b64: string | null
+  created_at: string
+}
+
+export async function apiGetSkinAnalyses(): Promise<SkinAnalysisRecord[]> {
+  const res = await authedFetch('/api/me/skin-analyses')
+  return res.json()
+}
+
+export async function apiDeleteSkinAnalysis(id: number): Promise<void> {
+  await authedFetch(`/api/me/skin-analyses/${id}`, { method: 'DELETE' })
 }
 
 export async function apiAnalyzeSkin(file: File): Promise<SkinAnalysisResult> {

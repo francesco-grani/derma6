@@ -37,6 +37,7 @@ export function useStreamChat(sessionId: string | null) {
 
   // Load history whenever sessionId changes
   useEffect(() => {
+    setPendingInterrupt(null)
     if (!sessionId) { setMessages([]); return }
     const token = getToken()
     if (!token) return

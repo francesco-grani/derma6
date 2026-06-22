@@ -7,11 +7,14 @@ import { useStreamChat, type ChatMessage } from '@/hooks/useStreamChat'
 import { useAuth } from '@/lib/auth'
 import { useSession } from '@/lib/sessionContext'
 import { useQueryClient } from '@tanstack/react-query'
+import { useRoutines } from '@/hooks/useRoutines'
+import { useNavigate } from '@tanstack/react-router'
 
-const SUGGESTIONS = [
+const STATIC_SUGGESTIONS = [
   'Analyze my ingredients',
-  'Build me a routine',
-  'What is skin cycling?',
+  'Check ingredient conflicts',
+  'Recommend an SPF',
+  'How to layer products?',
 ]
 
 export default function ChatPage() {
@@ -22,6 +25,8 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const qc = useQueryClient()
+  const { data: routines } = useRoutines()
+  const navigate = useNavigate()
 
   // On mount, ensure a session is active
   useEffect(() => {
@@ -32,7 +37,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, pendingInterrupt])
 
   useEffect(() => {
     if (!streaming) inputRef.current?.focus()
@@ -67,16 +72,21 @@ export default function ChatPage() {
             <div className="flex flex-col items-center justify-center flex-1 gap-6">
               <p style={{ color: '#9EAD9E', fontSize: 18 }}>How can I help you today?</p>
               <div className="flex gap-2 flex-wrap justify-center">
-                {SUGGESTIONS.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => submit(s)}
-                    className="px-4 py-2 rounded-full text-sm border transition-colors hover:opacity-80 cursor-pointer"
-                    style={{ borderColor: '#4B5A4C', color: '#E0E8E0', background: '#2E3D2F' }}
-                  >
-                    {s}
-                  </button>
+                <SuggestionPill
+                  label="Build me a routine"
+                  onClick={() => {
+                    if (routines && routines.length > 0) {
+                      const names = routines.map(r => r.name).join(' and ')
+                      submit(`I already have ${names}. What routine should I build next?`)
+                    } else {
+                      submit('Build me a routine')
+                    }
+                  }}
+                />
+                {STATIC_SUGGESTIONS.map(s => (
+                  <SuggestionPill key={s} label={s} onClick={() => submit(s)} />
                 ))}
+                <SuggestionPill label="Analyze my skin" onClick={() => navigate({ to: '/skin-analysis' })} />
               </div>
             </div>
           )}
@@ -129,6 +139,18 @@ export default function ChatPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+function SuggestionPill({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-4 py-2 rounded-full text-sm border transition-colors hover:opacity-80 cursor-pointer"
+      style={{ borderColor: '#4B5A4C', color: '#E0E8E0', background: '#2E3D2F' }}
+    >
+      {label}
+    </button>
   )
 }
 
@@ -240,17 +262,42 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
             className="text-xs px-2 py-1 rounded"
             style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer' }}
           >
-            🔍 RAG Retrieval {showRag ? '▲' : '▼'}
+            📄 Sources ({msg.rag_context.length}) {showRag ? '▲' : '▼'}
           </button>
           {showRag && (
-            <div className="flex flex-col gap-2 mt-1 p-2 rounded-lg" style={{ background: '#2E3D2F' }}>
+            <div className="flex flex-col gap-3 mt-1 p-3 rounded-lg" style={{ background: '#2E3D2F' }}>
               {msg.rag_context.map((r, i) => (
                 <div key={i}>
-                  <div className="flex justify-between text-xs" style={{ color: '#E0E8E0' }}>
-                    <span>{r.source}</span>
-                    <span style={{ color: '#C4933F' }}>{Math.round(r.score * 100)}%</span>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <span className="text-xs font-semibold" style={{ color: '#E0E8E0' }}>{r.source}</span>
+                    <span className="text-xs font-medium" style={{ color: '#C4933F' }}>{Math.round(r.score * 100)}%</span>
                   </div>
-                  <p className="text-xs mt-1" style={{ color: '#9EAD9E' }}>{r.snippet?.slice(0, 150)}…</p>
+                  <div
+                    className="text-xs leading-relaxed"
+                    style={{ color: '#9EAD9E' }}
+                  >
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p:      ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                        h1:     ({ children }) => <p className="font-bold mb-1">{children}</p>,
+                        h2:     ({ children }) => <p className="font-bold mb-1">{children}</p>,
+                        h3:     ({ children }) => <p className="font-semibold mb-0.5">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold" style={{ color: '#C0CEC0' }}>{children}</strong>,
+                        ul:     ({ children }) => <ul className="list-disc pl-4 mb-1">{children}</ul>,
+                        ol:     ({ children }) => <ol className="list-decimal pl-4 mb-1">{children}</ol>,
+                        li:     ({ children }) => <li className="mb-0.5">{children}</li>,
+                        em:     ({ children }) => <em className="italic">{children}</em>,
+                        code:   ({ children }) => <code className="px-1 rounded" style={{ background: '#1C2520' }}>{children}</code>,
+                        a:      ({ children }) => <span>{children}</span>,
+                      }}
+                    >
+                      {r.snippet ?? ''}
+                    </ReactMarkdown>
+                  </div>
+                  {i < msg.rag_context!.length - 1 && (
+                    <div className="mt-3" style={{ borderBottom: '1px solid #3A4A3B' }} />
+                  )}
                 </div>
               ))}
             </div>
@@ -268,11 +315,21 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
             🔧 Tools ({msg.tool_results.length}) {showTools ? '▲' : '▼'}
           </button>
           {showTools && (
-            <div className="flex flex-col gap-1 mt-1 p-2 rounded-lg" style={{ background: '#2E3D2F' }}>
+            <div className="flex flex-col gap-2 mt-1 p-3 rounded-lg" style={{ background: '#2E3D2F' }}>
               {msg.tool_results.map((t, i) => (
-                <div key={i} className="text-xs" style={{ color: '#9EAD9E' }}>
-                  <span style={{ color: '#C4933F' }}>{t.tool_name}</span>{' — '}
-                  {t.summary?.slice(0, 100)}
+                <div key={i}>
+                  <span
+                    className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-1"
+                    style={{ background: '#3A4A3B', color: '#C4933F' }}
+                  >
+                    {t.tool_name}
+                  </span>
+                  <p className="text-xs leading-relaxed" style={{ color: '#9EAD9E' }}>
+                    {t.summary}
+                  </p>
+                  {i < msg.tool_results!.length - 1 && (
+                    <div className="mt-2" style={{ borderBottom: '1px solid #3A4A3B' }} />
+                  )}
                 </div>
               ))}
             </div>
