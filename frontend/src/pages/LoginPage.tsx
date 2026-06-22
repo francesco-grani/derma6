@@ -23,7 +23,7 @@ export default function LoginPage() {
     try {
       const fn = mode === 'login' ? apiLogin : apiRegister
       const data = await fn(username.trim(), password)
-      login(data.access_token, data.username)
+      login(data.access_token, data.username, data.is_admin)
       navigate({ to: '/chat' })
     } catch (err) {
       setError((err as Error).message)

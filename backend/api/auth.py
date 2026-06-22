@@ -19,7 +19,8 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     user = User(username=req.username, password_hash=hash_password(req.password))
     db.add(user)
     db.commit()
-    return TokenResponse(access_token=create_access_token(req.username), username=req.username)
+    db.refresh(user)
+    return TokenResponse(access_token=create_access_token(req.username), username=req.username, is_admin=user.is_admin)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -30,4 +31,4 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password.",
         )
-    return TokenResponse(access_token=create_access_token(req.username), username=req.username)
+    return TokenResponse(access_token=create_access_token(req.username), username=req.username, is_admin=user.is_admin)

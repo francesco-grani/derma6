@@ -19,7 +19,7 @@ import ProfilePage from './pages/ProfilePage'
 import RoutinesPage from './pages/RoutinesPage'
 import AdminPage from './pages/AdminPage'
 import SkinAnalysisPage from './pages/SkinAnalysisPage'
-import { getToken } from './lib/api'
+import { getIsAdmin, getToken } from './lib/api'
 
 const queryClient = new QueryClient()
 
@@ -99,6 +99,9 @@ const routinesRoute = createRoute({
 const adminRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/admin',
+  beforeLoad: () => {
+    if (!getIsAdmin()) throw redirect({ to: '/chat' })
+  },
   component: AdminPage,
 })
 

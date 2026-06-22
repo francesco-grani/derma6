@@ -24,7 +24,7 @@ function formatDate(iso: string) {
 }
 
 export default function Sidebar() {
-  const { username, logout } = useAuth()
+  const { username, isAdmin, logout } = useAuth()
   const navigate = useNavigate()
   const { data: profile } = useProfile()
   const { sessionId, setSessionId, startNewSession } = useSession()
@@ -182,7 +182,7 @@ export default function Sidebar() {
           </Link>
         ))}
 
-        {username === 'admin' && (
+        {isAdmin && (
           <Link
             to="/admin"
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
