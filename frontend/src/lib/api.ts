@@ -198,9 +198,66 @@ export interface AdminUser {
   has_shaving_routine: boolean | null
   medical_flags: string | null
   onboarding_complete: boolean
+  total_prompt_tokens: number
+  total_completion_tokens: number
+  total_cost_usd: number
 }
 
 export async function apiGetAdminUsers(): Promise<AdminUser[]> {
   const res = await authedFetch('/api/admin/users')
   return res.json()
+}
+
+// ── Eval dashboard ────────────────────────────────────────────────────────────
+
+export interface GoldenCase {
+  id: string
+  tool: string
+  input: string
+  actual_output: string
+  expected_output: string | null
+  retrieval_context: string[]
+  tags: string[]
+}
+
+export interface MetricResult {
+  name: string
+  score: number
+  threshold: number
+  passed: boolean
+  reason: string | null
+  duration_s: number
+}
+
+export interface EvalResult {
+  test_id: string
+  test_name: string
+  tool: string
+  input: string
+  expected_output: string | null
+  passed: boolean
+  metrics: MetricResult[]
+}
+
+export interface EvalStatus {
+  status: 'idle' | 'running' | 'completed' | 'error'
+  started_at: string | null
+  completed_at: string | null
+  results: EvalResult[] | null
+  error: string | null
+  progress: string[]
+}
+
+export async function apiGetEvalGolden(): Promise<GoldenCase[]> {
+  const res = await authedFetch('/api/admin/eval/golden')
+  return res.json()
+}
+
+export async function apiGetEvalStatus(): Promise<EvalStatus> {
+  const res = await authedFetch('/api/admin/eval/status')
+  return res.json()
+}
+
+export async function apiRunEval(): Promise<void> {
+  await authedFetch('/api/admin/eval/run', { method: 'POST' })
 }

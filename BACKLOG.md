@@ -28,6 +28,10 @@
 ### Infrastructure
 
 - [ ] Conditional routing / multi-agent graph topology
-- [ ] WebSockets upgrade — needed for bidirectional mid-stream signals once HITL lands (SSE is one-way)
-- [ ] Persistent rate limiter — current in-memory limiter resets on restart
+- [ ] Persistent rate limiter — current in-memory limiter resets on restart *(defer to capstone: SQLite `rate_limit_events` table, swap `time.monotonic()` → `time.time()`)*
 - [ ] Deployment — target TBD (Cloudflare Pages + Railway likely); when confirmed: lock CORS origin, add `VITE_API_URL` build env var
+
+### Admin Features
+
+- [x] **Eval dashboard** — admin UI to trigger deepeval test suite and display results: golden dataset table + metric-level breakdown per test case
+- [x] **Cost tracking per user** — log token usage (prompt + completion) per request, aggregate per user, display cost in dollars in admin view
