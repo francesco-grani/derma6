@@ -1,6 +1,7 @@
 {
   "graphs": {
-    "derma6_agent": "./backend/agent/studio.py:graph"
+    "derma6_agent": "./backend/agent/studio.py:graph",
+    "rag_pipeline": "./backend/agent/studio.py:rag_graph"
   },
   "dependencies": ["."],
   "env": ".env"

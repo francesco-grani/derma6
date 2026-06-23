@@ -103,8 +103,11 @@ def _routine_order() -> GEval:
     return GEval(
         name="Routine Order Correctness",
         criteria=(
-            "Steps must appear in this order: cleanser → toner → serum → moisturiser → SPF. "
-            "Steps appearing earlier in the routine must have lower step numbers."
+            "Given the input products, the response must list only those products in the correct "
+            "canonical skincare order: cleanser first, then toner, then serum, then moisturiser, "
+            "then SPF last. Steps not present in the input must be omitted — do not penalise for "
+            "missing steps that were never provided. Products that ARE listed must appear in "
+            "ascending step-number order consistent with the canonical sequence."
         ),
         evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
         threshold=0.8,

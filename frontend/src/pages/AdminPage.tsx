@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
@@ -122,9 +122,34 @@ function UsersTab() {
 }
 
 // ── Eval tab ──────────────────────────────────────────────────────────────────
+const LS_KEY = 'derma6_eval_results'
+
+interface CachedEval {
+  results: EvalResult[]
+  completed_at: string
+}
+
+function loadCachedEval(): CachedEval | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    return raw ? (JSON.parse(raw) as CachedEval) : null
+  } catch {
+    return null
+  }
+}
+
+function saveCachedEval(results: EvalResult[], completed_at: string) {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({ results, completed_at }))
+  } catch {
+    // localStorage quota exceeded — silently ignore
+  }
+}
+
 function EvalTab() {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [cachedEval, setCachedEval] = useState<CachedEval | null>(() => loadCachedEval())
   const loggedUpTo = useRef(0)
   const progressEndRef = useRef<HTMLDivElement>(null)
 
@@ -139,6 +164,15 @@ function EvalTab() {
     refetchInterval: (query) =>
       query.state.data?.status === 'running' ? 2000 : false,
   })
+
+  // Persist results to localStorage whenever a run completes
+  useEffect(() => {
+    if (evalStatus?.status === 'completed' && evalStatus.results) {
+      const ts = evalStatus.completed_at ?? new Date().toISOString()
+      saveCachedEval(evalStatus.results, ts)
+      setCachedEval({ results: evalStatus.results, completed_at: ts })
+    }
+  }, [evalStatus?.status, evalStatus?.results, evalStatus?.completed_at])
 
   // Log new progress lines to the browser console as they arrive
   useEffect(() => {
@@ -164,7 +198,9 @@ function EvalTab() {
   })
 
   const status = evalStatus?.status ?? 'idle'
-  const results = evalStatus?.results
+  // Use live results when available, fall back to localStorage cache when backend is idle
+  const results = evalStatus?.results ?? (status === 'idle' ? cachedEval?.results ?? null : null)
+  const isCached = !evalStatus?.results && status === 'idle' && !!cachedEval
   const progress = evalStatus?.progress ?? []
   const resultMap = new Map<string, EvalResult>(results?.map(r => [r.test_id, r]) ?? [])
 
@@ -179,6 +215,11 @@ function EvalTab() {
         <h2 style={{ color: C.textPrimary, fontSize: 20, fontWeight: 700 }}>Eval Dashboard</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <StatusBadge status={status} startedAt={evalStatus?.started_at ?? null} completedAt={evalStatus?.completed_at ?? null} />
+          {isCached && cachedEval && (
+            <span style={{ fontSize: 11, color: C.textMuted }}>
+              cached · {new Date(cachedEval.completed_at).toLocaleString()}
+            </span>
+          )}
           <Button
             onClick={() => runMutation.mutate()}
             disabled={status === 'running' || runMutation.isPending}
@@ -240,12 +281,12 @@ function EvalTab() {
       <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
         <Table style={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: 88 }} />   {/* ID */}
-            <col style={{ width: 148 }} />  {/* Tool */}
-            <col />                         {/* Input — takes remaining space */}
-            <col style={{ width: 200 }} />  {/* Expected */}
-            {results && <col style={{ width: 110 }} />}  {/* Metrics */}
-            {results && <col style={{ width: 68 }} />}   {/* Status */}
+            <col style={{ width: 80 }} />
+            <col style={{ width: 190 }} />
+            <col />
+            <col style={{ width: 220 }} />
+            {results && <col style={{ width: 110 }} />}
+            {results && <col style={{ width: 68 }} />}
           </colgroup>
           <TableHeader>
             <TableRow style={{ background: C.bgDark, borderColor: C.border }}>
@@ -262,9 +303,8 @@ function EvalTab() {
               const result = resultMap.get(g.id)
               const isExpanded = expanded === g.id
               return (
-                <>
+                <Fragment key={g.id}>
                   <TableRow
-                    key={g.id}
                     onClick={() => result && setExpanded(isExpanded ? null : g.id)}
                     style={{
                       borderColor: C.border,
@@ -272,13 +312,17 @@ function EvalTab() {
                       cursor: result ? 'pointer' : 'default',
                     }}
                   >
-                    <TableCell style={{ color: C.textMuted, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', whiteSpace: 'nowrap' }}>{g.id}</TableCell>
-                    <TableCell style={{ color: C.textPrimary, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{g.tool}</TableCell>
-                    <TableCell style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.input}>
-                      {g.input}
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{g.id}</div>
                     </TableCell>
-                    <TableCell style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.expected_output ?? ''}>
-                      {g.expected_output ?? '—'}
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textPrimary, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{g.tool}</div>
+                    </TableCell>
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.input}>{g.input}</div>
+                    </TableCell>
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.expected_output ?? ''}>{g.expected_output ?? '—'}</div>
                     </TableCell>
                     {results && (
                       <TableCell style={{ overflow: 'hidden' }}>
@@ -333,12 +377,12 @@ function EvalTab() {
                   {/* Expanded metric detail row */}
                   {isExpanded && result && (
                     <TableRow key={`${g.id}-detail`} style={{ background: C.bgDark, borderColor: C.border }}>
-                      <TableCell colSpan={6} style={{ padding: '12px 16px' }}>
+                      <TableCell colSpan={6} style={{ padding: '12px 16px', overflow: 'hidden' }}>
                         <MetricDetail result={result} />
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </TableBody>
@@ -351,12 +395,12 @@ function EvalTab() {
 // ── Metric detail panel (expanded row) ───────────────────────────────────────
 function MetricDetail({ result }: { result: EvalResult }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
       {result.metrics.map(m => (
-        <div key={m.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div key={m.name} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: C.textPrimary, fontSize: 12, fontWeight: 600, minWidth: 220 }}>{m.name}</span>
-            <div style={{ flex: 1, maxWidth: 160 }}>
+            <span style={{ color: C.textPrimary, fontSize: 12, fontWeight: 600, minWidth: 220, flexShrink: 0 }}>{m.name}</span>
+            <div style={{ width: 160, flexShrink: 0 }}>
               <Progress
                 value={m.score * 100}
                 style={{
@@ -366,26 +410,29 @@ function MetricDetail({ result }: { result: EvalResult }) {
                 className="[&>div]:transition-all"
               />
             </div>
-            <span style={{ color: m.passed ? C.pass : C.fail, fontSize: 12, fontFamily: 'monospace', minWidth: 50 }}>
+            <span style={{ color: m.passed ? C.pass : C.fail, fontSize: 12, fontFamily: 'monospace', minWidth: 50, flexShrink: 0 }}>
               {m.score.toFixed(3)}
             </span>
-            <span style={{ color: C.textMuted, fontSize: 11 }}>/ {m.threshold}</span>
+            <span style={{ color: C.textMuted, fontSize: 11, flexShrink: 0 }}>/ {m.threshold}</span>
             <Badge
               style={{
                 background: m.passed ? '#1A3A2A' : '#3A1A1A',
                 color: m.passed ? C.pass : C.fail,
                 border: `1px solid ${m.passed ? '#2A5A3A' : '#5A2A2A'}`,
                 fontSize: 10,
+                flexShrink: 0,
               }}
             >
               {m.passed ? 'PASS' : 'FAIL'}
             </Badge>
-            <span style={{ color: C.textMuted, fontSize: 11 }}>{m.duration_s}s</span>
+            <span style={{ color: C.textMuted, fontSize: 11, flexShrink: 0 }}>{m.duration_s}s</span>
           </div>
           {m.reason && (
-            <p style={{ color: C.textMuted, fontSize: 11, margin: 0, paddingLeft: 230, lineHeight: 1.5 }}>
-              {m.reason}
-            </p>
+            <div style={{ paddingLeft: 230, boxSizing: 'border-box' }}>
+              <p style={{ color: C.textMuted, fontSize: 11, margin: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>
+                {m.reason}
+              </p>
+            </div>
           )}
         </div>
       ))}

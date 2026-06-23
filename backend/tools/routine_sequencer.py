@@ -96,7 +96,7 @@ def routine_sequencer(ingredients: str) -> str:
         for step in STEP_ORDER:
             if step in classified:
                 for ingredient in classified[step]:
-                    lines.append(f"{step_num}. {ingredient} ({step})")
+                    lines.append(f"{step_num}. {step}: {ingredient}")
                     step_num += 1
 
         lines.append(f"\nUnclassifiable items: [{', '.join(unclassifiable)}]")

@@ -9,6 +9,7 @@ RUN uv sync --frozen --no-dev
 
 COPY backend/ ./backend/
 COPY knowledge_base/ ./knowledge_base/
+COPY eval/ ./eval/
 
 RUN mkdir -p /app/data /app/logs
 
