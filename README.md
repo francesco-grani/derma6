@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="frontend/src/assets/hero.png" width="180" alt="Derma6"/>
+  <img src="frontend/src/assets/hero.png" width="140" alt="Derma6"/>
 </p>
 
 <p align="center">
-  <strong>Derma6 v2</strong> — AI skincare assistant for male beginners.<br/>
-  Diagnose your skin type, build a personalised routine, catch ingredient conflicts, and schedule active introductions.
+  <strong>Derma6 v2</strong> — AI skincare assistant for male beginners.
+  Diagnose your skin type · Build a personalised routine · Catch ingredient conflicts · Schedule active introductions.
 </p>
 
 <p align="center">
@@ -123,20 +123,53 @@ The agent runs as an explicit `StateGraph` (not `create_react_agent`). This was 
 - Medical flags trigger a `⚠️ Consult a dermatologist` notice only on specific recommendations
 - `BaseHTTPMiddleware` safe for SSE because it never reads the response body
 
+### Content filter
+
+`backend/middleware/content_filter.py` runs as a FastAPI `Depends` before the agent on every `/api/chat` request:
+
+- **Jailbreak detection** — regex patterns for `ignore previous instructions`, `DAN mode`, `act as if you are`, persona-switch phrases, and similar injection patterns; returns HTTP 400 on match
+- **Input PII detection** — blocks email addresses, phone numbers, credit card numbers, and SSNs with a user-friendly error message
+- **Output PII scrubbing** — after the agent streams, `scrub_pii_output()` replaces any PII patterns in the assembled answer *before* it is persisted to chat history (the streamed text is already at the client; scrubbing is storage-only)
+
+### HITL (Human-in-the-Loop)
+
+Several agent tools use LangGraph's `interrupt()` to pause the graph and wait for a user decision before performing any write. The flow:
+
+1. Tool calls `interrupt(payload)` — graph suspends; `run_id` is stored in the checkpoint
+2. Backend emits SSE `{"type": "interrupt", "run_id": "...", "kind": "...", ...}`
+3. Frontend renders the appropriate interactive card (save dialog, conflict card, profile review, etc.)
+4. User makes a choice; frontend POSTs to `/api/chat/resume` with `{run_id, choice, note}`
+5. `stream_resume_response()` calls `graph.astream(Command(resume={...}))` — graph continues from the interrupt point
+6. Tool receives the decision, executes the write, and returns; agent produces the final response
+
 ### Agent tools
 
-Six domain tools are registered with the LangGraph agent:
+Thirteen tools are registered with the LangGraph agent. Six are domain tools (read-only or stateless); seven are HITL tools that trigger an `interrupt()` — pausing the graph so the user can confirm before any write.
+
+#### Domain tools
 
 | Tool | Purpose |
 |---|---|
-| `kb_search` | Semantic search over the 20-document knowledge base |
+| `kb_search` | Agentic RAG pipeline — 7-node LangGraph graph inside the tool boundary |
 | `conflict_checker` | Deterministic lookup against the ingredient conflict matrix |
 | `routine_sequencer` | Orders ingredients by correct application step |
-| `skin_type_advisor` | Classifies skin type from KB evidence and conversation |
-| `introduction_scheduler` | Builds a gradual schedule for introducing strong actives |
+| `skin_type_advisor_tool` | Classifies skin type from KB evidence and saves it to the profile |
+| `introduction_scheduler_tool` | Builds a gradual schedule for introducing strong actives |
 | `spf_recommender` | Recommends SPF products suitable for the user's profile |
 
-Profile-mutating operations (save routine, update concerns, medical flags) were promoted to API endpoints in v2 rather than remaining agent tools — reducing LLM tool-call surface and making writes auditable at the HTTP layer.
+#### HITL tools (each calls `interrupt()` before writing)
+
+| Tool | Interrupt kind | What it does |
+|---|---|---|
+| `save_routine_tool` | `routine_diff` | Shows a preview card; user can save, overwrite, or cancel |
+| `update_beard_style_tool` | `beard_style_select` | Shows a 3-option card; result is saved to profile |
+| `update_location_tool` | `location_input` | Shows a text-field card; location saved to profile |
+| `add_medical_flag_tool` | `medical_flag_confirm` | Asks user to confirm before adding a diagnosed condition |
+| `finalize_onboarding_tool` | `onboarding_review` | Shows a full profile review card; confirms onboarding complete |
+| `propose_conflict_resolution_tool` | `conflict_resolution` | Shows options to remove one conflicting ingredient from all routines |
+| `update_skin_concerns_tool` | direct write | Saves skin concerns list; no interrupt needed |
+
+The audit logger (`derma6.audit`) records every tool call with username, tool name, and a sanitised args summary before the tool executes.
 
 ---
 

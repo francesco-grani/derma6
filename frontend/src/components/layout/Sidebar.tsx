@@ -92,10 +92,15 @@ export default function Sidebar() {
       className="flex flex-col h-screen w-56 shrink-0"
       style={{ background: '#2E3D2F', borderRight: '1px solid #4B5A4C' }}
     >
-      {/* Logo */}
-      <div className="px-5 pt-6 pb-4">
-        <img src="/Derma6_logo.png" alt="Derma6" style={{ height: 52, width: 'auto' }} />
-      </div>
+      {/* Logo — click to start a new chat */}
+      <button
+        onClick={handleNewChat}
+        title="New chat"
+        className="px-5 pt-6 pb-4 cursor-pointer w-full text-left hover:opacity-80 transition-opacity"
+        style={{ background: 'none', border: 'none', padding: '24px 20px 16px' }}
+      >
+        <img src="/Derma6_logo.png" alt="Derma6" style={{ height: 76, width: 'auto' }} />
+      </button>
 
       {/* Chat section: button + session list */}
       <div className="px-3 mb-1">

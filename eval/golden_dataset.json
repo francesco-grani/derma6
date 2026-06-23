@@ -42,7 +42,7 @@
     "id": "routine-01",
     "tool": "routine_sequencer",
     "input": "spf, retinol, cleanser, moisturiser",
-    "actual_output": "Routine order:\n1. cleanser (cleanser)\n2. retinol (serum)\n3. moisturiser (moisturiser)\n4. spf (spf)\n\nUnclassifiable items: []",
+    "actual_output": "Routine order:\n1. cleanser: cleanser\n2. serum: retinol\n3. moisturiser: moisturiser\n4. spf: spf\n\nUnclassifiable items: []",
     "expected_output": "Steps ordered as cleanser → serum → moisturiser → spf.",
     "retrieval_context": [],
     "tags": ["routine", "ordering"]
@@ -51,7 +51,7 @@
     "id": "routine-02",
     "tool": "routine_sequencer",
     "input": "cleanser, mystery_serum_xyz, spf",
-    "actual_output": "Routine order:\n1. cleanser (cleanser)\n2. spf (spf)\n\nUnclassifiable items: [mystery_serum_xyz]",
+    "actual_output": "Routine order:\n1. cleanser: cleanser\n2. spf: spf\n\nUnclassifiable items: [mystery_serum_xyz]",
     "expected_output": "Known items ordered correctly; unclassifiable items listed separately.",
     "retrieval_context": [],
     "tags": ["routine", "unclassifiable"]

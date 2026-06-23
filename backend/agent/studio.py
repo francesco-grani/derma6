@@ -10,6 +10,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from backend.agent.graph import _make_tools, _store, build_system_prompt
 from backend.config import settings
+from backend.rag.pipeline.graph import RagPipelineGraph
 from backend.schemas import UserProfile
 
 _profile = UserProfile(
@@ -45,3 +46,5 @@ _builder.add_conditional_edges("agent", tools_condition)
 _builder.add_edge("tools", "agent")
 
 graph = _builder.compile(checkpointer=False)
+
+rag_graph = RagPipelineGraph()._graph
