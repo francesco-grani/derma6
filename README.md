@@ -140,6 +140,32 @@ Profile-mutating operations (save routine, update concerns, medical flags) were 
 
 ---
 
+## Agentic RAG Pipeline
+
+`kb_search` is backed by a 7-node LangGraph `StateGraph` that runs inside the tool boundary — the outer ReAct agent, FastAPI layer, and API contract are untouched.
+
+```
+query_decompose → hybrid_retrieve → rerank → crag_grade
+                                                 ├─ ≥ threshold ──────────────────► generate
+                                                 └─ < threshold → local_retry
+                                                                     ├─ ≥ threshold ► generate
+                                                                     └─ < threshold → external_fallback → generate
+```
+
+| Node | What it does |
+|---|---|
+| `query_decompose` | LLM splits complex questions into focused sub-queries (falls back to original on failure) |
+| `hybrid_retrieve` | Per sub-query: HyDE dense (ChromaDB) + BM25 sparse in parallel, merged via Reciprocal Rank Fusion |
+| `rerank` | Cross-encoder (`ms-marco-MiniLM-L-6-v2`) scores all candidates against the **original** query |
+| `crag_grade` | LLM grades each reranked doc as relevant/not; computes aggregate score |
+| `local_retry` | LLM reformulates query → re-retrieves → re-grades; keeps local KB as authoritative source |
+| `external_fallback` | Web search (Tavily → DuckDuckGo) or LLM-only; last resort only (default: `llm-only`) |
+| `generate` | Formats context string in `kb_search`-compatible format + appends `__RAG_PIPELINE_META__` block |
+
+All parameters are configurable via environment variables with safe defaults — see [Agentic RAG](docs/wiki/Agentic-RAG.md) in the wiki for the full reference.
+
+---
+
 ## Evaluation
 
 RAGAs evaluation against a 15-question golden dataset (`eval/eval_dataset.json`). Inherited from v1 and updated for the v2 retrieval pipeline.
@@ -234,6 +260,7 @@ cd frontend && npx tsc --noEmit
 ## Wiki
 
 - [Architecture deep-dive](docs/wiki/Architecture.md)
+- [Agentic RAG Pipeline](docs/wiki/Agentic-RAG.md)
 - [Knowledge Base Maintenance](docs/wiki/Knowledge-Base-Maintenance.md)
 - [API Reference](docs/wiki/API-Reference.md)
 
