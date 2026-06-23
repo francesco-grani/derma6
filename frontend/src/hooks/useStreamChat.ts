@@ -108,6 +108,8 @@ export function useStreamChat(sessionId: string | null) {
             const event = JSON.parse(raw)
             if (event.type === 'text') {
               updateLast(msg => ({ ...msg, content: msg.content + event.content }))
+            } else if (event.type === 'clear_text') {
+              updateLast(msg => ({ ...msg, content: '' }))
             } else if (event.type === 'metadata') {
               updateLast(msg => ({
                 ...msg,
@@ -201,6 +203,8 @@ export function useStreamChat(sessionId: string | null) {
             const event = JSON.parse(raw)
             if (event.type === 'text') {
               updateLast(msg => ({ ...msg, content: msg.content + event.content }))
+            } else if (event.type === 'clear_text') {
+              updateLast(msg => ({ ...msg, content: '' }))
             } else if (event.type === 'metadata') {
               updateLast(msg => ({
                 ...msg,
