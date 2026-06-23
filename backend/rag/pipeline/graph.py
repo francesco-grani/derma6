@@ -24,7 +24,7 @@ logger = logging.getLogger("derma6.rag.pipeline")
 
 
 def _build_and_compile():
-    graph: StateGraph = StateGraph(dict)
+    graph: StateGraph = StateGraph(RagState)
 
     graph.add_node("query_decompose", query_decompose)
     graph.add_node("hybrid_retrieve", hybrid_retrieve)
@@ -61,16 +61,16 @@ class RagPipelineGraph:
         self._graph = _build_and_compile()
         logger.info("RagPipelineGraph compiled successfully")
 
-    def invoke(self, query: str) -> str:
+    async def ainvoke(self, query: str) -> str:
         """Run the full agentic RAG pipeline for one query. Returns the formatted context string."""
         state = initial_state(query, fallback_strategy=settings.crag_fallback_strategy)
         try:
-            final_state = self._graph.invoke(state)
+            final_state = await self._graph.ainvoke(state)
             result = final_state.get("result_string", "")
             if not result:
                 logger.warning("RagPipelineGraph produced empty result_string for query=%r", query[:60])
                 return "No relevant articles found in the knowledge base for this query."
             return result
         except Exception as exc:
-            logger.error("RagPipelineGraph.invoke failed for query=%r: %s", query[:60], exc)
+            logger.error("RagPipelineGraph.ainvoke failed for query=%r: %s", query[:60], exc)
             raise

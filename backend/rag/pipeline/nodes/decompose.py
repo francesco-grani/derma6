@@ -48,8 +48,25 @@ async def query_decompose(state: dict) -> dict:
 
         async def _call() -> list[str]:
             response = await llm.ainvoke(prompt)
-            text = response.content if hasattr(response, "content") else str(response)
-            parsed = json.loads(text.strip())
+            content = response.content if hasattr(response, "content") else str(response)
+            # Claude via LangChain can return content as a list of typed blocks
+            if isinstance(content, list):
+                text = " ".join(
+                    b.get("text", "") if isinstance(b, dict) else str(b) for b in content
+                ).strip()
+            else:
+                text = str(content).strip()
+            if not text:
+                logger.warning(
+                    "query_decompose: empty content from model — response type=%s repr=%.200s",
+                    type(content).__name__, repr(content),
+                )
+                raise ValueError("Empty response from decomposition LLM")
+            # Strip markdown code fences if model wraps the JSON
+            if text.startswith("```"):
+                import re as _re
+                text = _re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=_re.DOTALL).strip()
+            parsed = json.loads(text)
             if not isinstance(parsed, list) or not parsed:
                 raise ValueError("Empty or non-list response from decomposition LLM")
             return [str(q).strip() for q in parsed if str(q).strip()]

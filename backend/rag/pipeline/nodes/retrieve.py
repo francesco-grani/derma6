@@ -71,7 +71,7 @@ async def _dense_retrieve(sub_query: str, collection, embeddings) -> tuple[list[
         results = collection.query(
             query_embeddings=[vector],
             n_results=settings.retrieval_top_k,
-            include=["documents", "metadatas", "distances", "ids"],
+            include=["documents", "metadatas", "distances"],
         )
         docs_raw = results["documents"][0]
         metas_raw = results["metadatas"][0]
