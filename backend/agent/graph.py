@@ -672,6 +672,27 @@ def extract_citations(messages: list) -> list[str]:
     return citations
 
 
+def extract_rag_pipeline_meta(messages: list) -> dict:
+    """Extract __RAG_PIPELINE_META__ from tool messages. Returns the last found block."""
+    import json as _json
+    marker = "__RAG_PIPELINE_META__: "
+    result: dict = {}
+    for msg in messages:
+        if not isinstance(msg, ToolMessage):
+            continue
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        idx = content.find(marker)
+        if idx == -1:
+            continue
+        try:
+            raw = _json.loads(content[idx + len(marker):].split("\n")[0].strip())
+            if isinstance(raw, dict):
+                result = raw
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    return result
+
+
 def extract_rag_context(messages: list) -> list[dict]:
     seen: set[str] = set()
     items: list[dict] = []
@@ -797,11 +818,19 @@ async def stream_agent_response(
             "metadata": {"username": username},
         }
 
-        async for chunk, _ in graph.astream(
+        prev_node: str | None = None
+        async for chunk, metadata in graph.astream(
             {"messages": input_messages},
             stream_mode="messages",
             config=graph_config,
         ):
+            current_node = metadata.get("langgraph_node") if isinstance(metadata, dict) else None
+            # When agent re-runs after a tool call, discard intermediate text and reset the UI.
+            if current_node == "agent" and prev_node == "tools":
+                accumulated_text.clear()
+                yield _sse({"type": "clear_text"})
+            if current_node:
+                prev_node = current_node
             accumulated_messages.append(chunk)
             if isinstance(chunk, AIMessageChunk):
                 content = chunk.content
@@ -826,6 +855,7 @@ async def stream_agent_response(
         answer = "".join(accumulated_text)
         citations = extract_citations(accumulated_messages)
         rag_context = extract_rag_context(accumulated_messages)
+        rag_pipeline_meta = extract_rag_pipeline_meta(accumulated_messages)
         tool_results_objs = extract_tool_results(accumulated_messages)
 
         chat_history.add_user_message(message)
@@ -862,12 +892,16 @@ async def stream_agent_response(
             username, len(citations), len(rag_context), len(tool_results_objs),
         )
 
-        yield _sse({
+        metadata_payload: dict = {
             "type": "metadata",
             "citations": citations,
             "rag_context": rag_context,
             "tool_results": [tr.model_dump() for tr in tool_results_objs],
-        })
+        }
+        if rag_pipeline_meta:
+            metadata_payload["rag_routing"] = rag_pipeline_meta.get("final_routing", "")
+            metadata_payload["rag_fallback_triggered"] = rag_pipeline_meta.get("rag_fallback_triggered", False)
+        yield _sse(metadata_payload)
 
         if is_first_message:
             title = await _set_title_if_first_message(session_id, message)
@@ -905,11 +939,18 @@ async def stream_resume_response(
         accumulated_text: list[str] = []
         accumulated_messages: list = []
 
-        async for chunk, _ in graph.astream(
+        prev_node: str | None = None
+        async for chunk, metadata in graph.astream(
             Command(resume={"choice": choice, "note": note}),
             stream_mode="messages",
             config=graph_config,
         ):
+            current_node = metadata.get("langgraph_node") if isinstance(metadata, dict) else None
+            if current_node == "agent" and prev_node == "tools":
+                accumulated_text.clear()
+                yield _sse({"type": "clear_text"})
+            if current_node:
+                prev_node = current_node
             accumulated_messages.append(chunk)
             if isinstance(chunk, AIMessageChunk):
                 content = chunk.content

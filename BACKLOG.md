@@ -14,7 +14,8 @@
 - [x] Skin analysis feature — vision LLM endpoint, condition + confidence + differential diagnoses
 - [x] Auto 401 logout — frontend intercepts expired tokens and redirects to login
 - [x] Camera modal (`getUserMedia`) in Skin Analysis — `capture="environment"` is mobile-only; replaced with live video stream + canvas snapshot so it works on desktop too
-- [x] Test suite — 233 unit tests, 91% coverage on business logic; deepeval evaluation suite (12 LLM-quality tests) with golden dataset at `tests/eval/golden_dataset.json`
+- [x] Test suite — 278 unit tests (45 new for agentic RAG pipeline), 91% coverage on business logic; deepeval evaluation suite (12 LLM-quality tests) with golden dataset at `tests/eval/golden_dataset.json`
+- [x] **Agentic RAG pipeline** — `kb_search` upgraded to a 7-node LangGraph `StateGraph`: Query Decomposition → Hybrid Retrieval (HyDE dense + BM25 sparse, RRF merge) → Cross-encoder Reranking → Corrective RAG (CRAG) with local retry before external fallback; `__RAG_PIPELINE_META__` surfaced in SSE metadata event (`rag_routing`, `rag_fallback_triggered`); 11 tunable env vars; `rank-bm25` + `sentence-transformers` dependencies
 
 ## Pending
 
