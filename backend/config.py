@@ -78,6 +78,22 @@ class Settings(BaseSettings):
     # Input validation
     max_message_chars: int = Field(default=2000, alias="MAX_MESSAGE_CHARS")
 
+    # Agentic RAG pipeline
+    reranker_model: str = Field(
+        default="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        alias="RERANKER_MODEL",
+    )
+    rerank_top_k: int = Field(default=5, alias="RERANK_TOP_K")
+    crag_relevance_threshold: float = Field(default=0.5, alias="CRAG_RELEVANCE_THRESHOLD")
+    crag_fallback_strategy: str = Field(default="llm-only", alias="CRAG_FALLBACK_STRATEGY")
+    decompose_timeout_seconds: int = Field(default=10, alias="DECOMPOSE_TIMEOUT_SECONDS")
+    hyde_timeout_seconds: int = Field(default=10, alias="HYDE_TIMEOUT_SECONDS")
+    crag_grade_timeout_seconds: int = Field(default=10, alias="CRAG_GRADE_TIMEOUT_SECONDS")
+    rerank_timeout_seconds: int = Field(default=15, alias="RERANK_TIMEOUT_SECONDS")
+    rrf_k: int = Field(default=60, alias="RRF_K")
+    tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
+    rag_debug_mode: bool = Field(default=False, alias="RAG_DEBUG_MODE")
+
     # CORS
     allowed_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],
