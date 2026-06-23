@@ -325,7 +325,17 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
                     {t.tool_name}
                   </span>
                   <p className="text-xs leading-relaxed" style={{ color: '#9EAD9E' }}>
-                    {t.summary}
+                    {(() => {
+                      const stripped = t.summary
+                        .replace(/```[\s\S]*?```/g, '')
+                        .replace(/#{1,6}\s+/g, '')
+                        .replace(/\*\*(.+?)\*\*/g, '$1')
+                        .replace(/\*(.+?)\*/g, '$1')
+                        .replace(/---+/g, '')
+                        .replace(/\n+/g, ' ')
+                        .trim();
+                      return stripped.length > 160 ? stripped.slice(0, 160).trimEnd() + '…' : stripped;
+                    })()}
                   </p>
                   {i < msg.tool_results!.length - 1 && (
                     <div className="mt-2" style={{ borderBottom: '1px solid #3A4A3B' }} />

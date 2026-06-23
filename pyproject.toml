@@ -12,7 +12,7 @@ dependencies = [
     "langgraph>=0.2",
     "langsmith>=0.8.16",
     "onnxruntime<=1.19.2",
-    "rank-bm25>=0.3.1",
+    "rank-bm25>=0.2.2",
     "sentence-transformers>=3.0",
     "openai>=2.42.0",
     "pydantic-settings>=2.0",
@@ -53,6 +53,11 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
 
 [tool.coverage.run]

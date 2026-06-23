@@ -30,6 +30,7 @@ from backend.config import settings
 from backend.db.chat_history import get_history
 from backend.db.deps import get_profile_store, get_session_store
 from backend.db.profile_store import ProfileStore
+from backend.middleware.content_filter import scrub_pii_output
 from backend.pricing import calculate_cost
 from backend.rate_limiter import RateLimiter
 from backend.schemas import BackendResponse, RoutineSchema, RoutineStepSchema, ToolResult, UserProfile
@@ -118,7 +119,14 @@ _SAVE_RULE = (
 # ── Sanitisation ─────────────────────────────────────────────────────────────
 
 _INJECTION_PATTERNS = re.compile(
-    r"ignore\s+(previous|all|above)|you\s+are\s+now|system\s*:",
+    r"ignore\s+(previous|all|above|prior|your|these)\s+(instructions?|prompts?|rules?|constraints?)"
+    r"|you\s+are\s+now"
+    r"|system\s*:"
+    r"|(forget|disregard|override|bypass)\s+(your|all|the|previous|any)\s+(instructions?|rules?|training|constraints?|guidelines?)"
+    r"|act\s+as\s+if\s+you\s+(are|were)"
+    r"|\bjailbreak\b|\bdan\s+mode\b"
+    r"|<\s*/?system\s*>"
+    r"|(disable|bypass)\s+(your\s+)?(safety|filters?|restrictions?)",
     re.IGNORECASE,
 )
 
@@ -859,7 +867,7 @@ async def stream_agent_response(
         tool_results_objs = extract_tool_results(accumulated_messages)
 
         chat_history.add_user_message(message)
-        chat_history.add_ai_message(answer)
+        chat_history.add_ai_message(scrub_pii_output(answer))
 
         # ── Token accounting ────────────────────────────────────────
         prompt_tokens = 0
@@ -978,7 +986,7 @@ async def stream_resume_response(
         tool_results_objs = extract_tool_results(accumulated_messages)
 
         chat_history = get_history(session_id)
-        chat_history.add_ai_message(answer)
+        chat_history.add_ai_message(scrub_pii_output(answer))
 
         yield _sse({
             "type": "metadata",

@@ -18,7 +18,7 @@ _rag_pipeline = RagPipelineGraph()
 
 
 @tool
-def kb_search(query: str) -> str:
+async def kb_search(query: str) -> str:
     """Search the skincare knowledge base for information on ingredients, actives,
     routines, skin concepts, or skincare science.
 
@@ -29,7 +29,7 @@ def kb_search(query: str) -> str:
     Input: the user's question or a concise search phrase.
     """
     try:
-        result = _rag_pipeline.invoke(query)
+        result = await _rag_pipeline.ainvoke(query)
         logger.info("kb_search: agentic RAG pipeline returned result for query=%r", query[:60])
         return result
     except Exception as exc:

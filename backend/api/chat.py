@@ -6,13 +6,18 @@ from fastapi.responses import StreamingResponse
 from backend.agent.graph import stream_agent_response
 from backend.auth import get_current_user
 from backend.db.chat_history import serialise_history
+from backend.middleware.content_filter import check_chat_content
 from backend.schemas import ChatHistoryMessage, ChatRequest
 
 router = APIRouter(tags=["chat"])
 
 
 @router.post("/api/chat")
-async def chat(req: ChatRequest, username: str = Depends(get_current_user)):
+async def chat(
+    req: ChatRequest,
+    username: str = Depends(get_current_user),
+    _: None = Depends(check_chat_content),
+):
     return StreamingResponse(
         stream_agent_response(username, req.message, req.session_id),
         media_type="text/event-stream",

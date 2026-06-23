@@ -24,7 +24,7 @@ class BM25Index:
 
         t0 = time.monotonic()
         try:
-            result = collection.get(include=["documents", "metadatas", "ids"])
+            result = collection.get(include=["documents", "metadatas"])
         except Exception as exc:
             raise BM25UnavailableError(f"Failed to fetch corpus from ChromaDB: {exc}") from exc
 
