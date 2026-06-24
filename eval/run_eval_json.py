@@ -436,74 +436,111 @@ def _sunscreen_types() -> GEval:
 _TESTS: list[dict[str, Any]] = [
     # ── SPF Recommender ────────────────────────────────────────────────────────
     {"id": "spf-01", "name": "test_spf_enforces_50_plus",
+     "category": "SPF Recommender",
      "metrics": [_spf_standard, _answer_relevancy]},
     {"id": "spf-02", "name": "test_spf_redirects_low_spf",
+     "category": "SPF Recommender",
      "metrics": [_spf_standard]},
     {"id": "spf-03", "name": "test_spf_seasonal_still_50_plus",
+     "category": "SPF Recommender",
      "metrics": [_spf_standard, _seasonal_spf]},
     {"id": "spf-04", "name": "test_spf_15_indoors_redirected",
+     "category": "SPF Recommender",
      "metrics": [_spf_standard]},
 
     # ── Conflict Checker ───────────────────────────────────────────────────────
     {"id": "conflict-01", "name": "test_conflict_known_pair_format",
+     "category": "Conflict Checker",
      "metrics": [_conflict_format, _safety]},
     {"id": "conflict-02", "name": "test_conflict_unknown_ingredient",
+     "category": "Conflict Checker",
      "metrics": [_unknown_ingredient]},
     {"id": "conflict-03", "name": "test_conflict_safe_pair_identified",
+     "category": "Conflict Checker",
      "metrics": [_conflict_format, _safe_pair]},
     {"id": "conflict-04", "name": "test_conflict_exfoliation_stack",
+     "category": "Conflict Checker",
      "metrics": [_conflict_format, _exfoliation_stack]},
 
     # ── Routine Sequencer ──────────────────────────────────────────────────────
     {"id": "routine-01", "name": "test_routine_correct_order",
+     "category": "Routine Sequencer",
      "metrics": [_routine_order]},
     {"id": "routine-02", "name": "test_routine_unclassifiable_reported",
+     "category": "Routine Sequencer",
      "metrics": [_unclassifiable_items]},
     {"id": "routine-03", "name": "test_routine_multi_serum_ordering",
+     "category": "Routine Sequencer",
      "metrics": [_routine_order, _multi_serum_order]},
     {"id": "routine-04", "name": "test_routine_reverse_input_resequenced",
+     "category": "Routine Sequencer",
      "metrics": [_routine_order]},
 
     # ── Skin Type Advisor ──────────────────────────────────────────────────────
     {"id": "skin-type-01", "name": "test_skin_type_oily_classification",
+     "category": "Skin Type Advisor",
      "metrics": [_oily_skin]},
     {"id": "skin-type-02", "name": "test_skin_type_sensitive_classification",
+     "category": "Skin Type Advisor",
      "metrics": [_sensitive_skin]},
     {"id": "skin-type-03", "name": "test_skin_type_combination_classification",
+     "category": "Skin Type Advisor",
      "metrics": [_combination_skin]},
     {"id": "skin-type-04", "name": "test_skin_type_acneic_classification",
+     "category": "Skin Type Advisor",
      "metrics": [_acneic_skin]},
 
     # ── Introduction Scheduler ─────────────────────────────────────────────────
     {"id": "intro-01", "name": "test_intro_phased_schedule",
+     "category": "Introduction Scheduler",
      "metrics": [_phased_intro]},
     {"id": "intro-02", "name": "test_intro_conflict_warning",
+     "category": "Introduction Scheduler",
      "metrics": [_conflict_warning_in_schedule, _phased_intro]},
     {"id": "intro-03", "name": "test_intro_single_active_no_warnings",
+     "category": "Introduction Scheduler",
      "metrics": [_phased_intro, _single_active_schedule]},
     {"id": "intro-04", "name": "test_intro_three_actives_phased",
+     "category": "Introduction Scheduler",
      "metrics": [_phased_intro, _three_active_schedule]},
 
     # ── KB Search — answer quality ─────────────────────────────────────────────
     {"id": "kb-01", "name": "test_kb_search_relevance_and_faithfulness",
+     "category": "KB — Answer Quality",
      "metrics": [_answer_relevancy, _faithfulness]},
     {"id": "kb-02", "name": "test_kb_search_domain_scope",
+     "category": "KB — Answer Quality",
      "metrics": [_domain_relevance, _faithfulness]},
     {"id": "kb-03", "name": "test_kb_retinol_beginner_guidance",
+     "category": "KB — Answer Quality",
      "metrics": [_answer_relevancy, _faithfulness, _retinol_beginner]},
     {"id": "kb-04", "name": "test_kb_sunscreen_types_explained",
+     "category": "KB — Answer Quality",
      "metrics": [_answer_relevancy, _domain_relevance, _sunscreen_types]},
 
     # ── KB Search — RAG pipeline quality (contextual metrics) ──────────────────
     {"id": "kb-01", "name": "test_kb_rag_retrieval_quality_niacinamide",
+     "category": "KB — RAG Pipeline",
      "metrics": [_contextual_relevancy, _contextual_precision, _contextual_recall]},
     {"id": "kb-02", "name": "test_kb_rag_retrieval_quality_spf",
+     "category": "KB — RAG Pipeline",
      "metrics": [_contextual_relevancy, _contextual_precision, _contextual_recall]},
     {"id": "kb-03", "name": "test_kb_rag_retrieval_quality_retinol",
+     "category": "KB — RAG Pipeline",
      "metrics": [_contextual_relevancy, _contextual_recall]},
     {"id": "kb-04", "name": "test_kb_rag_retrieval_quality_sunscreen_types",
+     "category": "KB — RAG Pipeline",
      "metrics": [_contextual_relevancy, _contextual_precision, _contextual_recall]},
 ]
+
+
+def _metric_kind(metric: Any) -> str:
+    cls = type(metric).__name__
+    if cls in ("_RoutineOrderMetric", "_UnclassifiableItemsMetric"):
+        return "programmatic"
+    if cls in ("ContextualRelevancyMetric", "ContextualPrecisionMetric", "ContextualRecallMetric"):
+        return "rag"
+    return "llm-judge"
 
 
 def _measure(metric: Any, test_case: LLMTestCase) -> dict[str, Any]:
@@ -529,6 +566,7 @@ def _measure(metric: Any, test_case: LLMTestCase) -> dict[str, Any]:
         "passed": passed,
         "reason": reason,
         "duration_s": round(time.perf_counter() - t0, 2),
+        "kind": _metric_kind(metric),
     }
 
 
@@ -548,6 +586,7 @@ def main() -> None:
         results.append({
             "test_id": cfg["id"],
             "test_name": cfg["name"],
+            "category": cfg.get("category", "Uncategorized"),
             "tool": row["tool"],
             "input": row["input"],
             "expected_output": row.get("expected_output"),
