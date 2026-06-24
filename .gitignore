@@ -39,3 +39,6 @@ skills-lock.json
 # LangGraph / DeepEval runtime
 .langgraph_api/
 .deepeval/
+
+# Local study notes
+STUDY_GUIDE.md
