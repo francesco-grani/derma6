@@ -8,6 +8,8 @@ import {
   apiGetAdminUsers,
   apiGetEvalStatus,
   apiRunEval,
+  apiExportEvalJson,
+  apiExportEvalHtml,
   type EvalResult,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -348,6 +350,25 @@ function EvalTab() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-eval-status'] }),
   })
 
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleExportJson() {
+    const blob = await apiExportEvalJson()
+    triggerDownload(blob, `eval_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`)
+  }
+
+  async function handleExportHtml() {
+    const blob = await apiExportEvalHtml()
+    triggerDownload(blob, `eval_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.html`)
+  }
+
   const status = evalStatus?.status ?? 'idle'
   const results = evalStatus?.results ?? (status === 'idle' ? cachedEval?.results ?? null : null)
   const isCached = !evalStatus?.results && status === 'idle' && !!cachedEval
@@ -378,6 +399,22 @@ function EvalTab() {
             <span style={{ fontSize: 11, color: C.textMuted }}>
               cached · {new Date(cachedEval.completed_at).toLocaleString()}
             </span>
+          )}
+          {results && (
+            <>
+              <Button
+                onClick={handleExportJson}
+                style={{ background: C.bgCard, color: C.textPrimary, fontWeight: 600, fontSize: 13, border: `1px solid ${C.border}` }}
+              >
+                Export JSON
+              </Button>
+              <Button
+                onClick={handleExportHtml}
+                style={{ background: C.bgCard, color: C.textPrimary, fontWeight: 600, fontSize: 13, border: `1px solid ${C.border}` }}
+              >
+                Export HTML
+              </Button>
+            </>
           )}
           <Button
             onClick={() => runMutation.mutate()}

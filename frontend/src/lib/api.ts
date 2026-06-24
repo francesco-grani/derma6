@@ -303,3 +303,13 @@ export async function apiGetEvalStatus(): Promise<EvalStatus> {
 export async function apiRunEval(): Promise<void> {
   await authedFetch('/api/admin/eval/run', { method: 'POST' })
 }
+
+export async function apiExportEvalJson(): Promise<Blob> {
+  const res = await authedFetch('/api/admin/eval/export/json')
+  return res.blob()
+}
+
+export async function apiExportEvalHtml(): Promise<Blob> {
+  const res = await authedFetch('/api/admin/eval/export/html')
+  return res.blob()
+}

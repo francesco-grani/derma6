@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -166,3 +167,118 @@ async def _run_eval_background() -> None:
             "results": None,
             "error": str(exc)[:600],
         })
+
+
+# ── Eval export ───────────────────────────────────────────────────────────────
+
+@router.get("/eval/export/json")
+def export_eval_json(_: str = Depends(require_admin)) -> Response:
+    results = _eval_state.get("results")
+    if not results:
+        raise HTTPException(status_code=404, detail="No eval results available. Run the eval suite first.")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    payload = json.dumps({
+        "completed_at": _eval_state.get("completed_at"),
+        "results": results,
+    }, indent=2)
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="eval_results_{ts}.json"'},
+    )
+
+
+@router.get("/eval/export/html")
+def export_eval_html(_: str = Depends(require_admin)) -> Response:
+    results = _eval_state.get("results")
+    if not results:
+        raise HTTPException(status_code=404, detail="No eval results available. Run the eval suite first.")
+    completed_at = _eval_state.get("completed_at") or datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return Response(
+        content=_render_eval_html(results, completed_at),
+        media_type="text/html",
+        headers={"Content-Disposition": f'attachment; filename="eval_results_{ts}.html"'},
+    )
+
+
+def _render_eval_html(results: list[dict], completed_at: str) -> str:
+    passed = sum(1 for r in results if r.get("passed"))
+    total = len(results)
+    pass_rate = round(passed / total * 100) if total else 0
+
+    def score_color(score: float, passed: bool) -> str:
+        if passed:
+            return "#4CAF7D"
+        if score >= 0.5:
+            return "#F5A623"
+        return "#E05252"
+
+    rows_html = ""
+    for r in results:
+        metrics = r.get("metrics") or []
+        metric_cells = "".join(
+            f'<td style="padding:4px 8px;font-size:12px;color:{score_color(m.get("score",0), m.get("passed",False))}">'
+            f'{m["name"]}: {m.get("score", 0):.2f}'
+            f'{"✓" if m.get("passed") else "✗"}'
+            f'</td>'
+            for m in metrics
+        )
+        status_color = "#4CAF7D" if r.get("passed") else "#E05252"
+        status_label = "PASS" if r.get("passed") else "FAIL"
+        rows_html += (
+            f'<tr>'
+            f'<td style="padding:6px 8px;font-size:12px;color:#9DB09D">{r.get("category","")}</td>'
+            f'<td style="padding:6px 8px;font-size:12px;color:#C8D8C8">{r.get("test_name","")}</td>'
+            f'<td style="padding:6px 8px;font-size:12px;color:#9DB09D">{r.get("tool","")}</td>'
+            f'<td style="padding:6px 8px;font-size:12px;color:#C8D8C8;max-width:300px;white-space:pre-wrap">{r.get("input","")}</td>'
+            f'{metric_cells}'
+            f'<td style="padding:6px 8px;font-size:12px;font-weight:700;color:{status_color}">{status_label}</td>'
+            f'</tr>'
+        )
+
+    metric_headers = ""
+    if results and results[0].get("metrics"):
+        metric_headers = "".join(
+            f'<th style="padding:6px 8px;text-align:left;color:#7A9A7A;font-weight:600;font-size:12px">{m["name"]}</th>'
+            for m in results[0]["metrics"]
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Derma6 Eval Results</title>
+<style>
+  body {{ background:#1A2420; color:#C8D8C8; font-family: system-ui, sans-serif; margin: 0; padding: 24px; }}
+  h1 {{ color:#E0F0E0; font-size:22px; margin-bottom:4px; }}
+  .meta {{ color:#7A9A7A; font-size:13px; margin-bottom:24px; }}
+  .stats {{ display:flex; gap:16px; margin-bottom:24px; }}
+  .stat {{ background:#243028; border:1px solid #2E4035; border-radius:8px; padding:12px 20px; }}
+  .stat-val {{ font-size:28px; font-weight:700; }}
+  .stat-lbl {{ font-size:12px; color:#7A9A7A; margin-top:2px; }}
+  table {{ width:100%; border-collapse:collapse; }}
+  th {{ padding:6px 8px; text-align:left; background:#243028; color:#7A9A7A; font-weight:600; font-size:12px; }}
+  tr:nth-child(even) {{ background:#1E2C28; }}
+  tr:hover {{ background:#243028; }}
+</style>
+</head>
+<body>
+<h1>Derma6 Eval Results</h1>
+<p class="meta">Run completed: {completed_at}</p>
+<div class="stats">
+  <div class="stat"><div class="stat-val">{total}</div><div class="stat-lbl">Total</div></div>
+  <div class="stat"><div class="stat-val" style="color:#4CAF7D">{passed}</div><div class="stat-lbl">Passed</div></div>
+  <div class="stat"><div class="stat-val" style="color:#E05252">{total - passed}</div><div class="stat-lbl">Failed</div></div>
+  <div class="stat"><div class="stat-val" style="color:{"#4CAF7D" if pass_rate >= 80 else "#F5A623" if pass_rate >= 60 else "#E05252"}">{pass_rate}%</div><div class="stat-lbl">Pass Rate</div></div>
+</div>
+<table>
+<thead><tr>
+  <th>Category</th><th>Test</th><th>Tool</th><th>Input</th>
+  {metric_headers}
+  <th>Status</th>
+</tr></thead>
+<tbody>{rows_html}</tbody>
+</table>
+</body>
+</html>"""
