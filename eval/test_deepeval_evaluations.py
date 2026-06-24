@@ -7,6 +7,9 @@ Run with:
     pytest --run-eval eval/test_deepeval_evaluations.py -v
 
 The judge model uses OpenRouter (same API key as the app).
+
+Live capture (recommended before a full eval run):
+    python eval/capture_outputs.py --update-golden
 """
 
 from __future__ import annotations
@@ -19,18 +22,23 @@ from typing import Any
 import pytest
 
 # ── Judge model configuration ─────────────────────────────────────────────────
-# DeepEval defaults to OpenAI. Redirect to OpenRouter so the same key works.
 os.environ.setdefault("OPENAI_API_KEY", os.environ.get("OPENROUTER_API_KEY", ""))
 os.environ.setdefault("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
 
 from deepeval import assert_test  # noqa: E402
-from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric, GEval  # noqa: E402
+from deepeval.metrics import (  # noqa: E402
+    AnswerRelevancyMetric,
+    ContextualPrecisionMetric,
+    ContextualRecallMetric,
+    ContextualRelevancyMetric,
+    FaithfulnessMetric,
+    GEval,
+)
 from deepeval.test_case import LLMTestCase  # noqa: E402
 
 try:
-    # deepeval >= 2.x
     from deepeval.test_case import SingleTurnParams as _EvalParams
-except ImportError:  # pragma: no cover
+except ImportError:
     from deepeval.test_case import LLMTestCaseParams as _EvalParams  # type: ignore[no-redef]
 
 pytestmark = pytest.mark.eval
@@ -48,7 +56,6 @@ _BY_ID: dict[str, dict] = {case["id"]: case for case in _GOLDEN}
 
 
 def _case(case_id: str) -> LLMTestCase:
-    """Build an LLMTestCase from the golden dataset entry with the given id."""
     row = _BY_ID[case_id]
     return LLMTestCase(
         input=row["input"],
@@ -83,6 +90,18 @@ def _faithfulness() -> FaithfulnessMetric:
     return FaithfulnessMetric(threshold=0.7, model=_JUDGE_MODEL)
 
 
+def _contextual_relevancy() -> ContextualRelevancyMetric:
+    return ContextualRelevancyMetric(threshold=0.7, model=_JUDGE_MODEL)
+
+
+def _contextual_precision() -> ContextualPrecisionMetric:
+    return ContextualPrecisionMetric(threshold=0.7, model=_JUDGE_MODEL)
+
+
+def _contextual_recall() -> ContextualRecallMetric:
+    return ContextualRecallMetric(threshold=0.7, model=_JUDGE_MODEL)
+
+
 def _conflict_format() -> GEval:
     return GEval(
         name="Conflict Checker Output Format",
@@ -98,20 +117,70 @@ def _conflict_format() -> GEval:
     )
 
 
-def _routine_order() -> GEval:
-    return GEval(
-        name="Routine Order Correctness",
-        criteria=(
-            "Given the input products, the response must list only those products in the correct "
-            "canonical skincare order: cleanser first, then toner, then serum, then moisturiser, "
-            "then SPF last. Steps not present in the input must be omitted — do not penalise for "
-            "missing steps that were never provided. Products that ARE listed must appear in "
-            "ascending step-number order consistent with the canonical sequence."
-        ),
-        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
-        threshold=0.8,
-        model=_JUDGE_MODEL,
-    )
+class _RoutineOrderMetric:
+    """Programmatic check: canonical order cleanser → toner → serum → moisturiser → spf.
+
+    Uses string-position comparison rather than an LLM judge, which hallucinated
+    wrong facts about skincare canonical order (see handoff 2026-06-24).
+    """
+
+    name = "Routine Order Correctness"
+    threshold = 0.8
+    score: float = 0.0
+    reason: str | None = None
+
+    def measure(self, test_case: Any) -> float:
+        out = test_case.actual_output.lower()
+        _canonical = ["cleanser", "toner", "serum", "moisturiser", "spf"]
+        positions = {s: out.find(f"{s}:") for s in _canonical}
+        present = {k: v for k, v in positions.items() if v >= 0}
+        ordered = [s for s in _canonical if s in present]
+        if ordered == sorted(ordered, key=lambda s: present[s]):
+            self.score = 1.0
+            self.reason = f"Correct order: {' → '.join(ordered)}"
+        else:
+            self.score = 0.0
+            self.reason = "Out-of-order: " + ", ".join(
+                f"{s}@{present[s]}" for s in ordered
+            )
+        return self.score
+
+    def is_successful(self) -> bool:
+        return self.score >= self.threshold
+
+
+class _UnclassifiableItemsMetric:
+    """Programmatic check: every input item must appear in either the routine order
+    or the 'Unclassifiable items:' section — nothing silently dropped."""
+
+    name = "Unclassifiable Items Reporting"
+    threshold = 0.8
+    score: float = 0.0
+    reason: str | None = None
+
+    def measure(self, test_case: Any) -> float:
+        out = test_case.actual_output
+        items = [i.strip().lower() for i in test_case.input.split(",") if i.strip()]
+        if "Unclassifiable items:" not in out:
+            self.score = 0.0
+            self.reason = "Missing 'Unclassifiable items:' section"
+            return self.score
+        routine_part, unclass_part = out.lower().split("unclassifiable items:", 1)
+        dropped = [i for i in items if i not in routine_part and i not in unclass_part]
+        if dropped:
+            self.score = 0.0
+            self.reason = f"Silently dropped items: {dropped}"
+        else:
+            self.score = 1.0
+            self.reason = "All input items accounted for"
+        return self.score
+
+    def is_successful(self) -> bool:
+        return self.score >= self.threshold
+
+
+def _routine_order() -> _RoutineOrderMetric:
+    return _RoutineOrderMetric()
 
 
 def _phased_intro() -> GEval:
@@ -142,6 +211,19 @@ def _safety() -> GEval:
     )
 
 
+def _domain_relevance() -> GEval:
+    return GEval(
+        name="Skincare Domain Relevance",
+        criteria=(
+            "The response must stay within the skincare domain (UV protection, skin health, etc.). "
+            "It must not include off-topic information."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.9,
+        model=_JUDGE_MODEL,
+    )
+
+
 # ── SPF Recommender ───────────────────────────────────────────────────────────
 
 
@@ -151,6 +233,26 @@ def test_spf_enforces_50_plus():
 
 def test_spf_redirects_low_spf():
     assert_test(_case("spf-02"), [_spf_standard()])
+
+
+def test_spf_seasonal_still_50_plus():
+    """Winter query must still recommend SPF 50+ and mention year-round UV."""
+    metric = GEval(
+        name="Seasonal SPF Consistency",
+        criteria=(
+            "The response must recommend SPF 50+ regardless of season. "
+            "It should clarify that UV radiation is present year-round, including winter."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("spf-03"), [_spf_standard(), metric])
+
+
+def test_spf_15_indoors_redirected():
+    """Indoor worker requesting SPF 15 must be redirected to SPF 50+."""
+    assert_test(_case("spf-04"), [_spf_standard()])
 
 
 # ── Conflict Checker ──────────────────────────────────────────────────────────
@@ -176,6 +278,37 @@ def test_conflict_unknown_ingredient():
     assert_test(_case("conflict-02"), [metric])
 
 
+def test_conflict_safe_pair_identified():
+    """Niacinamide + vitamin C must return a 'safe' verdict with explanation."""
+    metric = GEval(
+        name="Safe Pair Recognition",
+        criteria=(
+            "The verdict must be 'safe'. "
+            "The reason must explain why the combination is not harmful, "
+            "ideally addressing the common misconception about these two ingredients."
+        ),
+        evaluation_params=[_EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("conflict-03"), [_conflict_format(), metric])
+
+
+def test_conflict_exfoliation_stack():
+    """AHA + BHA must be flagged as use-at-different-times to avoid over-exfoliation."""
+    metric = GEval(
+        name="Exfoliation Stack Warning",
+        criteria=(
+            "The verdict must be 'use-at-different-times'. "
+            "The reason must mention the risk of over-exfoliation or skin barrier disruption."
+        ),
+        evaluation_params=[_EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("conflict-04"), [_conflict_format(), metric])
+
+
 # ── Routine Sequencer ─────────────────────────────────────────────────────────
 
 
@@ -184,18 +317,28 @@ def test_routine_correct_order():
 
 
 def test_routine_unclassifiable_reported():
+    assert_test(_case("routine-02"), [_UnclassifiableItemsMetric()])
+
+
+def test_routine_multi_serum_ordering():
+    """Multiple serums must appear together between cleanser and SPF."""
     metric = GEval(
-        name="Unclassifiable Items Reporting",
+        name="Multi-Serum Ordering",
         criteria=(
-            "Known items must be ordered correctly. "
-            "Unknown items must appear in an 'Unclassifiable items:' section — "
-            "they must not be silently ignored."
+            "When multiple serums are present, they must all be grouped in the serum step "
+            "between cleanser and SPF. Their relative order within the serum step should match "
+            "the order they appeared in the input."
         ),
         evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
         threshold=0.8,
         model=_JUDGE_MODEL,
     )
-    assert_test(_case("routine-02"), [metric])
+    assert_test(_case("routine-03"), [_routine_order(), metric])
+
+
+def test_routine_reverse_input_resequenced():
+    """Products given in reverse order must still be output in canonical sequence."""
+    assert_test(_case("routine-04"), [_routine_order()])
 
 
 # ── Skin Type Advisor ─────────────────────────────────────────────────────────
@@ -230,6 +373,38 @@ def test_skin_type_sensitive_classification():
     assert_test(_case("skin-type-02"), [metric])
 
 
+def test_skin_type_combination_classification():
+    """T-zone oily + dry cheeks must be classified as combination."""
+    metric = GEval(
+        name="Combination Skin Classification",
+        criteria=(
+            "Given symptoms that describe an oily T-zone and dry cheeks, "
+            "the classified type must be 'combination'. "
+            "The characteristics must mention both the oily T-zone and drier cheeks."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("skin-type-03"), [metric])
+
+
+def test_skin_type_acneic_classification():
+    """Acne and clogged pore symptoms must be classified as acneic."""
+    metric = GEval(
+        name="Acneic Skin Classification",
+        criteria=(
+            "Given symptoms of acne, pimples, or clogged pores, "
+            "the classified type must be 'acneic'. "
+            "The characteristics must mention breakouts or clogged pores."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("skin-type-04"), [metric])
+
+
 # ── Introduction Scheduler ────────────────────────────────────────────────────
 
 
@@ -253,6 +428,39 @@ def test_intro_conflict_warning():
     assert_test(_case("intro-02"), [metric, _phased_intro()])
 
 
+def test_intro_single_active_no_warnings():
+    """A single active must produce a clean 2-week schedule with no conflict warnings."""
+    metric = GEval(
+        name="Single Active Schedule",
+        criteria=(
+            "The schedule must cover exactly the one active provided, "
+            "with a 2-week introduction block. "
+            "There must be no conflict warnings (no other active to conflict with). "
+            "A plan-saved confirmation must be present."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("intro-03"), [_phased_intro(), metric])
+
+
+def test_intro_three_actives_phased():
+    """Three actives must each get their own 2-week block — 6 weeks total."""
+    metric = GEval(
+        name="Three-Active Phased Schedule",
+        criteria=(
+            "The schedule must introduce each of the three actives in a separate 2-week block. "
+            "No two actives should be introduced in the same week block. "
+            "The total schedule should span at least 6 weeks."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.8,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("intro-04"), [_phased_intro(), metric])
+
+
 # ── KB Search ─────────────────────────────────────────────────────────────────
 
 
@@ -272,3 +480,70 @@ def test_kb_search_domain_scope():
         model=_JUDGE_MODEL,
     )
     assert_test(_case("kb-02"), [metric, _faithfulness()])
+
+
+def test_kb_rag_retrieval_quality_niacinamide():
+    """Retrieved chunks for the niacinamide query must be relevant and faithfully used."""
+    assert_test(
+        _case("kb-01"),
+        [_contextual_relevancy(), _contextual_precision(), _contextual_recall()],
+    )
+
+
+def test_kb_rag_retrieval_quality_spf():
+    """Retrieved chunks for the SPF protection query must be relevant and faithfully used."""
+    assert_test(
+        _case("kb-02"),
+        [_contextual_relevancy(), _contextual_precision(), _contextual_recall()],
+    )
+
+
+def test_kb_retinol_beginner_guidance():
+    """Retinol beginner query must return safe, structured introduction advice."""
+    metric = GEval(
+        name="Retinol Beginner Guidance",
+        criteria=(
+            "The response must: "
+            "1) Recommend starting at a low concentration. "
+            "2) Recommend low initial frequency (1–3 nights per week). "
+            "3) Mention the need for SPF during retinol use. "
+            "4) Not suggest jumping straight to daily use."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("kb-03"), [_answer_relevancy(), _faithfulness(), metric])
+
+
+def test_kb_rag_retrieval_quality_retinol():
+    """Retrieved chunks for the retinol beginner query must be relevant to the question."""
+    assert_test(
+        _case("kb-03"),
+        [_contextual_relevancy(), _contextual_recall()],
+    )
+
+
+def test_kb_sunscreen_types_explained():
+    """Physical vs chemical sunscreen query must clearly distinguish the two types."""
+    metric = GEval(
+        name="Sunscreen Types Distinction",
+        criteria=(
+            "The response must explain both physical (mineral) and chemical sunscreen types. "
+            "It must describe the core mechanism difference: "
+            "physical reflects UV, chemical absorbs/converts UV. "
+            "Both must ultimately be recommended at SPF 50+ standard."
+        ),
+        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
+        threshold=0.7,
+        model=_JUDGE_MODEL,
+    )
+    assert_test(_case("kb-04"), [_answer_relevancy(), _domain_relevance(), metric])
+
+
+def test_kb_rag_retrieval_quality_sunscreen_types():
+    """Retrieved chunks for the sunscreen types query must support the answer."""
+    assert_test(
+        _case("kb-04"),
+        [_contextual_relevancy(), _contextual_precision(), _contextual_recall()],
+    )

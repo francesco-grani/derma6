@@ -3,13 +3,16 @@
     "id": "spf-01",
     "tool": "spf_recommender",
     "input": "What SPF sunscreen should I use daily?",
-    "actual_output": "SPF Recommendation (SPF 50+ / PA+++ standard):\n\nApply a broad-spectrum sunscreen with at least SPF 50+ and PA+++ rating every morning as the final step in your routine, about 15 minutes before sun exposure. Reapply every 2 hours outdoors.\n\nSources: WHO Sun Safety Guidelines",
+    "actual_output": "SPF Recommendation (SPF 50+ / PA+++ standard):\n\n## SPF and PA Ratings\n\n| Rating System | What It Measures | Standard |\n|---|---|---|\n| SPF (Sun Protection Factor) | UVB protection only | SPF 30 blocks ~97%; SPF 50 blocks ~98%; SPF 50+ blocks 98–99% |\n| PA (Protection Grade of UVA) | UVA protection (Japanese/Asian system) | PA+ to PA++++ |\n| PPD (Persistent Pigment Darkening) | UVA protection (EU system) | Must be ≥ SPF/3 in EU |\n| Broad-spectrum label (US) | Passes FDA UVA test | Minimum standard |\n\n**Minimum recommended:** SPF 50 / PA+++ (European Dermatology Forum recommendation). SPF 30 is the absolute minimum for any sun exposure. # SPF Actives Guide\n\n## Overview\n\nSunscreen (SPF) is the single most evidence-backed skincare product for preventing photoageing, hyperpigmentation, and skin cancer. Daily application is not optional — it is the foundation of any skincare routine. Without SPF, the benefits of actives like vitamin C, retinol, and AHAs are partially undermined because UV exposure re-damages the skin these actives are working to repair. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Anti-Acne  \n**INCI Decoder classification:** superstar — cell-communicating ingredient 1. World Health Organization — Radiation: Ultraviolet (UV) radiation: https://www.who.int/news-room/questions-and-answers/item/radiation-ultraviolet-(uv)\n2. Lim, H.W. et al. (2017). \"Current challenges in photoprotection.\" *Journal of the American Academy of Dermatology*, 76(3 Suppl 1), S91–S99. https://doi.org/10.1016/j.jaad.2016.09.040\n3. European Dermatology Forum — Photoprotection guidelines: https://www.euroderm.org/edf/index.php/edf-guidelines/category/5-guidelines-miscellaneous\n4. Flieger, J., & Raszewska-Famielec, M. (2024). \"Skin Protection by Carotenoid Pigments.\" *International Journal of Molecular Sciences*. DOI:10.3390/ijms25031431\n5. Passeron, T., & Lim, H.W. (2021). \"Photoprotection according to skin phototype and dermatoses: practical recommendations from an expert panel.\" *Journal of the European Academy of Dermatology and Venereology*, DOI:10.1111/jdv.17242 ### Step 3: SPF 50+ (AM only — the final step)\n\n**Purpose:** prevents photoageing, hyperpigmentation, and skin cancer. Protects the skin barrier from UV-induced damage. Makes every other skincare investment worthwhile.\n\n**What to look for:**\n- SPF 50 minimum (SPF 50 blocks ~98% UVB vs SPF 30's ~97% — the difference matters in daily cumulative exposure).\n- Broad-spectrum (UVA + UVB protection).\n- PA+++ or PA++++ (for UVA rating).\n- Non-comedogenic and mattifying formulas for oily/acne-prone skin.\n- Tinted formulas can double as light coverage.\n\n**Product examples:**\n- **Oily/acne-prone:** La Roche-Posay Anthelios Clear Skin SPF 60, EltaMD UV Clear SPF 46 (with niacinamide).\n- **Dry/sensitive:** La Roche-Posay Anthelios Melt-In Cream SPF 60, CeraVe AM Facial Moisturising Lotion SPF 30 (SPF 30 minimum — upgrade to dedicated SPF 50 for best protection).\n- **Daily general use:** Altruist SPF 50 (affordable), Bondi Sands SPF 50 Face Mist, Australian Gold Botanical SPF 50. ## 2. Skipping or Under-Applying SPF\n\n**What it looks like:** skipping sunscreen on \"cloudy days,\" \"indoor days,\" applying only a fingertip amount, or relying on SPF-containing moisturiser applied in insufficient quantity.\n\n**What happens:** UV damage accumulates daily. Retinol, vitamin C, and AHA results are partially reversed by unprotected UV exposure. Hyperpigmentation worsens. Premature ageing accelerates.\n\n**Fix:** apply SPF 50 every morning as the last step — 1/4 to 1/2 teaspoon for the face. Indoors or cloudy conditions still expose skin to UVA (which penetrates clouds and glass). ## Application Requirements\n\n- **Amount:** 2 mg/cm² is the standard test application. For the face, this is approximately 1/4 to 1/2 teaspoon (1.25–2.5 ml). Most people apply only 25–50% of this amount, achieving SPF far below the rated value.\n- **Timing:** Apply as the last step in the AM routine, after all other skincare products (moisturiser, vitamin C, etc.). Allow 1–2 minutes for skin to settle before sunscreen application.\n- **Reapplication:** reapply every 2 hours during direct sun exposure. On a typical indoor day with commuting, one morning application is generally adequate.\n- **Order:** SPF is always the last skincare step. Applying anything on top (tinted moisturiser excepted) can disrupt the SPF film.\n\nSources: SPF Actives Guide, Beginner 3-Step Routine for Men, Common Skincare Mistakes",
     "expected_output": "A recommendation for SPF 50+ with PA+++ as a minimum standard.",
     "retrieval_context": [
       "SPF 50+ provides approximately 98% UVB filtration. Apply as the last morning step.",
       "PA+++ rating indicates strong UVA protection. WHO recommends SPF 50+ for daily use."
     ],
-    "tags": ["spf", "recommendation"]
+    "tags": [
+      "spf",
+      "recommendation"
+    ]
   },
   {
     "id": "spf-02",
@@ -18,16 +21,50 @@
     "actual_output": "SPF Standard: The recommended minimum is SPF 50+ with PA+++ or higher (EU/WHO standard). SPF 30 blocks ~97% of UVB vs SPF 50's ~98%, but the gap in real-world application is larger. I recommend SPF 50+ only.\n\nWould you like recommendations for lightweight SPF 50+ options instead?",
     "expected_output": "Redirect to SPF 50+ explaining why SPF 30 is not recommended.",
     "retrieval_context": [],
-    "tags": ["spf", "low-spf-redirect"]
+    "tags": [
+      "spf",
+      "low-spf-redirect"
+    ]
+  },
+  {
+    "id": "spf-03",
+    "tool": "spf_recommender",
+    "input": "What sunscreen should I wear in winter?",
+    "actual_output": "SPF Recommendation (SPF 50+ / PA+++ standard):\n\n## SPF and PA Ratings\n\n| Rating System | What It Measures | Standard |\n|---|---|---|\n| SPF (Sun Protection Factor) | UVB protection only | SPF 30 blocks ~97%; SPF 50 blocks ~98%; SPF 50+ blocks 98–99% |\n| PA (Protection Grade of UVA) | UVA protection (Japanese/Asian system) | PA+ to PA++++ |\n| PPD (Persistent Pigment Darkening) | UVA protection (EU system) | Must be ≥ SPF/3 in EU |\n| Broad-spectrum label (US) | Passes FDA UVA test | Minimum standard |\n\n**Minimum recommended:** SPF 50 / PA+++ (European Dermatology Forum recommendation). SPF 30 is the absolute minimum for any sun exposure. # SPF Actives Guide\n\n## Overview\n\nSunscreen (SPF) is the single most evidence-backed skincare product for preventing photoageing, hyperpigmentation, and skin cancer. Daily application is not optional — it is the foundation of any skincare routine. Without SPF, the benefits of actives like vitamin C, retinol, and AHAs are partially undermined because UV exposure re-damages the skin these actives are working to repair. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Anti-Acne  \n**INCI Decoder classification:** superstar — cell-communicating ingredient 1. World Health Organization — Radiation: Ultraviolet (UV) radiation: https://www.who.int/news-room/questions-and-answers/item/radiation-ultraviolet-(uv)\n2. Lim, H.W. et al. (2017). \"Current challenges in photoprotection.\" *Journal of the American Academy of Dermatology*, 76(3 Suppl 1), S91–S99. https://doi.org/10.1016/j.jaad.2016.09.040\n3. European Dermatology Forum — Photoprotection guidelines: https://www.euroderm.org/edf/index.php/edf-guidelines/category/5-guidelines-miscellaneous\n4. Flieger, J., & Raszewska-Famielec, M. (2024). \"Skin Protection by Carotenoid Pigments.\" *International Journal of Molecular Sciences*. DOI:10.3390/ijms25031431\n5. Passeron, T., & Lim, H.W. (2021). \"Photoprotection according to skin phototype and dermatoses: practical recommendations from an expert panel.\" *Journal of the European Academy of Dermatology and Venereology*, DOI:10.1111/jdv.17242 ### Step 3: SPF 50+ (AM only — the final step)\n\n**Purpose:** prevents photoageing, hyperpigmentation, and skin cancer. Protects the skin barrier from UV-induced damage. Makes every other skincare investment worthwhile.\n\n**What to look for:**\n- SPF 50 minimum (SPF 50 blocks ~98% UVB vs SPF 30's ~97% — the difference matters in daily cumulative exposure).\n- Broad-spectrum (UVA + UVB protection).\n- PA+++ or PA++++ (for UVA rating).\n- Non-comedogenic and mattifying formulas for oily/acne-prone skin.\n- Tinted formulas can double as light coverage.\n\n**Product examples:**\n- **Oily/acne-prone:** La Roche-Posay Anthelios Clear Skin SPF 60, EltaMD UV Clear SPF 46 (with niacinamide).\n- **Dry/sensitive:** La Roche-Posay Anthelios Melt-In Cream SPF 60, CeraVe AM Facial Moisturising Lotion SPF 30 (SPF 30 minimum — upgrade to dedicated SPF 50 for best protection).\n- **Daily general use:** Altruist SPF 50 (affordable), Bondi Sands SPF 50 Face Mist, Australian Gold Botanical SPF 50. ## 2. Skipping or Under-Applying SPF\n\n**What it looks like:** skipping sunscreen on \"cloudy days,\" \"indoor days,\" applying only a fingertip amount, or relying on SPF-containing moisturiser applied in insufficient quantity.\n\n**What happens:** UV damage accumulates daily. Retinol, vitamin C, and AHA results are partially reversed by unprotected UV exposure. Hyperpigmentation worsens. Premature ageing accelerates.\n\n**Fix:** apply SPF 50 every morning as the last step — 1/4 to 1/2 teaspoon for the face. Indoors or cloudy conditions still expose skin to UVA (which penetrates clouds and glass). ## Application Requirements\n\n- **Amount:** 2 mg/cm² is the standard test application. For the face, this is approximately 1/4 to 1/2 teaspoon (1.25–2.5 ml). Most people apply only 25–50% of this amount, achieving SPF far below the rated value.\n- **Timing:** Apply as the last step in the AM routine, after all other skincare products (moisturiser, vitamin C, etc.). Allow 1–2 minutes for skin to settle before sunscreen application.\n- **Reapplication:** reapply every 2 hours during direct sun exposure. On a typical indoor day with commuting, one morning application is generally adequate.\n- **Order:** SPF is always the last skincare step. Applying anything on top (tinted moisturiser excepted) can disrupt the SPF film.\n\nSources: SPF Actives Guide, Beginner 3-Step Routine for Men, Common Skincare Mistakes",
+    "expected_output": "SPF 50+ recommendation that clarifies UV is present year-round, including winter.",
+    "retrieval_context": [
+      "SPF 50+ provides approximately 98% UVB filtration. Apply as the last morning step.",
+      "UV radiation is present year-round and can penetrate clouds. SPF 50+ is recommended daily regardless of season."
+    ],
+    "tags": [
+      "spf",
+      "seasonal"
+    ]
+  },
+  {
+    "id": "spf-04",
+    "tool": "spf_recommender",
+    "input": "I work indoors all day, is SPF 15 enough for me?",
+    "actual_output": "SPF Standard: The recommended minimum is SPF 50+ with PA+++ or higher (EU/WHO standard). SPF 30 blocks ~97% of UVB vs SPF 50's ~98%, but the gap in real-world application is larger. I recommend SPF 50+ only.\n\nWould you like recommendations for lightweight SPF 50+ options instead?",
+    "expected_output": "Redirect to SPF 50+ explaining why SPF 15 is not recommended, even for indoor workers.",
+    "retrieval_context": [],
+    "tags": [
+      "spf",
+      "low-spf-redirect",
+      "indoors"
+    ]
   },
   {
     "id": "conflict-01",
     "tool": "conflict_checker",
     "input": "retinol, vitamin c",
-    "actual_output": "Verdict: use-at-different-times\nReason: Both are potent actives with incompatible pH requirements. L-ascorbic acid works optimally at pH 3–3.5 while retinol is effective at pH 5–6. Use vitamin C in AM and retinol in PM.\nUnknown ingredients: []",
+    "actual_output": "Verdict: use-at-different-times\nReason: Both are potent actives with incompatible pH requirements: L-ascorbic acid (vitamin C) works optimally at pH 3–3.5, while retinol is effective at pH 5–6. Combining them raises the pH of vitamin C, reducing its stability and efficacy, while the low pH accelerates retinol degradation. Additionally, vitamin C can oxidise in the presence of retinol. Recommended routine: vitamin C in AM, retinol in PM. (Sources: Paula's Choice Ingredient Dictionary; Mukherjee S et al., 'Retinoids in the treatment of skin aging', Clin Interv Aging 2006)\nUnknown ingredients: []",
     "expected_output": "Verdict of use-at-different-times with pH incompatibility explanation.",
     "retrieval_context": [],
-    "tags": ["conflict", "known-pair"]
+    "tags": [
+      "conflict",
+      "known-pair"
+    ]
   },
   {
     "id": "conflict-02",
@@ -36,7 +73,34 @@
     "actual_output": "Verdict: unknown_ingredient\nReason: No conflict data for unknown_xyz + retinol. Consult a dermatologist.\nUnknown ingredients: [unknown_xyz, retinol]",
     "expected_output": "unknown_ingredient verdict with recommendation to consult a professional.",
     "retrieval_context": [],
-    "tags": ["conflict", "unknown-pair"]
+    "tags": [
+      "conflict",
+      "unknown-pair"
+    ]
+  },
+  {
+    "id": "conflict-03",
+    "tool": "conflict_checker",
+    "input": "niacinamide, vitamin c",
+    "actual_output": "Verdict: safe\nReason: The long-held belief that niacinamide and vitamin C form niacin (causing flushing) was based on in-vitro studies using high concentrations at elevated temperatures—conditions irrelevant to topical cosmetic use. Modern peer-reviewed evidence and cosmetic chemist consensus confirm the combination is safe and even complementary: niacinamide reduces irritation risk from vitamin C and both provide brightening benefits. Some formulators still recommend applying them sequentially (vitamin C first, wait 30 seconds, then niacinamide) purely as a precaution, not because of proven incompatibility. (Sources: Hakozaki T et al., Br J Dermatol 2002; INCIDecoder niacinamide myths article; Cosmetic Chemist community consensus)\nUnknown ingredients: []",
+    "expected_output": "Verdict of safe with explanation that the flushing concern is a myth not applicable to topical use.",
+    "retrieval_context": [],
+    "tags": [
+      "conflict",
+      "safe-pair"
+    ]
+  },
+  {
+    "id": "conflict-04",
+    "tool": "conflict_checker",
+    "input": "aha, bha",
+    "actual_output": "Verdict: use-at-different-times\nReason: Using an AHA (e.g. glycolic or lactic acid) and a BHA (salicylic acid) at the same time stacks exfoliation and significantly raises the risk of over-exfoliation: compromised skin barrier, increased transepidermal water loss, redness, and sensitivity. For most users—especially beginners—alternate days or use one in AM and one in PM on separate days. Advanced users may combine them at low concentrations with close monitoring. (Sources: INCIDecoder exfoliant guides; Decker A & Graber EM, J Clin Aesthet Dermatol 2012)\nUnknown ingredients: []",
+    "expected_output": "Verdict of use-at-different-times with over-exfoliation risk explanation.",
+    "retrieval_context": [],
+    "tags": [
+      "conflict",
+      "exfoliation-stack"
+    ]
   },
   {
     "id": "routine-01",
@@ -45,7 +109,10 @@
     "actual_output": "Routine order:\n1. cleanser: cleanser\n2. serum: retinol\n3. moisturiser: moisturiser\n4. spf: spf\n\nUnclassifiable items: []",
     "expected_output": "Steps ordered as cleanser → serum → moisturiser → spf.",
     "retrieval_context": [],
-    "tags": ["routine", "ordering"]
+    "tags": [
+      "routine",
+      "ordering"
+    ]
   },
   {
     "id": "routine-02",
@@ -54,70 +121,205 @@
     "actual_output": "Routine order:\n1. cleanser: cleanser\n2. spf: spf\n\nUnclassifiable items: [mystery_serum_xyz]",
     "expected_output": "Known items ordered correctly; unclassifiable items listed separately.",
     "retrieval_context": [],
-    "tags": ["routine", "unclassifiable"]
+    "tags": [
+      "routine",
+      "unclassifiable"
+    ]
+  },
+  {
+    "id": "routine-03",
+    "tool": "routine_sequencer",
+    "input": "niacinamide, cleanser, spf, retinol",
+    "actual_output": "Routine order:\n1. cleanser: cleanser\n2. serum: niacinamide\n3. serum: retinol\n4. spf: spf\n\nUnclassifiable items: []",
+    "expected_output": "cleanser first, then serums (niacinamide then retinol) in input order, then spf last.",
+    "retrieval_context": [],
+    "tags": [
+      "routine",
+      "ordering",
+      "multi-serum"
+    ]
+  },
+  {
+    "id": "routine-04",
+    "tool": "routine_sequencer",
+    "input": "toner, moisturiser, cleanser",
+    "actual_output": "Routine order:\n1. cleanser: cleanser\n2. toner: toner\n3. moisturiser: moisturiser\n\nUnclassifiable items: []",
+    "expected_output": "Reverse-order input correctly resequenced to cleanser → toner → moisturiser.",
+    "retrieval_context": [],
+    "tags": [
+      "routine",
+      "ordering",
+      "reverse-input"
+    ]
   },
   {
     "id": "skin-type-01",
     "tool": "skin_type_advisor",
-    "input": "description: my face gets really shiny and greasy by noon, especially my forehead",
-    "actual_output": "Skin type: oily\n\nCharacteristics: Produces excess sebum throughout the day, leaving a shiny or greasy appearance.\n\nYour profile has been updated.",
+    "input": "description: my face gets really shiny and greasy by noon, especially my forehead | username: testuser",
+    "actual_output": "Skin type: oily\n\nCharacteristics: Oily Skin\n\n**Characteristics:**\n- Visible shine across the entire face, especially prominent in the T-zone (forehead, nose, chin) within 1–2 hours of cleansing.\n\nYour profile has been updated.",
     "expected_output": "Skin type classified as oily with matching characteristics.",
     "retrieval_context": [
       "Oily skin produces excess sebum and appears shiny, especially in the T-zone."
     ],
-    "tags": ["skin-type", "oily"]
+    "tags": [
+      "skin-type",
+      "oily"
+    ]
   },
   {
     "id": "skin-type-02",
     "tool": "skin_type_advisor",
-    "input": "description: my skin turns red and stings whenever I try new products",
-    "actual_output": "Skin type: sensitive\n\nCharacteristics: Reacts easily to products or environmental triggers with redness, burning, or stinging.\n\nYour profile has been updated.",
+    "input": "description: my skin turns red and stings whenever I try new products | username: testuser",
+    "actual_output": "Skin type: sensitive\n\nCharacteristics: Sensitive Skin\n\n**Characteristics:**\n- Frequent redness, stinging, burning, or itching in response to products.\n\nYour profile has been updated.",
     "expected_output": "Skin type classified as sensitive with reactivity-focused characteristics.",
     "retrieval_context": [
       "Sensitive skin reacts to products with redness, burning, or stinging."
     ],
-    "tags": ["skin-type", "sensitive"]
+    "tags": [
+      "skin-type",
+      "sensitive"
+    ]
+  },
+  {
+    "id": "skin-type-03",
+    "tool": "skin_type_advisor",
+    "input": "description: combination skin, oily t-zone and dry cheeks | username: testuser",
+    "actual_output": "Skin type: combination\n\nCharacteristics: Combination Skin\n\n**Characteristics:**\n- Oily or shiny T-zone (forehead, nose, chin).\n\nYour profile has been updated.",
+    "expected_output": "Skin type classified as combination with T-zone oily / cheeks dry description.",
+    "retrieval_context": [],
+    "tags": [
+      "skin-type",
+      "combination"
+    ]
+  },
+  {
+    "id": "skin-type-04",
+    "tool": "skin_type_advisor",
+    "input": "description: I have acne and clogged pores all over my chin and nose | username: testuser",
+    "actual_output": "Skin type: acneic\n\nCharacteristics: Prone to breakouts, blackheads, or cystic blemishes due to clogged pores.\n\nYour profile has been updated.",
+    "expected_output": "Skin type classified as acneic with breakout/clogged-pore description.",
+    "retrieval_context": [],
+    "tags": [
+      "skin-type",
+      "acneic"
+    ]
   },
   {
     "id": "intro-01",
     "tool": "introduction_scheduler",
     "input": "actives: retinol, niacinamide | username: testuser",
-    "actual_output": "Introduction Schedule for: retinol, niacinamide\n\nWeek 1-2: Introduce retinol\n  → Introduce retinol — Use 2x/week initially. Patch test on a small area first.\n\nWeek 3-4: Introduce niacinamide\n  → Introduce niacinamide — Use 2x/week initially. Patch test on a small area first.\n\nYour introduction plan has been saved to your profile.",
+    "actual_output": "Introduction Schedule for: retinol, niacinamide\n\nWeek 1-2: Introduce retinol\n  → Introduce retinol — ## Concentrations  | Concentration | Use Case | |---|---| | 0.025–0.05% | Beginners, sensitive skin | | 0.1–0.3% | Intermediate — after 8–12 weeks of tolerance building | | 0.5–1.0% | Experienced user\n\nWeek 3-4: Introduce niacinamide\n  → Introduce niacinamide — ### Niacinamide (Vitamin B3) *INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*  \"A multi-functional skincare superstar with several proven benefits\" (INCI Deco\n\nYour introduction plan has been saved to your profile.",
     "expected_output": "Phased week-by-week schedule with each active introduced separately over 2 weeks.",
     "retrieval_context": [],
-    "tags": ["intro-scheduler", "phased"]
+    "tags": [
+      "intro-scheduler",
+      "phased"
+    ]
   },
   {
     "id": "intro-02",
     "tool": "introduction_scheduler",
     "input": "actives: benzoyl peroxide, retinol | username: testuser",
-    "actual_output": "Introduction Schedule for: benzoyl peroxide, retinol\n\nWarning: benzoyl peroxide and retinol should not be used together — excluded from concurrent weeks.\n\nWeek 1-2: Introduce benzoyl peroxide\n  → Introduce benzoyl peroxide — Use 2x/week initially.\n\nWeek 3-4: Introduce retinol\n  → Introduce retinol — Use 2x/week initially.\n\nYour introduction plan has been saved to your profile.",
+    "actual_output": "Introduction Schedule for: benzoyl peroxide, retinol\n\nWeek 1-2: Introduce benzoyl peroxide\n  → Introduce benzoyl peroxide — ### Benzoyl Peroxide *INCI Decoder note: \"gold standard topical ingredient in treating acne\" but pro-oxidant*  \"The closest thing we have to a miracle cure for acne\" (INCI Decoder) — highly effective \n\nWeek 3-4: Introduce retinol\n  → Introduce retinol — ## Concentrations  | Concentration | Use Case | |---|---| | 0.025–0.05% | Beginners, sensitive skin | | 0.1–0.3% | Intermediate — after 8–12 weeks of tolerance building | | 0.5–1.0% | Experienced user\n\nYour introduction plan has been saved to your profile.",
     "expected_output": "Warning about the do-not-use conflict and separate weeks for each active.",
     "retrieval_context": [],
-    "tags": ["intro-scheduler", "conflict-warning"]
+    "tags": [
+      "intro-scheduler",
+      "conflict-warning"
+    ]
+  },
+  {
+    "id": "intro-03",
+    "tool": "introduction_scheduler",
+    "input": "actives: niacinamide | username: testuser",
+    "actual_output": "Introduction Schedule for: niacinamide\n\nWeek 1-2: Introduce niacinamide\n  → Introduce niacinamide — ### Niacinamide (Vitamin B3) *INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*  \"A multi-functional skincare superstar with several proven benefits\" (INCI Deco\n\nYour introduction plan has been saved to your profile.",
+    "expected_output": "A simple 2-week introduction block for a single active with no conflict warnings.",
+    "retrieval_context": [],
+    "tags": [
+      "intro-scheduler",
+      "single-active"
+    ]
+  },
+  {
+    "id": "intro-04",
+    "tool": "introduction_scheduler",
+    "input": "actives: retinol, niacinamide, aha | username: testuser",
+    "actual_output": "Introduction Schedule for: retinol, niacinamide, aha\n\nWeek 1-2: Introduce retinol\n  → Introduce retinol — ## Concentrations  | Concentration | Use Case | |---|---| | 0.025–0.05% | Beginners, sensitive skin | | 0.1–0.3% | Intermediate — after 8–12 weeks of tolerance building | | 0.5–1.0% | Experienced user\n\nWeek 3-4: Introduce niacinamide\n  → Introduce niacinamide — ### Niacinamide (Vitamin B3) *INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*  \"A multi-functional skincare superstar with several proven benefits\" (INCI Deco\n\nWeek 5-6: Introduce aha\n  → Introduce aha — ## pH Requirement  Effective AHA products must have a pH below 4 (ideally 3–3.5). At higher pH, the acids exist predominantly in ionised form and cannot penetrate the stratum corneum. Always check pro\n\nYour introduction plan has been saved to your profile.",
+    "expected_output": "Three separate 2-week blocks — one per active — spanning 6 weeks total with no concurrent introductions.",
+    "retrieval_context": [],
+    "tags": [
+      "intro-scheduler",
+      "three-actives",
+      "phased"
+    ]
   },
   {
     "id": "kb-01",
     "tool": "kb_search",
     "input": "What are the benefits of niacinamide?",
-    "actual_output": "Niacinamide (vitamin B3) is a water-soluble vitamin that works with the natural substances in your skin to visibly minimise enlarged pores, tighten lax pores, improve uneven skin tone, soften fine lines and wrinkles, diminish dullness, and strengthen a weakened surface.\n\nIt can also reduce the impact of environmental damage and is suitable for all skin types including acne-prone and sensitive skin.\n\nSources: Paula's Choice Ingredient Dictionary\n\n__RAG_CONTEXT_JSON__: []",
+    "actual_output": "# Niacinamide Profile\n\n## Overview\n\nNiacinamide (nicotinamide) is the amide form of vitamin B3. It is water-soluble, highly stable across a wide pH range (3–9), and exceptionally well-tolerated, making it one of the most versatile actives in modern skincare. It is effective across virtually all skin types — oily, dry, sensitive, and acne-prone. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Pore Minimizer, Soothing.  \n**INCI Decoder classification:** superstar — cell-communicating ingredient.\n\n---\n\n### Niacinamide (Vitamin B3)\n*INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*\n\n\"A multi-functional skincare superstar with several proven benefits\" (INCI Decoder). Benefits at 4–5%: anti-aging, wrinkle smoothing, brown spot fading. Increases ceramide synthesis for a stronger barrier. Effective for acne, rosacea, and atopic dermatitis. **Exceptionally well tolerated** — the lowest irritancy potential of all actives in this KB. The historical concern about niacinamide + vitamin C producing niacin (skin flushing) is largely debunked at cosmetically relevant concentrations and temperatures.\n\n**Photosensitivity:** None.\n**Management:** can be used morning and evening; no slow-introduction required; compatible with most other actives.\n\n---\n\n---\n\n## Mechanism of Action\n\nNiacinamide acts as a precursor to the coenzymes NAD+ (nicotinamide adenine dinucleotide) and NADP+, which are critical in cellular energy metabolism and oxidative stress defence. Key mechanisms include:\n\n---\n\n- **Anti-inflammatory:** inhibits the transfer of melanosomes from melanocytes to keratinocytes and suppresses pro-inflammatory cytokine cascades (TNF-α, IL-1β), reducing redness and irritation.\n- **Barrier reinforcement:** upregulates the synthesis of ceramides, free fatty acids, and cholesterol — the three lipid components of the stratum corneum — thereby strengthening the skin's barrier. Studies have shown that niacinamide increases ceramide synthesis, resulting in a stronger, healthier skin barrier and better hydration (Tanno et al., 2000).\n- **Sebum regulation:** reduces sebocyte lipid synthesis, decreasing surface sebum and pore congestion.\n- **Melanin inhibition:** blocks melanosome transfer (independent of tyrosinase inhibition), fading existing hyperpigmentation and preventing new spots.\n\n---\n\n### Ceramides\n*INCI Decoder classification: skin-identical ingredient / goodie*\n\nCeramides are lipids that form the mortar between skin cells in the stratum corneum. They are skin-identical — the skin produces its own ceramides. Zero irritancy, zero comedogenic risk. Essential for barrier repair after aggressive active use. Ceramide NP (the most common in cosmetics) directly reinforces barrier function and reduces transepidermal water loss (TEWL).\n\n**Photosensitivity:** None.\n**Management:** can be used at any time; particularly valuable during retinol or AHA introduction to buffer barrier disruption.\n\n---\n\nSources: Niacinamide Profile, Ingredient Irritancy Reference\n\n__RAG_CONTEXT_JSON__: [{\"source\": \"Niacinamide Profile\", \"score\": 0.11, \"snippet\": \"# Niacinamide Profile\\n\\n## Overview\\n\\nNiacinamide (nicotinamide) is the amide form of vitamin B3. It is water-soluble, highly stable across a wide pH ra\"}, {\"source\": \"Ingredient Irritancy Reference\", \"score\": 0.097, \"snippet\": \"### Niacinamide (Vitamin B3)\\n*INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*\\n\\n\\\"A multi-functional skincare \"}, {\"source\": \"Niacinamide Profile\", \"score\": 0.077, \"snippet\": \"## Mechanism of Action\\n\\nNiacinamide acts as a precursor to the coenzymes NAD+ (nicotinamide adenine dinucleotide) and NADP+, which are critical in cel\"}, {\"source\": \"Niacinamide Profile\", \"score\": 0.064, \"snippet\": \"- **Anti-inflammatory:** inhibits the transfer of melanosomes from melanocytes to keratinocytes and suppresses pro-inflammatory cytokine cascades (TNF\"}, {\"source\": \"Ingredient Irritancy Reference\", \"score\": 0.046, \"snippet\": \"### Ceramides\\n*INCI Decoder classification: skin-identical ingredient / goodie*\\n\\nCeramides are lipids that form the mortar between skin cells in the s\"}]\n\n__RAG_PIPELINE_META__: {\"final_routing\": \"generate\", \"rag_fallback_triggered\": false, \"retry_triggered\": false}",
     "expected_output": "Benefits of niacinamide including pore minimisation, tone evening, and barrier strengthening.",
     "retrieval_context": [
-      "Niacinamide minimises pores, evens skin tone, and strengthens the skin barrier.",
-      "Niacinamide is suitable for all skin types and is generally well-tolerated."
+      "# Niacinamide Profile\n\n## Overview\n\nNiacinamide (nicotinamide) is the amide form of vitamin B3. It is water-soluble, highly stable across a wide pH range (3–9), and exceptionally well-tolerated, making it one of the most versatile actives in modern skincare. It is effective across virtually all skin types — oily, dry, sensitive, and acne-prone. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Pore Minimizer, Soothing.  \n**INCI Decoder classification:** superstar — cell-communicating ingredient.",
+      "### Niacinamide (Vitamin B3)\n*INCI Decoder classification: cell-communicating ingredient, skin brightening / superstar*\n\n\"A multi-functional skincare superstar with several proven benefits\" (INCI Decoder). Benefits at 4–5%: anti-aging, wrinkle smoothing, brown spot fading. Increases ceramide synthesis for a stronger barrier. Effective for acne, rosacea, and atopic dermatitis. **Exceptionally well tolerated** — the lowest irritancy potential of all actives in this KB. The historical concern about niacinamide + vitamin C producing niacin (skin flushing) is largely debunked at cosmetically relevant concentrations and temperatures.\n\n**Photosensitivity:** None.\n**Management:** can be used morning and evening; no slow-introduction required; compatible with most other actives.\n\n---",
+      "## Mechanism of Action\n\nNiacinamide acts as a precursor to the coenzymes NAD+ (nicotinamide adenine dinucleotide) and NADP+, which are critical in cellular energy metabolism and oxidative stress defence. Key mechanisms include:",
+      "- **Anti-inflammatory:** inhibits the transfer of melanosomes from melanocytes to keratinocytes and suppresses pro-inflammatory cytokine cascades (TNF-α, IL-1β), reducing redness and irritation.\n- **Barrier reinforcement:** upregulates the synthesis of ceramides, free fatty acids, and cholesterol — the three lipid components of the stratum corneum — thereby strengthening the skin's barrier. Studies have shown that niacinamide increases ceramide synthesis, resulting in a stronger, healthier skin barrier and better hydration (Tanno et al., 2000).\n- **Sebum regulation:** reduces sebocyte lipid synthesis, decreasing surface sebum and pore congestion.\n- **Melanin inhibition:** blocks melanosome transfer (independent of tyrosinase inhibition), fading existing hyperpigmentation and preventing new spots."
     ],
-    "tags": ["kb-search", "ingredient"]
+    "tags": [
+      "kb-search",
+      "ingredient"
+    ]
   },
   {
     "id": "kb-02",
     "tool": "kb_search",
     "input": "How does SPF protect from UV damage?",
-    "actual_output": "Sunscreen works by absorbing, reflecting, or scattering UV radiation. SPF (Sun Protection Factor) measures protection against UVB rays that cause sunburn. Broad-spectrum sunscreens also protect against UVA rays, which cause premature aging. SPF 50+ filters about 98% of UVB rays.\n\nSources: WHO Sun Safety Guidelines",
+    "actual_output": "Note: The local knowledge base did not contain sufficient relevant information for this query. The following response is based on general knowledge and should be verified with authoritative skincare sources.\n\n\n\n__RAG_CONTEXT_JSON__: []\n\n__RAG_PIPELINE_META__: {\"final_routing\": \"llm-only\", \"rag_fallback_triggered\": true, \"retry_triggered\": true}",
     "expected_output": "Explanation of UVB/UVA protection mechanisms and SPF 50+ filter rate.",
     "retrieval_context": [
-      "SPF measures how well a sunscreen protects against UVB radiation.",
-      "Broad-spectrum sunscreens protect against both UVA and UVB radiation."
+      "### Step 3: SPF 50+ (AM only — the final step)\n\n**Purpose:** prevents photoageing, hyperpigmentation, and skin cancer. Protects the skin barrier from UV-induced damage. Makes every other skincare investment worthwhile.\n\n**What to look for:**\n- SPF 50 minimum (SPF 50 blocks ~98% UVB vs SPF 30's ~97% — the difference matters in daily cumulative exposure).\n- Broad-spectrum (UVA + UVB protection).\n- PA+++ or PA++++ (for UVA rating).\n- Non-comedogenic and mattifying formulas for oily/acne-prone skin.\n- Tinted formulas can double as light coverage.\n\n**Product examples:**\n- **Oily/acne-prone:** La Roche-Posay Anthelios Clear Skin SPF 60, EltaMD UV Clear SPF 46 (with niacinamide).\n- **Dry/sensitive:** La Roche-Posay Anthelios Melt-In Cream SPF 60, CeraVe AM Facial Moisturising Lotion SPF 30 (SPF 30 minimum — upgrade to dedicated SPF 50 for best protection).\n- **Daily general use:** Altruist SPF 50 (affordable), Bondi Sands SPF 50 Face Mist, Australian Gold Botanical SPF 50.",
+      "## SPF and PA Ratings\n\n| Rating System | What It Measures | Standard |\n|---|---|---|\n| SPF (Sun Protection Factor) | UVB protection only | SPF 30 blocks ~97%; SPF 50 blocks ~98%; SPF 50+ blocks 98–99% |\n| PA (Protection Grade of UVA) | UVA protection (Japanese/Asian system) | PA+ to PA++++ |\n| PPD (Persistent Pigment Darkening) | UVA protection (EU system) | Must be ≥ SPF/3 in EU |\n| Broad-spectrum label (US) | Passes FDA UVA test | Minimum standard |\n\n**Minimum recommended:** SPF 50 / PA+++ (European Dermatology Forum recommendation). SPF 30 is the absolute minimum for any sun exposure.",
+      "## SPF and Skincare Actives\n\n- **Retinol:** increases photosensitivity — SPF is essential.\n- **AHAs:** increase UV sensitivity — SPF is essential.\n- **Vitamin C:** provides additional photoprotection (antioxidant) but does not replace SPF.\n- **BHA (salicylic acid):** mild photosensitisation; SPF recommended.",
+      "## Filter Types\n\n### Mineral (Physical) Filters\nInorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):\n- **Zinc oxide (ZnO):** provides broad-spectrum UVA + UVB coverage; photostable; gentle on sensitive skin; white cast at higher concentrations (nanoparticle forms reduce cast). Zinc oxide is considered to offer the broadest range of UV protection, covering UVB, UVA II, and UVA I almost uniformly (INCI Decoder). It is also recognized as a skin protectant and anti-irritant, often used to treat skin irritations such as diaper rash.\n- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast. Titanium dioxide provides good protection primarily in the UVB and UVA II range but is less effective at UVA I (INCI Decoder). \n\nMineral sunscreens are recommended for sensitive, rosacea-prone, and acne-prone skin due to lower irritation risk."
     ],
-    "tags": ["kb-search", "spf"]
+    "tags": [
+      "kb-search",
+      "spf"
+    ]
+  },
+  {
+    "id": "kb-03",
+    "tool": "kb_search",
+    "input": "How should a beginner start using retinol without irritation?",
+    "actual_output": "## Concentrations\n\n| Concentration | Use Case |\n|---|---|\n| 0.025–0.05% | Beginners, sensitive skin |\n| 0.1–0.3% | Intermediate — after 8–12 weeks of tolerance building |\n| 0.5–1.0% | Experienced users; maximum OTC strength in most markets |\n| >1% | Prescription territory (tretinoin 0.025–0.1%) |\n\n## How to Use\n\n- **Time of day:** PM only. Retinol degrades under UV light and can increase photosensitivity.\n- **Starting frequency:** 2× per week for 4–6 weeks, then increase gradually to nightly if tolerated.\n- **Application:** apply to dry skin (waiting 10–15 minutes after cleansing reduces irritation on sensitive skin).\n- **SPF is mandatory** every morning when using retinol — skin becomes more vulnerable to UV damage.\n\n---\n\n### Glycolic Acid (AHA)\n*INCI Decoder classification: exfoliant, buffering / superstar*\n\n\"Slight stinging or burning with a stronger AHA product is normal\" (INCI Decoder). Concentration and pH both drive irritation — effectiveness and irritancy increase as pH decreases. Rosacea-prone users should use a BHA or PHA instead of glycolic acid. \"The most researched AHA with the most proven skin benefits\" (INCI Decoder).\n\n**Photosensitivity:** Yes — AHAs thin the stratum corneum temporarily; always use SPF when using glycolics.\n**Management:** start at 1–2× per week; avoid stacking with retinol in the same session.\n\n---\n\n---\n\n## Per-Ingredient Irritancy Notes\n\n### Retinol\n*INCI Decoder classification: cell-communicating ingredient / superstar*\n\nRetinol is \"10-to-20 times less potent than retinoic acid\" (INCI Decoder) and has \"much less\" irritation than prescription tretinoin — but it is still the highest-irritancy ingredient in this KB's scope. Irritation manifests as redness, peeling, dryness, and temporary tightness (retinoid dermatitis). Symptoms typically peak in weeks 2–4 and resolve by weeks 6–8 as skin adjusts. Pregnant users must not use any retinoid.\n\n**Photosensitivity:** High — PM use only; mandatory SPF every morning.\n**Management:** buffer over moisturiser, start at 2× per week, increase slowly.\n\n---\n\n---\n\n## How to Use\n\n- Apply to clean, dry skin after cleansing.\n- Leave-on (toner/serum): start 2–3× per week, increase to daily if tolerated.\n- Wash-off (cleanser): use daily; contact time is short, so well tolerated.\n- Can be used AM or PM; PM preferred for leave-on treatments to allow maximum contact time without immediate UV exposure.\n\n---\n\n### 3. Start Low Frequency\n\nFor potentially irritating actives (AHAs, BHAs, retinoids, benzoyl peroxide), begin at 1–2 times per week. Increase frequency only when skin shows no signs of irritation at the current frequency. Typical ramp-up:\n\n| Week | Frequency |\n|------|-----------|\n| 1–2 | 1× per week |\n| 3–4 | 2× per week |\n| 5–6 | Every other day |\n| 7+ | Daily (if tolerated; retinoids often stay at every other day) |\n\nIrritation can accumulate over days, not just appear immediately after a single use. Go slow.\n\n### 4. Minimise Concurrent Irritation Sources\n\nWhen introducing a new active, temporarily pause or reduce other strong actives (e.g. if starting retinol, pause AHAs/BHAs). Stacking multiple irritants during introduction makes it impossible to attribute reactions correctly and increases overall irritation burden.\n\nSources: Retinol Profile, Ingredient Irritancy Reference, BHA Guide, Introduction Schedule Framework\n\n__RAG_CONTEXT_JSON__: [{\"source\": \"Retinol Profile\", \"score\": 0.016, \"snippet\": \"## Concentrations\\n\\n| Concentration | Use Case |\\n|---|---|\\n| 0.025\\u20130.05% | Beginners, sensitive skin |\\n| 0.1\\u20130.3% | Intermediate \\u2014 after 8\\u201312 weeks of \"}, {\"source\": \"Ingredient Irritancy Reference\", \"score\": 0.016, \"snippet\": \"### Glycolic Acid (AHA)\\n*INCI Decoder classification: exfoliant, buffering / superstar*\\n\\n\\\"Slight stinging or burning with a stronger AHA product is no\"}, {\"source\": \"Ingredient Irritancy Reference\", \"score\": 0.016, \"snippet\": \"## Per-Ingredient Irritancy Notes\\n\\n### Retinol\\n*INCI Decoder classification: cell-communicating ingredient / superstar*\\n\\nRetinol is \\\"10-to-20 times le\"}, {\"source\": \"BHA Guide\", \"score\": 0.016, \"snippet\": \"## How to Use\\n\\n- Apply to clean, dry skin after cleansing.\\n- Leave-on (toner/serum): start 2\\u20133\\u00d7 per week, increase to daily if tolerated.\\n- Wash-off (\"}, {\"source\": \"Introduction Schedule Framework\", \"score\": 0.016, \"snippet\": \"### 3. Start Low Frequency\\n\\nFor potentially irritating actives (AHAs, BHAs, retinoids, benzoyl peroxide), begin at 1\\u20132 times per week. Increase freque\"}]\n\n__RAG_PIPELINE_META__: {\"final_routing\": \"generate\", \"rag_fallback_triggered\": false, \"retry_triggered\": false}",
+    "expected_output": "Step-by-step beginner retinol guidance: low concentration, low frequency, gradual increase, SPF requirement.",
+    "retrieval_context": [
+      "## Concentrations\n\n| Concentration | Use Case |\n|---|---|\n| 0.025–0.05% | Beginners, sensitive skin |\n| 0.1–0.3% | Intermediate — after 8–12 weeks of tolerance building |\n| 0.5–1.0% | Experienced users; maximum OTC strength in most markets |\n| >1% | Prescription territory (tretinoin 0.025–0.1%) |\n\n## How to Use\n\n- **Time of day:** PM only. Retinol degrades under UV light and can increase photosensitivity.\n- **Starting frequency:** 2× per week for 4–6 weeks, then increase gradually to nightly if tolerated.\n- **Application:** apply to dry skin (waiting 10–15 minutes after cleansing reduces irritation on sensitive skin).\n- **SPF is mandatory** every morning when using retinol — skin becomes more vulnerable to UV damage.",
+      "### Glycolic Acid (AHA)\n*INCI Decoder classification: exfoliant, buffering / superstar*\n\n\"Slight stinging or burning with a stronger AHA product is normal\" (INCI Decoder). Concentration and pH both drive irritation — effectiveness and irritancy increase as pH decreases. Rosacea-prone users should use a BHA or PHA instead of glycolic acid. \"The most researched AHA with the most proven skin benefits\" (INCI Decoder).\n\n**Photosensitivity:** Yes — AHAs thin the stratum corneum temporarily; always use SPF when using glycolics.\n**Management:** start at 1–2× per week; avoid stacking with retinol in the same session.\n\n---",
+      "## Per-Ingredient Irritancy Notes\n\n### Retinol\n*INCI Decoder classification: cell-communicating ingredient / superstar*\n\nRetinol is \"10-to-20 times less potent than retinoic acid\" (INCI Decoder) and has \"much less\" irritation than prescription tretinoin — but it is still the highest-irritancy ingredient in this KB's scope. Irritation manifests as redness, peeling, dryness, and temporary tightness (retinoid dermatitis). Symptoms typically peak in weeks 2–4 and resolve by weeks 6–8 as skin adjusts. Pregnant users must not use any retinoid.\n\n**Photosensitivity:** High — PM use only; mandatory SPF every morning.\n**Management:** buffer over moisturiser, start at 2× per week, increase slowly.\n\n---",
+      "## How to Use\n\n- Apply to clean, dry skin after cleansing.\n- Leave-on (toner/serum): start 2–3× per week, increase to daily if tolerated.\n- Wash-off (cleanser): use daily; contact time is short, so well tolerated.\n- Can be used AM or PM; PM preferred for leave-on treatments to allow maximum contact time without immediate UV exposure."
+    ],
+    "tags": [
+      "kb-search",
+      "retinol",
+      "beginner"
+    ]
+  },
+  {
+    "id": "kb-04",
+    "tool": "kb_search",
+    "input": "What is the difference between physical and chemical sunscreen?",
+    "actual_output": "## Filter Types\n\n### Mineral (Physical) Filters\nInorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):\n- **Zinc oxide (ZnO):** provides broad-spectrum UVA + UVB coverage; photostable; gentle on sensitive skin; white cast at higher concentrations (nanoparticle forms reduce cast). Zinc oxide is considered to offer the broadest range of UV protection, covering UVB, UVA II, and UVA I almost uniformly (INCI Decoder). It is also recognized as a skin protectant and anti-irritant, often used to treat skin irritations such as diaper rash.\n- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast. Titanium dioxide provides good protection primarily in the UVB and UVA II range but is less effective at UVA I (INCI Decoder). \n\nMineral sunscreens are recommended for sensitive, rosacea-prone, and acne-prone skin due to lower irritation risk.\n\n---\n\n# AHA Guide\n\n## Overview\n\nAlpha-hydroxy acids (AHAs) are water-soluble chemical exfoliants derived from natural sources (fruit acids, milk, sugar cane). Unlike physical scrubs, AHAs dissolve the bonds between dead skin cells without mechanical abrasion, delivering controlled, even exfoliation. They are among the most evidence-backed actives for improving skin texture, tone, and mild acne. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Dark Spot Fading, Evens Skin Tone, Hydration  \n**INCI Decoder classification:** superstar — exfoliant, humectant\n\n---\n\n### Chemical (Organic) Filters\nCarbon-containing molecules that **absorb** UV photons and convert them to heat:\n- **Avobenzone (Butyl Methoxydibenzoylmethane):** UVA filter; inherently photounstable — degrades in sunlight unless stabilised with octocrylene or bemotrizinol. Common in US formulations.\n- **Tinosorb S (Bis-Ethylhexyloxyphenol Methoxyphenyl Triazine):** broad-spectrum UVA + UVB; highly photostable; widely used in EU, Australia. Not yet approved by FDA.\n- **Tinosorb M:** hybrid filter (acts as both mineral and chemical filter); broad-spectrum, photostable.\n- **Mexoryl SX and XL:** UVA filters; photostable; common in EU formulations.\n- **Uvinul A Plus, Uvinul T 150:** newer photostable UV filters common in European and Asian formulations.\n\nEuropean and Asian sunscreen formulations generally provide superior UVA protection compared to US-market formulations due to access to newer, photostable chemical filters not yet FDA-approved.\n\n---\n\n# Ceramides Profile\n\n## Overview\n\nCeramides are a family of lipid molecules (sphingolipids) that form the dominant structural component of the stratum corneum — the outermost layer of the skin. Alongside cholesterol and free fatty acids, ceramides make up the intercellular lipid matrix of the stratum corneum, composing approximately **50% of its lipid content** (with cholesterol at ~25% and fatty acids at ~15%). Together these three components form a \"lamellar bilayer\" structure often compared to mortar between bricks, where the corneocytes (dead skin cells) are the bricks.\n\nThis lipid matrix serves two critical functions:\n1. Preventing trans-epidermal water loss (TEWL) — keeping moisture inside the skin.\n2. Acting as a physical and chemical barrier against pathogens, allergens, and irritants.\n\n**Paula's Choice rating:** Best — benefits: Hydration, Anti-Aging  \n**INCI Decoder classification:** superstar — skin-identical ingredient\n\n---\n\n### Zinc Oxide (SPF active)\n*INCI Decoder classification: sunscreen / goodie*\n*Irritancy: 0/10 | Comedogenicity: 1/10 (INCI Decoder)*\n\nBroadest-spectrum UV filter available, covering UVB, UVA II, and UVA I. \"Highly stable and non-irritating\" — also used as a skin protectant and anti-irritant (diaper rash formulations). Comedogenicity score of 1/10 is low and clinically insignificant for most users. The primary drawback is white cast (especially in non-nanoparticle form). Nanoparticle zinc oxide is widely used and remains on the skin surface rather than absorbing into deeper layers.\n\n---\n\n### Titanium Dioxide (SPF active)\n*INCI Decoder classification: sunscreen, colorant / goodie*\n\nProvides UVB and UVA II coverage (narrower than zinc oxide). Zero irritancy. Also leaves a white cast, though slightly more pronounced than zinc oxide. Often combined with zinc oxide for full-spectrum coverage.\n\n---\n\nSources: SPF Actives Guide, AHA Guide, Ceramides Profile, Ingredient Irritancy Reference\n\n__RAG_CONTEXT_JSON__: [{\"source\": \"SPF Actives Guide\", \"score\": 0.016, \"snippet\": \"## Filter Types\\n\\n### Mineral (Physical) Filters\\nInorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):\\n\"}, {\"source\": \"AHA Guide\", \"score\": 0.016, \"snippet\": \"# AHA Guide\\n\\n## Overview\\n\\nAlpha-hydroxy acids (AHAs) are water-soluble chemical exfoliants derived from natural sources (fruit acids, milk, sugar cane\"}, {\"source\": \"SPF Actives Guide\", \"score\": 0.016, \"snippet\": \"### Chemical (Organic) Filters\\nCarbon-containing molecules that **absorb** UV photons and convert them to heat:\\n- **Avobenzone (Butyl Methoxydibenzoyl\"}, {\"source\": \"Ceramides Profile\", \"score\": 0.016, \"snippet\": \"# Ceramides Profile\\n\\n## Overview\\n\\nCeramides are a family of lipid molecules (sphingolipids) that form the dominant structural component of the stratum\"}, {\"source\": \"Ingredient Irritancy Reference\", \"score\": 0.016, \"snippet\": \"### Zinc Oxide (SPF active)\\n*INCI Decoder classification: sunscreen / goodie*\\n*Irritancy: 0/10 | Comedogenicity: 1/10 (INCI Decoder)*\\n\\nBroadest-spectr\"}]\n\n__RAG_PIPELINE_META__: {\"final_routing\": \"generate\", \"rag_fallback_triggered\": false, \"retry_triggered\": false}",
+    "expected_output": "Clear distinction between physical (mineral, reflects UV) and chemical (absorbs UV) sunscreens, with SPF 50+ recommendation for both.",
+    "retrieval_context": [
+      "## Filter Types\n\n### Mineral (Physical) Filters\nInorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):\n- **Zinc oxide (ZnO):** provides broad-spectrum UVA + UVB coverage; photostable; gentle on sensitive skin; white cast at higher concentrations (nanoparticle forms reduce cast). Zinc oxide is considered to offer the broadest range of UV protection, covering UVB, UVA II, and UVA I almost uniformly (INCI Decoder). It is also recognized as a skin protectant and anti-irritant, often used to treat skin irritations such as diaper rash.\n- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast. Titanium dioxide provides good protection primarily in the UVB and UVA II range but is less effective at UVA I (INCI Decoder). \n\nMineral sunscreens are recommended for sensitive, rosacea-prone, and acne-prone skin due to lower irritation risk.",
+      "# AHA Guide\n\n## Overview\n\nAlpha-hydroxy acids (AHAs) are water-soluble chemical exfoliants derived from natural sources (fruit acids, milk, sugar cane). Unlike physical scrubs, AHAs dissolve the bonds between dead skin cells without mechanical abrasion, delivering controlled, even exfoliation. They are among the most evidence-backed actives for improving skin texture, tone, and mild acne. \n\n**Paula's Choice rating:** Best — benefits: Anti-Aging, Dark Spot Fading, Evens Skin Tone, Hydration  \n**INCI Decoder classification:** superstar — exfoliant, humectant",
+      "### Chemical (Organic) Filters\nCarbon-containing molecules that **absorb** UV photons and convert them to heat:\n- **Avobenzone (Butyl Methoxydibenzoylmethane):** UVA filter; inherently photounstable — degrades in sunlight unless stabilised with octocrylene or bemotrizinol. Common in US formulations.\n- **Tinosorb S (Bis-Ethylhexyloxyphenol Methoxyphenyl Triazine):** broad-spectrum UVA + UVB; highly photostable; widely used in EU, Australia. Not yet approved by FDA.\n- **Tinosorb M:** hybrid filter (acts as both mineral and chemical filter); broad-spectrum, photostable.\n- **Mexoryl SX and XL:** UVA filters; photostable; common in EU formulations.\n- **Uvinul A Plus, Uvinul T 150:** newer photostable UV filters common in European and Asian formulations.\n\nEuropean and Asian sunscreen formulations generally provide superior UVA protection compared to US-market formulations due to access to newer, photostable chemical filters not yet FDA-approved.",
+      "# Ceramides Profile\n\n## Overview\n\nCeramides are a family of lipid molecules (sphingolipids) that form the dominant structural component of the stratum corneum — the outermost layer of the skin. Alongside cholesterol and free fatty acids, ceramides make up the intercellular lipid matrix of the stratum corneum, composing approximately **50% of its lipid content** (with cholesterol at ~25% and fatty acids at ~15%). Together these three components form a \"lamellar bilayer\" structure often compared to mortar between bricks, where the corneocytes (dead skin cells) are the bricks.\n\nThis lipid matrix serves two critical functions:\n1. Preventing trans-epidermal water loss (TEWL) — keeping moisture inside the skin.\n2. Acting as a physical and chemical barrier against pathogens, allergens, and irritants.\n\n**Paula's Choice rating:** Best — benefits: Hydration, Anti-Aging  \n**INCI Decoder classification:** superstar — skin-identical ingredient"
+    ],
+    "tags": [
+      "kb-search",
+      "sunscreen-types"
+    ]
   }
 ]

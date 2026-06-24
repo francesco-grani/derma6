@@ -58,9 +58,6 @@ def _classify_ingredient(ingredient: str) -> str | None:
         for step in STEP_ORDER:
             if step in content_lower and ingredient in content_lower:
                 return step
-        for step in STEP_ORDER:
-            if step in content_lower:
-                return step
     except Exception as exc:
         logger.error("Retriever fallback failed for '%s': %s", ingredient, exc)
 

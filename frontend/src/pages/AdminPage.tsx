@@ -395,18 +395,15 @@ function EvalTab() {
 // ── Metric detail panel (expanded row) ───────────────────────────────────────
 function MetricDetail({ result }: { result: EvalResult }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {result.metrics.map(m => (
-        <div key={m.name} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+        <div key={m.name} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: C.textPrimary, fontSize: 12, fontWeight: 600, minWidth: 220, flexShrink: 0 }}>{m.name}</span>
             <div style={{ width: 160, flexShrink: 0 }}>
               <Progress
                 value={m.score * 100}
-                style={{
-                  height: 6,
-                  background: '#2E3D2F',
-                }}
+                style={{ height: 6, background: '#2E3D2F' }}
                 className="[&>div]:transition-all"
               />
             </div>
@@ -428,8 +425,9 @@ function MetricDetail({ result }: { result: EvalResult }) {
             <span style={{ color: C.textMuted, fontSize: 11, flexShrink: 0 }}>{m.duration_s}s</span>
           </div>
           {m.reason && (
-            <div style={{ paddingLeft: 230, boxSizing: 'border-box' }}>
-              <p style={{ color: C.textMuted, fontSize: 11, margin: 0, lineHeight: 1.5, wordBreak: 'break-word' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '230px 1fr', columnGap: 10 }}>
+              <div />
+              <p style={{ color: C.textMuted, fontSize: 11, margin: 0, lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                 {m.reason}
               </p>
             </div>
