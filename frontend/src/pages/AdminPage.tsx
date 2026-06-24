@@ -245,19 +245,25 @@ function CategorySection({
                         {r.metrics.map(m => (
                           <span
                             key={m.name}
-                            title={`[${m.kind}] ${m.name}: ${m.score.toFixed(3)} / ${m.threshold}`}
+                            title={`${m.name}: ${m.score.toFixed(3)} / ${m.threshold}`}
                             style={{
                               fontSize: 10,
                               padding: '2px 5px',
                               borderRadius: 4,
                               background: m.passed ? '#1A3A2A' : '#3A1A1A',
                               color: m.passed ? C.pass : C.fail,
-                              border: `1px solid ${m.passed ? '#2A5A3A' : '#5A2A2A'}`,
+                              border: `1px solid ${KIND_COLOR[m.kind] ?? C.border}`,
                               cursor: 'help',
                               fontFamily: 'monospace',
                               flexShrink: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
                             }}
                           >
+                            <span style={{ color: KIND_COLOR[m.kind] ?? C.textMuted, opacity: 0.9 }}>
+                              {KIND_LABEL[m.kind] ?? '?'}
+                            </span>
                             {m.score.toFixed(2)}
                           </span>
                         ))}

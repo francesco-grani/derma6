@@ -157,6 +157,54 @@ def _routine_order() -> _RoutineOrderMetric:
     return _RoutineOrderMetric()
 
 
+class _MultiSerumOrderMetric:
+    """Programmatic check: multiple serums must appear in the same relative order
+    they were listed in the input.
+
+    Uses string-position comparison for the same reason as _RoutineOrderMetric:
+    gpt-4o-mini consistently hallucinated wrong facts about serum ordering.
+    """
+
+    name = "Multi-Serum Ordering"
+    threshold = 0.8
+    score: float = 0.0
+    reason: str | None = None
+
+    def measure(self, test_case: Any) -> float:
+        import re
+        out = test_case.actual_output.lower()
+        inp = test_case.input.lower()
+
+        input_items = [i.strip() for i in inp.split(",") if i.strip()]
+        serum_entries = re.findall(r"serum:\s*(\S+)", out)
+
+        if len(serum_entries) <= 1:
+            self.score = 1.0
+            self.reason = "Single or no serums — relative order trivially correct"
+            return self.score
+
+        # Filter input items to those that appear as serum entries in output
+        input_serums_in_order = [i for i in input_items if i in serum_entries]
+
+        if serum_entries == input_serums_in_order:
+            self.score = 1.0
+            self.reason = f"Input order preserved: {' → '.join(serum_entries)}"
+        else:
+            self.score = 0.0
+            self.reason = (
+                f"Serum order mismatch — output: {serum_entries}, "
+                f"expected by input: {input_serums_in_order}"
+            )
+        return self.score
+
+    def is_successful(self) -> bool:
+        return self.score >= self.threshold
+
+
+def _multi_serum_order() -> _MultiSerumOrderMetric:
+    return _MultiSerumOrderMetric()
+
+
 def _phased_intro() -> GEval:
     return GEval(
         name="Phased Introduction Schedule",
@@ -328,19 +376,6 @@ def _exfoliation_stack() -> GEval:
         model=_JUDGE_MODEL,
     )
 
-
-def _multi_serum_order() -> GEval:
-    return GEval(
-        name="Multi-Serum Ordering",
-        criteria=(
-            "When multiple serums are present, they must all be grouped in the serum step "
-            "between cleanser and SPF. Their relative order within the serum step should match "
-            "the order they appeared in the input."
-        ),
-        evaluation_params=[_EvalParams.INPUT, _EvalParams.ACTUAL_OUTPUT],
-        threshold=0.8,
-        model=_JUDGE_MODEL,
-    )
 
 
 def _combination_skin() -> GEval:
