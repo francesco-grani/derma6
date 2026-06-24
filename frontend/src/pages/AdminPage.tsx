@@ -6,11 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
   apiGetAdminUsers,
-  apiGetEvalGolden,
   apiGetEvalStatus,
   apiRunEval,
   type EvalResult,
-  type GoldenCase,
 } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
@@ -124,6 +122,27 @@ function UsersTab() {
 // ── Eval tab ──────────────────────────────────────────────────────────────────
 const LS_KEY = 'derma6_eval_results'
 
+const CATEGORIES = [
+  'SPF Recommender',
+  'Conflict Checker',
+  'Routine Sequencer',
+  'Skin Type Advisor',
+  'Introduction Scheduler',
+  'KB — Answer Quality',
+  'KB — RAG Pipeline',
+] as const
+
+const KIND_LABEL: Record<string, string> = {
+  'llm-judge':   'LLM',
+  'programmatic': 'py',
+  'rag':         'RAG',
+}
+const KIND_COLOR: Record<string, string> = {
+  'llm-judge':   '#4A5A8A',
+  'programmatic': '#5A7A5A',
+  'rag':         '#7A5A2A',
+}
+
 interface CachedEval {
   results: EvalResult[]
   completed_at: string
@@ -146,17 +165,143 @@ function saveCachedEval(results: EvalResult[], completed_at: string) {
   }
 }
 
+// ── Category section ──────────────────────────────────────────────────────────
+function CategorySection({
+  category,
+  rows,
+  expanded,
+  onExpand,
+}: {
+  category: string
+  rows: EvalResult[]
+  expanded: string | null
+  onExpand: (key: string | null) => void
+}) {
+  const catPassed = rows.filter(r => r.passed).length
+  const allPass = catPassed === rows.length
+  const anyFail = catPassed < rows.length
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {/* Section header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6,
+        paddingBottom: 6, borderBottom: `1px solid ${C.border}`,
+      }}>
+        <span style={{ color: C.textPrimary, fontSize: 13, fontWeight: 600 }}>{category}</span>
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+          background: allPass ? '#1A3A2A' : anyFail ? '#3A1A1A' : C.bgDark,
+          color: allPass ? C.pass : anyFail ? C.fail : C.textMuted,
+          border: `1px solid ${allPass ? '#2A5A3A' : anyFail ? '#5A2A2A' : C.border}`,
+        }}>
+          {catPassed}/{rows.length}
+        </span>
+      </div>
+
+      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+        <Table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <colgroup>
+            <col style={{ width: 96 }} />
+            <col />
+            <col style={{ width: 230 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 68 }} />
+          </colgroup>
+          <TableHeader>
+            <TableRow style={{ background: C.bgDark, borderColor: C.border }}>
+              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Test ID</TableHead>
+              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Input</TableHead>
+              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Expected</TableHead>
+              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Metrics</TableHead>
+              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(r => {
+              const key = `${r.test_name}`
+              const isExpanded = expanded === key
+              return (
+                <Fragment key={key}>
+                  <TableRow
+                    onClick={() => onExpand(isExpanded ? null : key)}
+                    style={{
+                      borderColor: C.border,
+                      background: isExpanded ? C.bgDark : C.bg,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{r.test_id}</div>
+                    </TableCell>
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={r.input}>{r.input}</div>
+                    </TableCell>
+                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
+                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={r.expected_output ?? ''}>{r.expected_output ?? '—'}</div>
+                    </TableCell>
+                    <TableCell style={{ overflow: 'hidden', padding: '8px 12px' }}>
+                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                        {r.metrics.map(m => (
+                          <span
+                            key={m.name}
+                            title={`[${m.kind}] ${m.name}: ${m.score.toFixed(3)} / ${m.threshold}`}
+                            style={{
+                              fontSize: 10,
+                              padding: '2px 5px',
+                              borderRadius: 4,
+                              background: m.passed ? '#1A3A2A' : '#3A1A1A',
+                              color: m.passed ? C.pass : C.fail,
+                              border: `1px solid ${m.passed ? '#2A5A3A' : '#5A2A2A'}`,
+                              cursor: 'help',
+                              fontFamily: 'monospace',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {m.score.toFixed(2)}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell style={{ padding: '8px 12px' }}>
+                      <Badge
+                        style={{
+                          background: r.passed ? '#1A3A2A' : '#3A1A1A',
+                          color: r.passed ? C.pass : C.fail,
+                          border: `1px solid ${r.passed ? '#2A5A3A' : '#5A2A2A'}`,
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {r.passed ? 'PASS' : 'FAIL'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+
+                  {isExpanded && (
+                    <TableRow style={{ background: C.bgDark, borderColor: C.border }}>
+                      <TableCell colSpan={5} style={{ padding: '12px 16px', overflow: 'hidden' }}>
+                        <MetricDetail result={r} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
 function EvalTab() {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [activeCategory, setActiveCategory] = useState<string>('All')
   const [cachedEval, setCachedEval] = useState<CachedEval | null>(() => loadCachedEval())
   const loggedUpTo = useRef(0)
   const progressEndRef = useRef<HTMLDivElement>(null)
-
-  const { data: golden } = useQuery({
-    queryKey: ['admin-eval-golden'],
-    queryFn: apiGetEvalGolden,
-  })
 
   const { data: evalStatus } = useQuery({
     queryKey: ['admin-eval-status'],
@@ -198,15 +343,23 @@ function EvalTab() {
   })
 
   const status = evalStatus?.status ?? 'idle'
-  // Use live results when available, fall back to localStorage cache when backend is idle
   const results = evalStatus?.results ?? (status === 'idle' ? cachedEval?.results ?? null : null)
   const isCached = !evalStatus?.results && status === 'idle' && !!cachedEval
   const progress = evalStatus?.progress ?? []
-  const resultMap = new Map<string, EvalResult>(results?.map(r => [r.test_id, r]) ?? [])
 
   const passed = results?.filter(r => r.passed).length ?? 0
   const total = results?.length ?? 0
   const passRate = total > 0 ? Math.round((passed / total) * 100) : 0
+
+  // Group results by category
+  const byCategory = CATEGORIES.reduce<Record<string, EvalResult[]>>((acc, cat) => {
+    acc[cat] = results?.filter(r => r.category === cat) ?? []
+    return acc
+  }, {})
+
+  const visibleCategories = activeCategory === 'All'
+    ? CATEGORIES.filter(c => (byCategory[c]?.length ?? 0) > 0)
+    : CATEGORIES.filter(c => c === activeCategory)
 
   return (
     <div>
@@ -244,7 +397,7 @@ function EvalTab() {
         </div>
       )}
 
-      {/* Live progress feed — visible while running or just after completion */}
+      {/* Live progress feed */}
       {progress.length > 0 && (
         <div style={{ background: '#1C2520', border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', marginBottom: 20, maxHeight: 160, overflowY: 'auto', fontFamily: 'monospace' }}>
           {progress.map((line, i) => {
@@ -260,9 +413,9 @@ function EvalTab() {
         </div>
       )}
 
-      {/* Summary cards — only when results available */}
+      {/* Summary cards */}
       {results && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
           <StatCard label="Total" value={total} />
           <StatCard label="Passed" value={passed} valueColor={C.pass} />
           <StatCard label="Failed" value={total - passed} valueColor={total - passed > 0 ? C.fail : C.textMuted} />
@@ -270,124 +423,73 @@ function EvalTab() {
         </div>
       )}
 
-      {/* Golden dataset + results table */}
-      <div style={{ marginBottom: 8 }}>
-        <p style={{ color: C.textMuted, fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
-          Golden Dataset ({golden?.length ?? 0} cases)
-          {results && <span style={{ marginLeft: 8, color: C.textMuted }}>· click a row to see metric detail</span>}
-        </p>
-      </div>
+      {/* Metric kind legend */}
+      {results && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center' }}>
+          <span style={{ color: C.textMuted, fontSize: 11 }}>Metric type:</span>
+          {Object.entries(KIND_LABEL).map(([kind, label]) => (
+            <span key={kind} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 4, background: KIND_COLOR[kind], color: '#E0E8E0', fontFamily: 'monospace' }}>
+              {label}
+            </span>
+          ))}
+          <span style={{ color: C.textMuted, fontSize: 11, marginLeft: 4 }}>— hover a score chip for details</span>
+        </div>
+      )}
 
-      <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-        <Table style={{ tableLayout: 'fixed', width: '100%' }}>
-          <colgroup>
-            <col style={{ width: 80 }} />
-            <col style={{ width: 190 }} />
-            <col />
-            <col style={{ width: 220 }} />
-            {results && <col style={{ width: 110 }} />}
-            {results && <col style={{ width: 68 }} />}
-          </colgroup>
-          <TableHeader>
-            <TableRow style={{ background: C.bgDark, borderColor: C.border }}>
-              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>ID</TableHead>
-              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Tool</TableHead>
-              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Input</TableHead>
-              <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Expected</TableHead>
-              {results && <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Metrics</TableHead>}
-              {results && <TableHead style={{ color: C.textMuted, fontSize: 11, letterSpacing: '0.06em' }}>Status</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(golden ?? []).map((g: GoldenCase) => {
-              const result = resultMap.get(g.id)
-              const isExpanded = expanded === g.id
-              return (
-                <Fragment key={g.id}>
-                  <TableRow
-                    onClick={() => result && setExpanded(isExpanded ? null : g.id)}
-                    style={{
-                      borderColor: C.border,
-                      background: isExpanded ? C.bgDark : C.bg,
-                      cursor: result ? 'pointer' : 'default',
-                    }}
-                  >
-                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
-                      <div style={{ color: C.textMuted, fontSize: 12, fontFamily: 'monospace', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{g.id}</div>
-                    </TableCell>
-                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
-                      <div style={{ color: C.textPrimary, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{g.tool}</div>
-                    </TableCell>
-                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
-                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.input}>{g.input}</div>
-                    </TableCell>
-                    <TableCell style={{ verticalAlign: 'top', padding: '8px 12px' }}>
-                      <div style={{ color: C.textMuted, fontSize: 12, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }} title={g.expected_output ?? ''}>{g.expected_output ?? '—'}</div>
-                    </TableCell>
-                    {results && (
-                      <TableCell style={{ overflow: 'hidden' }}>
-                        {result ? (
-                          <div style={{ display: 'flex', gap: 3 }}>
-                            {result.metrics.map(m => (
-                              <span
-                                key={m.name}
-                                title={`${m.name}: ${m.score} / ${m.threshold}`}
-                                style={{
-                                  fontSize: 11,
-                                  padding: '2px 5px',
-                                  borderRadius: 4,
-                                  background: m.passed ? '#1A3A2A' : '#3A1A1A',
-                                  color: m.passed ? C.pass : C.fail,
-                                  border: `1px solid ${m.passed ? '#2A5A3A' : '#5A2A2A'}`,
-                                  cursor: 'help',
-                                  fontFamily: 'monospace',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {m.score.toFixed(2)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>
-                        )}
-                      </TableCell>
-                    )}
-                    {results && (
-                      <TableCell>
-                        {result ? (
-                          <Badge
-                            style={{
-                              background: result.passed ? '#1A3A2A' : '#3A1A1A',
-                              color: result.passed ? C.pass : C.fail,
-                              border: `1px solid ${result.passed ? '#2A5A3A' : '#5A2A2A'}`,
-                              fontSize: 11,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {result.passed ? 'PASS' : 'FAIL'}
-                          </Badge>
-                        ) : (
-                          <span style={{ color: C.textMuted, fontSize: 12 }}>—</span>
-                        )}
-                      </TableCell>
-                    )}
-                  </TableRow>
+      {/* Category filter pills */}
+      {results && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 20 }}>
+          {['All', ...CATEGORIES].map(cat => {
+            const isActive = activeCategory === cat
+            const catRows = cat === 'All' ? results : (byCategory[cat] ?? [])
+            const catPassed = catRows.filter(r => r.passed).length
+            const allPass = catPassed === catRows.length && catRows.length > 0
+            const anyFail = catPassed < catRows.length && catRows.length > 0
+            return (
+              <button
+                key={cat}
+                onClick={() => { setActiveCategory(cat); setExpanded(null) }}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: isActive ? 600 : 400,
+                  border: `1px solid ${isActive ? C.btnPrimary : C.border}`,
+                  background: isActive ? C.btnPrimary : 'transparent',
+                  color: isActive ? C.btnPrimaryText : allPass ? C.pass : anyFail ? C.fail : C.textMuted,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                }}
+              >
+                {cat}
+                {catRows.length > 0 && (
+                  <span style={{ marginLeft: 5, opacity: 0.7 }}>
+                    {catPassed}/{catRows.length}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
-                  {/* Expanded metric detail row */}
-                  {isExpanded && result && (
-                    <TableRow key={`${g.id}-detail`} style={{ background: C.bgDark, borderColor: C.border }}>
-                      <TableCell colSpan={6} style={{ padding: '12px 16px', overflow: 'hidden' }}>
-                        <MetricDetail result={result} />
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </div>
+      {/* No results yet */}
+      {!results && (
+        <div style={{ color: C.textMuted, fontSize: 13, padding: '32px 0', textAlign: 'center' }}>
+          No eval results yet — click <strong style={{ color: C.textPrimary }}>Run Eval Suite</strong> to start.
+        </div>
+      )}
+
+      {/* Category sections */}
+      {results && visibleCategories.map(cat => (
+        <CategorySection
+          key={cat}
+          category={cat}
+          rows={byCategory[cat] ?? []}
+          expanded={expanded}
+          onExpand={setExpanded}
+        />
+      ))}
     </div>
   )
 }

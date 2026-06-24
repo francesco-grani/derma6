@@ -267,11 +267,13 @@ export interface MetricResult {
   passed: boolean
   reason: string | null
   duration_s: number
+  kind: 'llm-judge' | 'programmatic' | 'rag'
 }
 
 export interface EvalResult {
   test_id: string
   test_name: string
+  category: string
   tool: string
   input: string
   expected_output: string | null
