@@ -171,29 +171,16 @@ async def _run_eval_background() -> None:
 
 # ── Eval export ───────────────────────────────────────────────────────────────
 
-@router.get("/eval/export/json")
-def export_eval_json(_: str = Depends(require_admin)) -> Response:
-    results = _eval_state.get("results")
-    if not results:
-        raise HTTPException(status_code=404, detail="No eval results available. Run the eval suite first.")
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    payload = json.dumps({
-        "completed_at": _eval_state.get("completed_at"),
-        "results": results,
-    }, indent=2)
-    return Response(
-        content=payload,
-        media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="eval_results_{ts}.json"'},
-    )
+class _EvalExportBody(dict):
+    pass
 
 
-@router.get("/eval/export/html")
-def export_eval_html(_: str = Depends(require_admin)) -> Response:
-    results = _eval_state.get("results")
+@router.post("/eval/export/html")
+def export_eval_html(body: dict[str, Any], _: str = Depends(require_admin)) -> Response:
+    results: list[dict] = body.get("results") or []
     if not results:
-        raise HTTPException(status_code=404, detail="No eval results available. Run the eval suite first.")
-    completed_at = _eval_state.get("completed_at") or datetime.now(timezone.utc).isoformat()
+        raise HTTPException(status_code=400, detail="No results provided.")
+    completed_at: str = body.get("completed_at") or datetime.now(timezone.utc).isoformat()
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     return Response(
         content=_render_eval_html(results, completed_at),
