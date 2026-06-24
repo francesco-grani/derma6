@@ -304,12 +304,10 @@ export async function apiRunEval(): Promise<void> {
   await authedFetch('/api/admin/eval/run', { method: 'POST' })
 }
 
-export async function apiExportEvalJson(): Promise<Blob> {
-  const res = await authedFetch('/api/admin/eval/export/json')
-  return res.blob()
-}
-
-export async function apiExportEvalHtml(): Promise<Blob> {
-  const res = await authedFetch('/api/admin/eval/export/html')
+export async function apiExportEvalHtml(results: EvalResult[], completedAt: string | null): Promise<Blob> {
+  const res = await authedFetch('/api/admin/eval/export/html', {
+    method: 'POST',
+    body: JSON.stringify({ results, completed_at: completedAt }),
+  })
   return res.blob()
 }

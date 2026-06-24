@@ -8,7 +8,6 @@ import {
   apiGetAdminUsers,
   apiGetEvalStatus,
   apiRunEval,
-  apiExportEvalJson,
   apiExportEvalHtml,
   type EvalResult,
 } from '@/lib/api'
@@ -350,6 +349,10 @@ function EvalTab() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-eval-status'] }),
   })
 
+  const status = evalStatus?.status ?? 'idle'
+  const results = evalStatus?.results ?? (status === 'idle' ? cachedEval?.results ?? null : null)
+  const completedAt = evalStatus?.completed_at ?? cachedEval?.completed_at ?? null
+
   function triggerDownload(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -359,18 +362,17 @@ function EvalTab() {
     URL.revokeObjectURL(url)
   }
 
-  async function handleExportJson() {
-    const blob = await apiExportEvalJson()
-    triggerDownload(blob, `eval_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`)
+  function handleExportJson() {
+    if (!results) return
+    const payload = JSON.stringify({ completed_at: completedAt, results }, null, 2)
+    triggerDownload(new Blob([payload], { type: 'application/json' }), `eval_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`)
   }
 
   async function handleExportHtml() {
-    const blob = await apiExportEvalHtml()
+    if (!results) return
+    const blob = await apiExportEvalHtml(results, completedAt)
     triggerDownload(blob, `eval_results_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.html`)
   }
-
-  const status = evalStatus?.status ?? 'idle'
-  const results = evalStatus?.results ?? (status === 'idle' ? cachedEval?.results ?? null : null)
   const isCached = !evalStatus?.results && status === 'idle' && !!cachedEval
   const progress = evalStatus?.progress ?? []
 
