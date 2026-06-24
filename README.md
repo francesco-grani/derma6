@@ -16,6 +16,10 @@
   <img src="https://img.shields.io/badge/uv-package%20manager-7C3AED" alt="uv"/>
 </p>
 
+<p align="center">
+  <strong>Live:</strong> <a href="https://167-233-84-81.sslip.io/">https://167-233-84-81.sslip.io/</a>
+</p>
+
 ---
 
 ## What changed from v1 (AE.2.5)
