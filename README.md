@@ -201,12 +201,25 @@ All parameters are configurable via environment variables with safe defaults —
 
 ## Evaluation
 
-RAGAs evaluation against a 15-question golden dataset (`eval/eval_dataset.json`). Inherited from v1 and updated for the v2 retrieval pipeline.
+[deepeval](https://github.com/confident-ai/deepeval) suite — 28 tests across 7 categories covering all six agent tools and the agentic RAG pipeline. Results are visible in Admin → Eval Dashboard (grouped by category, with per-metric kind tagging).
+
+| Evaluator type | Used for | LLM call? |
+| --- | --- | --- |
+| GEval (LLM-as-judge) | SPF, conflict, skin type, intro scheduler | yes — `gpt-4o-mini` |
+| Programmatic | Routine sequencer order + unclassifiable items | no |
+| Contextual RAG | KB retrieval relevancy, precision, recall | yes |
 
 ```bash
-uv run python scripts/index_kb.py   # build / refresh ChromaDB index
-uv run python scripts/eval_rag.py   # run RAGAs evaluation
+# Refresh actual_output from live tool runs (before eval)
+uv run python eval/capture_outputs.py --update-golden
+
+# Run via pytest
+uv run pytest --run-eval eval/test_deepeval_evaluations.py -v
+
+# Or trigger from the Admin UI: Admin → Eval Dashboard → Run Eval Suite
 ```
+
+See [docs/wiki/Evaluation.md](docs/wiki/Evaluation.md) for the full reference — golden dataset schema, capture script usage, evaluator types, known failing tests, and how to add new cases.
 
 ---
 
