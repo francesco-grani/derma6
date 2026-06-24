@@ -8,7 +8,6 @@ data/
 logs/
 frontend/
 tests/
-eval/
 docs/
 .claude/
 .deepeval/
