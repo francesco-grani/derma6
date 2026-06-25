@@ -38,7 +38,6 @@ from backend.tools.conflict_checker import conflict_checker
 from backend.tools.introduction_scheduler import introduction_scheduler
 from backend.tools.kb_search import kb_search
 from backend.tools.routine_sequencer import routine_sequencer
-from backend.tools.skin_type_advisor import skin_type_advisor
 from backend.tools.spf_recommender import spf_recommender
 
 logger = logging.getLogger(__name__)
@@ -183,9 +182,12 @@ def _tool_instructions(username: str) -> str:
         "Calling the tool IS the save action. Never narrate it. "
         "FORBIDDEN after a routine list: 'Would you like to save', 'Shall I save', "
         "'I will save', 'Saving now', 'Let me save', 'Routine Name:', 'Steps:'.\n"
-        "- skin_type_advisor_tool: Classify the user's skin type and save it to their profile. "
-        "MUST be called as soon as the user describes their skin. "
-        "Input: free-text description of the user's skin.\n"
+        "- skin_type_advisor_tool: Save the inferred skin type to the user's profile. "
+        "Gather enough information (up to 3 exchanges total), then pick the best label from: "
+        "oily, dry, combination, sensitive, dehydrated, acneic. "
+        "Input: your chosen skin type label (one word from that list). "
+        "If still uncertain after 3 exchanges, use 'combination'. "
+        "NEVER pass a description — only the final skin type label.\n"
         "- update_skin_concerns_tool: Save the user's skin concerns. "
         "MUST be called as soon as the user states their concerns. "
         "Input: comma-separated concerns, e.g. \"acne, dark spots\"\n"
@@ -217,10 +219,26 @@ def _make_tools(username: str, store: ProfileStore) -> list:
     """Return username-bound tool list. Username and store injected via closure — LLM never sees them."""
 
     @lc_tool
-    def skin_type_advisor_tool(description: str) -> str:
-        """Classify the user's skin type from their description and save it to their profile."""
-        _audit(username, "skin_type_advisor_tool", description[:100])
-        return skin_type_advisor.invoke(f"description: {description} | username: {username}")
+    def skin_type_advisor_tool(skin_type: str) -> str:
+        """Save the user's inferred skin type to their profile.
+        skin_type: one of 'oily', 'dry', 'combination', 'sensitive', 'dehydrated', 'acneic'.
+        Call this once you have gathered enough information to make a confident classification."""
+        from backend.tools.skin_type_advisor import SKIN_TYPES, _CHARACTERISTICS
+        skin_type = skin_type.strip().lower()
+        if skin_type not in SKIN_TYPES:
+            skin_type = "combination"
+        _audit(username, "skin_type_advisor_tool", skin_type)
+        characteristic = _CHARACTERISTICS.get(skin_type, "")
+        try:
+            store.update_skin_type(username, skin_type)
+            return (
+                f"Skin type: {skin_type}\n\n"
+                f"Characteristics: {characteristic}\n\n"
+                "Your profile has been updated."
+            )
+        except Exception as exc:
+            logger.error("skin_type_advisor_tool failed: %s", exc)
+            return "Sorry, I could not save your skin type. Please try again."
 
     @lc_tool
     def save_routine_tool(name: str, steps: str, suggestions: str = "") -> str:
@@ -563,7 +581,11 @@ def build_system_prompt(profile: UserProfile, store: ProfileStore) -> str:
         sections.append(
             "ONBOARDING: This user has not completed their skin profile. "
             "Collect the following, one question at a time, in this order:\n"
-            "1. Skin description → call skin_type_advisor_tool immediately with their answer.\n"
+            "1. Skin type — ask the user to describe their skin. You may ask up to 2 follow-up "
+            "questions if their answer is too vague to classify. After at most 3 total exchanges "
+            "(your initial question + 2 follow-ups), you MUST pick the best match from: "
+            "oily, dry, combination, sensitive, dehydrated, acneic — then call "
+            "skin_type_advisor_tool with that label. If still uncertain, use 'combination'.\n"
             "2. Skin concerns (e.g. acne, dryness, dark spots) → call update_skin_concerns_tool.\n"
             "3. Facial hair → call update_beard_style_tool('ask') immediately — "
             "the tool shows the user an interactive selection card, no text question needed.\n"
