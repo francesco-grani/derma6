@@ -67,7 +67,7 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 | **Frontend** | React 19, Vite 8, Tailwind 4, shadcn/ui |
 | **Routing** | TanStack Router (type-safe file routes) |
 | **Data fetching** | TanStack Query |
-| **LLM** | OpenRouter — `openai/gpt-4o-mini` (agent), `openai/gpt-4o` (vision) |
+| **LLM** | OpenRouter — `anthropic/claude-haiku-4-5` (agent), `google/gemini-2.5-flash` (vision) |
 | **Embeddings** | OpenRouter — `qwen/qwen3-embedding-8b` |
 | **Vector store** | ChromaDB |
 | **Relational store** | SQLite + SQLAlchemy |
@@ -287,6 +287,32 @@ cd frontend && npx tsc --noEmit
 
 ---
 
+## CI/CD
+
+Two GitHub Actions workflows handle quality gates and deployment.
+
+### CI (`ci.yml`)
+
+Runs on every push to any branch. Two parallel jobs:
+
+| Job | Steps |
+|---|---|
+| **frontend** | `npm run lint` (ESLint) → `npm run build` (TypeScript + Vite) |
+| **backend** | `uv sync --group dev` → `pytest --cov` (fails if coverage drops below 90%) |
+
+### Deploy (`deploy.yml`)
+
+Runs on every push to `main`:
+
+1. Build frontend (`npm run build`)
+2. `rsync` backend to Hetzner VPS (excludes `.env`, `data/`, `.venv/`)
+3. `rsync` `frontend/dist/` → `/app/www/`
+4. SSH in and run `docker compose up --build -d`
+
+Use `[skip ci]` in the commit message to bypass both workflows.
+
+---
+
 ## Design Decisions
 
 | ADR | Decision |
@@ -316,4 +342,4 @@ cd frontend && npx tsc --noEmit
 
 ---
 
-<sub>Derma6 v2 — Turing College AI Engineering Sprint 3 (AE.3.6) · Built with Claude Code · Powered by OpenRouter</sub>
+<sub>Derma6 v2 · Built with Claude Code · Powered by OpenRouter</sub>
