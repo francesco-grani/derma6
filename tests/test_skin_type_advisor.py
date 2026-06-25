@@ -120,11 +120,13 @@ class TestSkinTypeAdvisorTool:
 
     @patch("backend.tools.skin_type_advisor.get_profile_store")
     @patch("backend.tools.skin_type_advisor.retriever")
-    def test_no_match_no_docs_asks_for_detail(self, mock_retriever, mock_get_store):
+    def test_no_match_no_docs_falls_back_to_combination(self, mock_retriever, mock_get_store):
         mock_retriever.query.return_value = []
+        mock_get_store.return_value = MagicMock()
 
         result = skin_type_advisor.invoke("description: fine | username: carol")
-        assert "detail" in result.lower() or "describe" in result.lower()
+        assert "combination" in result.lower()
+        mock_get_store.return_value.update_skin_type.assert_called_once_with("carol", "combination")
 
     @patch("backend.tools.skin_type_advisor.get_profile_store")
     @patch("backend.tools.skin_type_advisor.retriever")
