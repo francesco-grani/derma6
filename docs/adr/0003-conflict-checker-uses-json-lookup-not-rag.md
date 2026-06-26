@@ -1,6 +1,6 @@
 # ADR-0003: Conflict checker uses a JSON lookup table, not vector search
 
-**Status:** Accepted (ported from AE.2.5)  
+**Status:** Accepted (ported from v1)  
 **Date:** 2026-06-17
 
 ## Context

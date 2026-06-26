@@ -2,7 +2,7 @@
 
 ## Delivered (v2)
 
-- [x] Migrate from Streamlit monolith (AE.2.5) to decoupled FastAPI + React architecture
+- [x] Migrate from Streamlit monolith (v1) to decoupled FastAPI + React architecture
 - [x] LangGraph `StateGraph` agent with explicit node/edge topology (prepared for HITL, conditional routing, multi-agent)
 - [x] SSE streaming via `StreamingResponse` (`text/event-stream`)
 - [x] JWT auth — username + bcrypt, `BaseHTTPMiddleware` + `Depends(get_current_user)` hybrid

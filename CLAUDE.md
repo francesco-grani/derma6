@@ -4,13 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Turing College AI Engineering Sprint 3. Goal: TBD.
-
-**Selected project:** TBD
-
-## Tech Stack
-
-- TBD
+Derma6 — AI skincare assistant for male beginners.
 
 ## Spec Workflow
 

@@ -22,11 +22,11 @@
 
 ---
 
-## What changed from v1 (AE.2.5)
+## What changed from v1
 
 Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architecture. Same skincare domain, same 10 core behaviours — production-grade stack:
 
-| | v1 (AE.2.5) | v2 (AE.3.6) |
+| | v1 | v2 |
 |---|---|---|
 | **Frontend** | Streamlit | React 19 + Vite + Tailwind + shadcn/ui |
 | **Routing** | Streamlit pages | TanStack Router (type-safe) |
