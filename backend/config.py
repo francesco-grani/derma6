@@ -44,9 +44,10 @@ class Settings(BaseSettings):
     )
 
     # Storage
-    sqlite_db_path: str = Field(
-        default="./data/skincare.db",
-        alias="SQLITE_DB_PATH",
+    database_url: str = Field(
+        ...,
+        alias="DATABASE_URL",
+        description="Postgres connection string (raw, as provided by Supabase) or a sqlite:/// URL for tests",
     )
     chroma_persist_dir: str = Field(
         default="./data/chroma",
@@ -126,9 +127,18 @@ class Settings(BaseSettings):
     )
 
     @property
-    def sqlite_url(self) -> str:
-        """SQLAlchemy-compatible connection string derived from sqlite_db_path."""
-        return f"sqlite:///{self.sqlite_db_path}"
+    def sqlalchemy_database_url(self) -> str:
+        """SQLAlchemy dialect-qualified URL derived from database_url.
+
+        Supabase provides a raw postgresql:// string; SQLAlchemy needs the
+        driver qualified explicitly (psycopg v3). sqlite:// URLs (tests) pass
+        through unchanged.
+        """
+        if self.database_url.startswith("postgresql://"):
+            return self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        if self.database_url.startswith("postgres://"):
+            return self.database_url.replace("postgres://", "postgresql+psycopg://", 1)
+        return self.database_url
 
 
 try:

@@ -39,7 +39,7 @@ class ProfileStore:
         if engine is not None:
             self._engine = engine
         else:
-            url = db_url or settings.sqlite_url
+            url = db_url or settings.sqlalchemy_database_url
             self._engine = create_engine(url)
             Base.metadata.create_all(self._engine)
 

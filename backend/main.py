@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.agent.graph import close_checkpointer, init_checkpointer
 from backend.api import admin, analysis, auth, chat, export, hitl, profile, routines, sessions
 from backend.config import settings
 from backend.db.models import init_db
@@ -20,7 +21,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    await init_checkpointer()
     yield
+    await close_checkpointer()
 
 
 app = FastAPI(

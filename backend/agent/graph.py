@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import uuid
+from contextlib import AsyncExitStack
 from typing import AsyncIterator
 
 from langchain_core.messages import (
@@ -19,7 +20,8 @@ from langchain_core.messages import (
 )
 from langchain_core.tools import tool as lc_tool
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import interrupt, Command
@@ -46,9 +48,31 @@ _AUDIT_LOGGER = logging.getLogger("derma6.audit")
 
 # ── Module-level singletons ───────────────────────────────────────────────────
 
-# Shared in-memory checkpointer — enables HITL interrupt/resume within a process lifetime.
-# Replace with AsyncSqliteSaver for persistence across restarts.
-_checkpointer = MemorySaver()
+# Postgres-backed checkpointer — enables HITL interrupt/resume to survive process
+# restarts and be resumed by a different instance. Opened via init_checkpointer()
+# in the FastAPI lifespan; not usable before that runs.
+_checkpointer: BaseCheckpointSaver | None = None
+_checkpointer_exit_stack: AsyncExitStack | None = None
+
+
+async def init_checkpointer() -> None:
+    """Open the Postgres checkpointer connection pool. Call once at app startup."""
+    global _checkpointer, _checkpointer_exit_stack
+    _checkpointer_exit_stack = AsyncExitStack()
+    _checkpointer = await _checkpointer_exit_stack.enter_async_context(
+        AsyncPostgresSaver.from_conn_string(settings.database_url)
+    )
+    await _checkpointer.setup()
+
+
+async def close_checkpointer() -> None:
+    """Close the Postgres checkpointer connection pool. Call once at app shutdown."""
+    global _checkpointer, _checkpointer_exit_stack
+    if _checkpointer_exit_stack is not None:
+        await _checkpointer_exit_stack.aclose()
+        _checkpointer_exit_stack = None
+    _checkpointer = None
+
 
 _store = get_profile_store()
 _sess_store = get_session_store()
@@ -656,9 +680,15 @@ def build_graph(tools: list, system_prompt: str):
 
     Topology: agent → (tools_condition) → tools → agent (loop until no tool calls)
 
-    Uses the module-level _checkpointer (MemorySaver) so interrupt/resume works
-    within a process lifetime. thread_id = session_id keeps runs isolated.
+    Uses the module-level _checkpointer (Postgres-backed) so interrupt/resume
+    survives process restarts and works across instances. thread_id = run_id
+    keeps runs isolated.
     """
+    if _checkpointer is None:
+        raise RuntimeError(
+            "Checkpointer not initialized — init_checkpointer() must run in the "
+            "FastAPI lifespan before build_graph() is called."
+        )
     llm_with_tools = _llm.bind_tools(tools)
 
     def agent_node(state: MessagesState):

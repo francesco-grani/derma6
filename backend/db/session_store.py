@@ -28,13 +28,12 @@ class SessionStoreError(Exception):
 class SessionStore:
     def __init__(self, db_url: Optional[str] = None, engine=None) -> None:
         if engine is not None:
-            # Shared engine path: init_db() already ran create_all + migrations.
+            # Shared engine path: init_db() already ran create_all.
             self._engine = engine
         else:
-            url = db_url or settings.sqlite_url
+            url = db_url or settings.sqlalchemy_database_url
             self._engine = create_engine(url)
             Base.metadata.create_all(self._engine)
-            self._migrate_token_columns()
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -181,28 +180,6 @@ class SessionStore:
         if user is None:
             raise SessionStoreError(f"User '{username}' not found.")
         return user
-
-    def _migrate_token_columns(self) -> None:
-        """Add token/cost columns to chat_sessions if they don't exist yet.
-
-        SQLAlchemy create_all() never alters existing tables, so we do this
-        once at startup via raw SQL. Safe to call repeatedly.
-        """
-        cols = {
-            "total_prompt_tokens": "INTEGER DEFAULT 0",
-            "total_completion_tokens": "INTEGER DEFAULT 0",
-            "total_cost_usd": "REAL DEFAULT 0.0",
-        }
-        with Session(self._engine) as session:
-            for col, definition in cols.items():
-                try:
-                    session.execute(text(f"SELECT {col} FROM chat_sessions LIMIT 1"))
-                except Exception:
-                    session.execute(
-                        text(f"ALTER TABLE chat_sessions ADD COLUMN {col} {definition}")
-                    )
-                    session.commit()
-                    logger.info("Added column chat_sessions.%s", col)
 
     def _maybe_migrate_legacy(self, session: Session, user: User, username: str) -> None:
         """If legacy message_store rows exist (session_id=username) and no ChatSession

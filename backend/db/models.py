@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import ForeignKey, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from backend.config import settings
 
@@ -160,49 +160,15 @@ class SkinAnalysis(Base):
 
 # Database engine — module-level singleton; tables are NOT created here.
 # Call init_db() once at application startup (via FastAPI lifespan).
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
-engine = create_engine(settings.sqlite_url)
-
-
-def _ensure_schema(eng) -> None:
-    """Add columns introduced after initial deployment without full Alembic migrations."""
-    with eng.connect() as conn:
-        rs_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(routine_steps)"))}
-        if "budget_product" not in rs_cols:
-            conn.execute(text("ALTER TABLE routine_steps ADD COLUMN budget_product VARCHAR"))
-            conn.commit()
-
-        u_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
-        if "beard_style" not in u_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN beard_style VARCHAR"))
-            conn.commit()
-        if "location" not in u_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN location VARCHAR"))
-            conn.commit()
-        if "is_admin" not in u_cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
-            conn.commit()
-
-
-def _migrate_chat_session_columns(eng) -> None:
-    """Add token/cost columns to chat_sessions if they don't exist yet."""
-    cols = {
-        "total_prompt_tokens": "INTEGER DEFAULT 0",
-        "total_completion_tokens": "INTEGER DEFAULT 0",
-        "total_cost_usd": "REAL DEFAULT 0.0",
-    }
-    with Session(eng) as session:
-        for col, definition in cols.items():
-            try:
-                session.execute(text(f"SELECT {col} FROM chat_sessions LIMIT 1"))
-            except Exception:
-                session.execute(text(f"ALTER TABLE chat_sessions ADD COLUMN {col} {definition}"))
-                session.commit()
+engine = create_engine(settings.sqlalchemy_database_url)
 
 
 def init_db() -> None:
-    """Create all tables and apply schema migrations. Call once at application startup."""
+    """Create all tables. Call once at application startup.
+
+    Schema evolution after the initial deployment is handled by Alembic
+    migrations (alembic/), not here.
+    """
     Base.metadata.create_all(engine)
-    _ensure_schema(engine)
-    _migrate_chat_session_columns(engine)

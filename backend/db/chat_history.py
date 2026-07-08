@@ -20,7 +20,7 @@ def get_history(session_id: str) -> BaseChatMessageHistory:
     """
     return SQLChatMessageHistory(
         session_id=session_id,
-        connection=settings.sqlite_url,
+        connection=settings.sqlalchemy_database_url,
     )
 
 

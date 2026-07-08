@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 
 # ── Environment (before any project import) ──────────────────────────────────
 os.environ.setdefault("OPENROUTER_API_KEY", "test-key-unit-tests")
-os.environ.setdefault("SQLITE_DB_PATH", "/tmp/test_derma6_unit.db")
+os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/test_derma6_unit.db")
 os.environ.setdefault("CHROMA_PERSIST_DIR", "/tmp/test_chroma_unit")
 
 # ── Stub chromadb so kb_search._retriever = Retriever() never opens a real DB ─
