@@ -195,7 +195,11 @@ class SessionStore:
             )
             count = result.fetchone()[0]
         except Exception:
-            return  # message_store doesn't exist yet
+            # message_store doesn't exist yet. On Postgres a failed statement
+            # aborts the whole transaction — roll back so the session remains
+            # usable for the caller's subsequent queries.
+            session.rollback()
+            return
 
         if count > 0:
             legacy = ChatSession(

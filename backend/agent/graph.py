@@ -905,7 +905,7 @@ async def stream_agent_response(
                                 accumulated_text.append(text)
                                 yield _sse({"type": "text", "content": text})
 
-        snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
+        snapshot = await graph.aget_state({"configurable": {"thread_id": run_id}})
         for task in snapshot.tasks:
             for intr in task.interrupts:
                 yield _sse({"type": "interrupt", "run_id": run_id, **intr.value})
@@ -1025,7 +1025,7 @@ async def stream_resume_response(
                                 accumulated_text.append(text)
                                 yield _sse({"type": "text", "content": text})
 
-        snapshot = graph.get_state({"configurable": {"thread_id": run_id}})
+        snapshot = await graph.aget_state({"configurable": {"thread_id": run_id}})
         for task in snapshot.tasks:
             for intr in task.interrupts:
                 yield _sse({"type": "interrupt", "run_id": run_id, **intr.value})
