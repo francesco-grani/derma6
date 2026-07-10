@@ -24,54 +24,14 @@ Agents live in `.claude/agents/kfc/`. Load `spec-system-prompt-loader` first if 
 
 ## Available Skills
 
-Use the `Skill` tool to invoke any of these. Sources: project-local (`.claude/skills/`), global plugin cache (`superpowers`, `frontend-design`), and Matt Pocock set (global cache via `skills-lock.json`).
+Use the `Skill` tool to invoke any of these. Sources: project-local (`.claude/skills/`), global plugin cache (`superpowers`, `frontend-design`), and Matt Pocock set (global cache via `skills-lock.json`). This is a deliberately small core set — other skills exist in the global caches and can still be invoked ad hoc via the `Skill` tool if a genuine need arises, they just aren't standing entries here.
 
-### Always-on workflow
 | Skill | When to invoke |
 | ----- | -------------- |
-| `superpowers:using-superpowers` | Session start — establishes skill discovery rules |
-| `superpowers:brainstorming` | Before any feature, component, or behaviour change |
-| `superpowers:writing-plans` | Before multi-step implementation — turns spec into a plan |
 | `superpowers:test-driven-development` | Implementing any feature or bugfix |
+| `superpowers:systematic-debugging` | Any bug, test failure, or unexpected behaviour |
 | `superpowers:verification-before-completion` | Before claiming work is done or creating a PR |
 | `superpowers:requesting-code-review` | After completing a feature or before merging |
-
-### Debugging & architecture
-| Skill | When to invoke |
-| ----- | -------------- |
-| `superpowers:systematic-debugging` | Any bug, test failure, or unexpected behaviour |
-| `diagnose` | Hard bugs — full reproduce → minimise → fix loop |
-| `improve-codebase-architecture` | Architecture review, refactor opportunities, testability |
-| `grill-with-docs` | Stress-test a plan against `CONTEXT.md` and ADRs |
-
-### Planning & design
-| Skill | When to invoke |
-| ----- | -------------- |
-| `grill-me` | Stress-test your own design through relentless questioning |
-| `prototype` | Throwaway prototype to validate a design or data model |
-| `triage` | Create or triage GitHub issues |
-| `to-prd` | Turn conversation context into a PRD |
-| `to-issues` | Break a plan into independently-grabbable GitHub issues |
-
-### Execution
-| Skill | When to invoke |
-| ----- | -------------- |
-| `superpowers:executing-plans` | Execute a written plan in a new session with review checkpoints |
-| `superpowers:subagent-driven-development` | Execute plans with independent tasks in the current session |
-| `superpowers:dispatching-parallel-agents` | 2+ independent tasks with no shared state |
-| `superpowers:using-git-worktrees` | Feature work that needs isolation from the current workspace |
-| `tdd` | Red-green-refactor TDD loop |
-
-### Handoff & integration
-| Skill | When to invoke |
-| ----- | -------------- |
-| `superpowers:finishing-a-development-branch` | Implementation complete, tests pass — decide how to integrate |
 | `superpowers:receiving-code-review` | Receiving code review feedback before implementing suggestions |
+| `superpowers:using-git-worktrees` | Feature work that needs isolation from the current workspace |
 | `handoff` | Compact the conversation for another agent to pick up |
-
-### Utilities
-| Skill | When to invoke |
-| ----- | -------------- |
-| `caveman` | Reduce token usage — ultra-compressed communication mode |
-| `zoom-out` | Step back and check alignment with the bigger picture |
-| `write-a-skill` | Create or edit skills |
