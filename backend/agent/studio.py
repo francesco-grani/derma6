@@ -14,6 +14,7 @@ from backend.rag.pipeline.graph import RagPipelineGraph
 from backend.schemas import UserProfile
 
 _profile = UserProfile(
+    user_id="studio_user",
     username="studio_user",
     skin_type="normal",
     skin_concerns=["acne", "dark spots"],

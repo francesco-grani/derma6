@@ -4,7 +4,7 @@ Uses pydantic-settings for environment variable management with validation.
 Fails fast at import time if required variables are missing.
 """
 
-from pydantic import Field, ValidationError, field_validator
+from pydantic import Field, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -75,6 +75,37 @@ class Settings(BaseSettings):
         default=60 * 24,  # 24 hours
         alias="ACCESS_TOKEN_EXPIRE_MINUTES",
     )
+
+    # Supabase Auth (Bundle 2 — JWT verification against the Supabase project)
+    supabase_url: str = Field(
+        ...,
+        alias="SUPABASE_URL",
+        description="Supabase project URL (e.g. https://<project-ref>.supabase.co)",
+    )
+    supabase_jwks_url: str = Field(
+        default="",
+        alias="SUPABASE_JWKS_URL",
+        description=(
+            "Supabase JWKS endpoint used to verify JWT signatures. "
+            "Derived from supabase_url (f'{supabase_url}/auth/v1/.well-known/jwks.json') "
+            "when not explicitly set."
+        ),
+    )
+    supabase_jwt_secret: str = Field(
+        default="",
+        alias="SUPABASE_JWT_SECRET",
+        description="Shared-secret HS256 fallback for JWT verification, used only if the "
+        "project is not configured for JWKS-based (RS256/ES256) verification.",
+    )
+
+    @field_validator("supabase_jwks_url", mode="after")
+    @classmethod
+    def _derive_jwks_url(cls, v: str, info: ValidationInfo) -> str:
+        """Derive the JWKS URL from supabase_url when not explicitly configured."""
+        if v:
+            return v
+        supabase_url = info.data.get("supabase_url", "")
+        return f"{supabase_url}/auth/v1/.well-known/jwks.json"
 
     # Input validation
     max_message_chars: int = Field(default=2000, alias="MAX_MESSAGE_CHARS")

@@ -24,9 +24,12 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Supabase-issued UUID string; always supplied at insert time, never
+    # generated locally (Req 7.1). Username remains a secondary, uniquely
+    # indexed attribute (Req 7.3) — it is no longer the join key.
+    id: Mapped[str] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(unique=True, index=True)
-    password_hash: Mapped[Optional[str]] = mapped_column(default=None)
+    email: Mapped[str] = mapped_column(unique=True, index=True)
     skin_type: Mapped[Optional[str]] = mapped_column(default=None)
     skin_concerns: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     has_shaving_routine: Mapped[Optional[bool]] = mapped_column(default=None)
@@ -67,7 +70,7 @@ class Routine(Base):
     __tablename__ = "routines"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     name: Mapped[str]  # e.g., "Morning", "Evening"
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -105,7 +108,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id: Mapped[str] = mapped_column(primary_key=True)  # UUID string
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     title: Mapped[Optional[str]] = mapped_column(default=None)
     total_prompt_tokens: Mapped[int] = mapped_column(default=0)
     total_completion_tokens: Mapped[int] = mapped_column(default=0)
@@ -125,7 +128,7 @@ class IntroductionPlan(Base):
     __tablename__ = "introduction_plans"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     plan_json: Mapped[str]  # JSON-serialised list[IntroductionWeek]
     actives_list: Mapped[str]  # JSON-serialised list[str]
     status: Mapped[str] = mapped_column(default="active")  # "active"|"completed"|"paused"
@@ -145,7 +148,7 @@ class SkinAnalysis(Base):
     __tablename__ = "skin_analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
     condition: Mapped[str]
     confidence: Mapped[float]
     alternatives_json: Mapped[str]  # JSON-serialised list[{condition, probability}]

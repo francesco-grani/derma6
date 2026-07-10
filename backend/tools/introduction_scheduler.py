@@ -224,6 +224,27 @@ def _format_output(
     return "\n".join(lines)
 
 
+def build_introduction_plan(actives: list[str]) -> tuple[IntroductionPlanSchema, str]:
+    """Build a phased introduction plan from a typed list of actives.
+
+    Pure orchestration reused by the live agent's `introduction_scheduler_tool`
+    closure (capstone-round Task 7): reuses `_check_conflicts()`,
+    `_build_schedule()`, and `_format_output()` unchanged, with no string
+    parsing and no I/O — persistence is the caller's responsibility.
+
+    Args:
+        actives: List of active ingredient names.
+
+    Returns:
+        Tuple of (IntroductionPlanSchema, formatted display text).
+    """
+    do_not_use_pairs, warnings = _check_conflicts(actives)
+    weeks = _build_schedule(actives, do_not_use_pairs)
+    plan = IntroductionPlanSchema(actives=actives, weeks=weeks, status="active")
+    formatted = _format_output(actives, weeks, warnings)
+    return plan, formatted
+
+
 @tool
 def introduction_scheduler(input_str: str) -> str:
     """Generate a phased introduction schedule for new skincare actives.

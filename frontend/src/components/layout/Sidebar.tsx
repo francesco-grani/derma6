@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useAuth } from '@/lib/auth'
 import { useSession } from '@/lib/sessionContext'
-import { getToken } from '@/lib/api'
 import { useProfile } from '@/hooks/useProfile'
 import { useSessions, useDeleteSession } from '@/hooks/useSessions'
 import { Button } from '@/components/ui/button'
@@ -24,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export default function Sidebar() {
-  const { username, isAdmin, logout } = useAuth()
+  const { username, isAdmin, token, logout } = useAuth()
   const navigate = useNavigate()
   const { data: profile } = useProfile()
   const { sessionId, setSessionId, startNewSession } = useSession()
@@ -46,7 +45,6 @@ export default function Sidebar() {
   }
 
   async function handleExport(format: 'html' | 'pdf') {
-    const token = getToken()
     const res = await fetch(`/api/me/export?format=${format}`, {
       headers: { Authorization: `Bearer ${token}` },
     })

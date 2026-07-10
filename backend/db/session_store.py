@@ -3,7 +3,7 @@
 Each user can have multiple named sessions. session_id is a UUID string used
 as the key in SQLChatMessageHistory (message_store table).
 
-Migration: existing users with legacy username-keyed history get a
+Migration: existing users with legacy user_id-keyed history get a
 "Previous conversations" session created lazily on first call to get_sessions().
 """
 
@@ -37,32 +37,32 @@ class SessionStore:
 
     # ── Public API ──────────────────────────────────────────────────────────
 
-    def create_session(self, username: str) -> str:
+    def create_session(self, user_id: str) -> str:
         """Create a new session for user and return its session_id (UUID)."""
         try:
             with Session(self._engine) as session:
-                user = self._get_user_or_raise(session, username)
+                user = self._get_user_or_raise(session, user_id)
                 session_id = str(uuid.uuid4())
                 session.add(ChatSession(id=session_id, user_id=user.id, title=None))
                 session.commit()
-                logger.info("Created session %s for %s", session_id, username)
+                logger.info("Created session %s for %s", session_id, user_id)
                 return session_id
         except SessionStoreError:
             raise
         except SQLAlchemyError as exc:
-            logger.error("create_session failed for %s: %s", username, exc)
+            logger.error("create_session failed for %s: %s", user_id, exc)
             raise SessionStoreError(str(exc)) from exc
 
-    def get_sessions(self, username: str) -> list[dict]:
+    def get_sessions(self, user_id: str) -> list[dict]:
         """Return all sessions for a user ordered by updated_at desc.
 
-        On first call, lazily migrates existing legacy history (session_id=username)
+        On first call, lazily migrates existing legacy history (session_id=user_id)
         by creating a 'Previous conversations' session entry for it.
         """
         try:
             with Session(self._engine) as session:
-                user = self._get_user_or_raise(session, username)
-                self._maybe_migrate_legacy(session, user, username)
+                user = self._get_user_or_raise(session, user_id)
+                self._maybe_migrate_legacy(session, user, user_id)
                 rows = (
                     session.query(ChatSession)
                     .filter_by(user_id=user.id)
@@ -81,12 +81,12 @@ class SessionStore:
         except SessionStoreError:
             raise
         except SQLAlchemyError as exc:
-            logger.error("get_sessions failed for %s: %s", username, exc)
+            logger.error("get_sessions failed for %s: %s", user_id, exc)
             raise SessionStoreError(str(exc)) from exc
 
-    def get_active_session_id(self, username: str) -> Optional[str]:
+    def get_active_session_id(self, user_id: str) -> Optional[str]:
         """Return the most recently updated session_id, or None if no sessions exist."""
-        sessions = self.get_sessions(username)
+        sessions = self.get_sessions(user_id)
         return sessions[0]["session_id"] if sessions else None
 
     def update_title(self, session_id: str, title: str) -> None:
@@ -114,11 +114,11 @@ class SessionStore:
         except SQLAlchemyError as exc:
             logger.error("touch_session failed for %s: %s", session_id, exc)
 
-    def delete_session(self, session_id: str, username: str) -> None:
+    def delete_session(self, session_id: str, user_id: str) -> None:
         """Delete a session (and its messages via message_store cascade in code)."""
         try:
             with Session(self._engine) as session:
-                user = self._get_user_or_raise(session, username)
+                user = self._get_user_or_raise(session, user_id)
                 row = (
                     session.query(ChatSession)
                     .filter_by(id=session_id, user_id=user.id)
@@ -133,11 +133,11 @@ class SessionStore:
                     {"sid": session_id},
                 )
                 session.commit()
-                logger.info("Deleted session %s for %s", session_id, username)
+                logger.info("Deleted session %s for %s", session_id, user_id)
         except SessionStoreError:
             raise
         except SQLAlchemyError as exc:
-            logger.error("delete_session failed for %s/%s: %s", username, session_id, exc)
+            logger.error("delete_session failed for %s/%s: %s", user_id, session_id, exc)
             raise SessionStoreError(str(exc)) from exc
 
     def add_token_usage(
@@ -175,23 +175,23 @@ class SessionStore:
 
     # ── Private helpers ─────────────────────────────────────────────────────
 
-    def _get_user_or_raise(self, session: Session, username: str) -> User:
-        user = session.query(User).filter_by(username=username).first()
+    def _get_user_or_raise(self, session: Session, user_id: str) -> User:
+        user = session.get(User, user_id)
         if user is None:
-            raise SessionStoreError(f"User '{username}' not found.")
+            raise SessionStoreError(f"User '{user_id}' not found.")
         return user
 
-    def _maybe_migrate_legacy(self, session: Session, user: User, username: str) -> None:
-        """If legacy message_store rows exist (session_id=username) and no ChatSession
+    def _maybe_migrate_legacy(self, session: Session, user: User, user_id: str) -> None:
+        """If legacy message_store rows exist (session_id=user_id) and no ChatSession
         covers them yet, create a 'Previous conversations' session for them."""
         existing_ids = {r.id for r in session.query(ChatSession).filter_by(user_id=user.id).all()}
-        if username in existing_ids:
+        if user_id in existing_ids:
             return  # already migrated
 
         try:
             result = session.execute(
                 text("SELECT COUNT(*) FROM message_store WHERE session_id = :sid"),
-                {"sid": username},
+                {"sid": user_id},
             )
             count = result.fetchone()[0]
         except Exception:
@@ -203,10 +203,10 @@ class SessionStore:
 
         if count > 0:
             legacy = ChatSession(
-                id=username,
+                id=user_id,
                 user_id=user.id,
                 title="Previous conversations",
             )
             session.add(legacy)
             session.commit()
-            logger.info("Migrated legacy history for %s (%d messages)", username, count)
+            logger.info("Migrated legacy history for %s (%d messages)", user_id, count)

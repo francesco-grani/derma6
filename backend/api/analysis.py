@@ -14,8 +14,9 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.config import settings
 from backend.db.deps import get_db, get_profile_store
-from backend.db.models import SkinAnalysis, User
+from backend.db.models import SkinAnalysis
 from backend.db.profile_store import ProfileStore, ProfileStoreError
+from backend.llm.structured import StructuredOutputError, structured_completion
 from backend.schemas import (
     Alternative,
     SaveConditionRequest,
@@ -44,25 +45,35 @@ def _prepare_for_vision(data: bytes) -> tuple[bytes, str]:
     return buf.getvalue(), "image/jpeg"
 
 _SYSTEM_PROMPT = (
-    "You are a dermatology screening assistant. Analyse the skin image and return a JSON object "
-    "with this exact shape — no markdown fences, pure JSON only:\n"
-    '{"condition":"<primary condition>","confidence":<float 0-1>,'
-    '"alternatives":[{"condition":"<name>","probability":"<e.g. 12.3%>"}],'
-    '"reasoning":"<1-2 sentence description of visible features>",'
-    '"disclaimer":"This is an AI screening tool for educational purposes only. '
-    'It does not constitute a medical diagnosis. Please consult a qualified dermatologist."}\n\n'
+    "You are a dermatology screening assistant. Analyse the skin image and identify: the "
+    "primary condition; your confidence (a float between 0 and 1); up to 3 alternative "
+    "conditions with probability > 5% each; a 1-2 sentence reasoning describing visible "
+    "features; and a disclaimer stating this is an AI screening tool for educational "
+    "purposes only, does not constitute a medical diagnosis, and the user should consult "
+    "a qualified dermatologist.\n\n"
     "Focus on these 12 conditions: Acne, Actinic Keratosis, Basal Cell Carcinoma, "
     "Benign Keratosis, Dermatofibroma, Eczema, Melanocytic Nevi, Melanoma, Nail Fungus, "
     "Psoriasis, Ringworm, Vascular Lesion. "
-    "If the image does not clearly show a skin condition, set condition to \"Unclear\" and confidence to 0.0. "
-    "Include up to 3 alternatives with probability > 5%."
+    "If the image does not clearly show a skin condition, set condition to \"Unclear\" and confidence to 0.0."
+)
+
+# Explicit JSON-shape instruction for the prompt-only fallback path (Req 1.3) — the
+# schema-constrained primary path relies on structured_completion()'s response_format
+# instead, so this is only ever appended when that path is unavailable/rejected.
+_FALLBACK_JSON_SHAPE_SUFFIX = (
+    "Return ONLY valid JSON matching this exact shape — no markdown fences, pure JSON only:\n"
+    '{"condition":"<primary condition>","confidence":<float 0-1>,'
+    '"alternatives":[{"condition":"<name>","probability":"<e.g. 12.3%, or null if unknown>"}],'
+    '"reasoning":"<1-2 sentence description of visible features>",'
+    '"disclaimer":"This is an AI screening tool for educational purposes only. '
+    'It does not constitute a medical diagnosis. Please consult a qualified dermatologist."}'
 )
 
 
 @router.post("/analyze-skin", response_model=SkinAnalysisResult)
 async def analyze_skin(
     file: UploadFile = File(...),
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if file.content_type not in _ALLOWED_TYPES:
@@ -74,7 +85,7 @@ async def analyze_skin(
     data = await file.read()
     logger.info(
         "analyze-skin: user=%s content_type=%r size_bytes=%d",
-        username, file.content_type, len(data),
+        user_id, file.content_type, len(data),
     )
     if len(data) > _MAX_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="Image too large. Max 10 MB.")
@@ -82,7 +93,7 @@ async def analyze_skin(
     try:
         data, mime = _prepare_for_vision(data)
     except Exception as exc:
-        logger.error("Image preparation failed for %s: %s", username, exc)
+        logger.error("Image preparation failed for %s: %s", user_id, exc)
         raise HTTPException(status_code=422, detail="Could not process image. Please upload a valid JPEG, PNG, or WebP file.") from exc
 
     b64 = base64.b64encode(data).decode()
@@ -94,44 +105,36 @@ async def analyze_skin(
     )
 
     try:
-        response = await client.chat.completions.create(
+        result, used_fallback = await structured_completion(
+            client,
             model=settings.vision_model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+            system_prompt=_SYSTEM_PROMPT,
+            user_content=[
                 {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime};base64,{b64}"},
-                        },
-                        {"type": "text", "text": "Analyse this skin image."},
-                    ],
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{b64}"},
                 },
+                {"type": "text", "text": "Analyse this skin image."},
             ],
+            schema_model=SkinAnalysisResult,
             max_tokens=512,
             temperature=0.1,
+            fallback_prompt_suffix=_FALLBACK_JSON_SHAPE_SUFFIX,
         )
+    except StructuredOutputError as exc:
+        logger.error("Could not parse vision response for %s: %s", user_id, exc)
+        raise HTTPException(
+            status_code=502, detail="Could not parse analysis result."
+        ) from exc
     except Exception as exc:
-        logger.error("Vision model call failed for %s: %s", username, exc)
+        logger.error("Vision model call failed for %s: %s", user_id, exc)
         raise HTTPException(
             status_code=502, detail="Vision model unavailable. Please try again."
         ) from exc
 
-    raw = (response.choices[0].message.content or "").strip()
-    logger.info("Vision raw response for %s: %r", username, raw[:500])
-    try:
-        parsed = json.loads(raw)
-        result = SkinAnalysisResult(**parsed)
-    except Exception as exc:
-        logger.error("Failed to parse vision response for %s: %r", username, raw[:200])
-        raise HTTPException(
-            status_code=502, detail="Could not parse analysis result."
-        ) from exc
-
     logger.info(
-        "Skin analysis for %s: condition=%s confidence=%.2f reasoning=%r",
-        username, result.condition, result.confidence, result.reasoning,
+        "Skin analysis for %s: condition=%s confidence=%.2f reasoning=%r used_fallback=%s",
+        user_id, result.condition, result.confidence, result.reasoning, used_fallback,
     )
 
     # Build thumbnail (256px longest side)
@@ -144,38 +147,33 @@ async def analyze_skin(
     full_b64 = base64.b64encode(data).decode()
 
     try:
-        user = db.query(User).filter(User.username == username).first()
-        if user:
-            record = SkinAnalysis(
-                user_id=user.id,
-                condition=result.condition,
-                confidence=result.confidence,
-                alternatives_json=json.dumps([a.model_dump() for a in result.alternatives]),
-                reasoning=result.reasoning,
-                disclaimer=result.disclaimer,
-                image_b64=full_b64,
-                thumbnail_b64=thumb_b64,
-            )
-            db.add(record)
-            db.commit()
-            logger.info("Saved skin analysis id=%d for %s", record.id, username)
+        record = SkinAnalysis(
+            user_id=user_id,
+            condition=result.condition,
+            confidence=result.confidence,
+            alternatives_json=json.dumps([a.model_dump() for a in result.alternatives]),
+            reasoning=result.reasoning,
+            disclaimer=result.disclaimer,
+            image_b64=full_b64,
+            thumbnail_b64=thumb_b64,
+        )
+        db.add(record)
+        db.commit()
+        logger.info("Saved skin analysis id=%d for %s", record.id, user_id)
     except Exception as exc:
-        logger.error("Failed to persist skin analysis for %s: %s", username, exc)
+        logger.error("Failed to persist skin analysis for %s: %s", user_id, exc)
 
     return result
 
 
 @router.get("/skin-analyses", response_model=list[SkinAnalysisRecord])
 def get_skin_analyses(
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return []
     rows = (
         db.query(SkinAnalysis)
-        .filter(SkinAnalysis.user_id == user.id)
+        .filter(SkinAnalysis.user_id == user_id)
         .order_by(SkinAnalysis.created_at.asc())
         .all()
     )
@@ -198,36 +196,33 @@ def get_skin_analyses(
 @router.delete("/skin-analyses/{analysis_id}", status_code=204)
 def delete_skin_analysis(
     analysis_id: int,
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Not found.")
     record = (
         db.query(SkinAnalysis)
-        .filter(SkinAnalysis.id == analysis_id, SkinAnalysis.user_id == user.id)
+        .filter(SkinAnalysis.id == analysis_id, SkinAnalysis.user_id == user_id)
         .first()
     )
     if not record:
         raise HTTPException(status_code=404, detail="Analysis not found.")
     db.delete(record)
     db.commit()
-    logger.info("Deleted skin analysis id=%d for %s", analysis_id, username)
+    logger.info("Deleted skin analysis id=%d for %s", analysis_id, user_id)
 
 
 @router.post("/medical-flags")
 def save_medical_flag(
     body: SaveConditionRequest,
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     store: ProfileStore = Depends(get_profile_store),
 ):
     condition = body.condition.strip()
     if not condition:
         raise HTTPException(status_code=422, detail="Condition name is required.")
     try:
-        store.add_medical_flag(username, condition)
-        logger.info("Medical flag '%s' saved for %s via analysis page", condition, username)
+        store.add_medical_flag(user_id, condition)
+        logger.info("Medical flag '%s' saved for %s via analysis page", condition, user_id)
         return {"saved": True, "condition": condition}
     except ProfileStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

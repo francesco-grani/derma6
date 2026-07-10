@@ -1,36 +1,33 @@
-/** Typed fetch wrappers. All authenticated calls inject the JWT from localStorage. */
+import { supabase } from './supabaseClient'
 
-export function getToken(): string | null {
-  return localStorage.getItem('derma6_token')
+/**
+ * Typed fetch wrappers. Authenticated calls inject the bearer token from the
+ * current Supabase session (supabase-js owns token storage/refresh — see
+ * `lib/auth.tsx` — nothing here reads or writes an auth token via
+ * `localStorage` anymore).
+ */
+
+/**
+ * Resolves the current Supabase session's access token, or null when signed
+ * out. Exported so call sites that can't route through `authedFetch()`
+ * (e.g. `useStreamChat.ts`'s raw SSE `fetch()`, which needs a readable
+ * stream rather than the parsed-JSON response `authedFetch()` returns) can
+ * still attach the bearer token the same way.
+ */
+export async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ?? null
 }
 
-export function getUsername(): string | null {
-  return localStorage.getItem('derma6_username')
-}
-
-export function getIsAdmin(): boolean {
-  return localStorage.getItem('derma6_is_admin') === 'true'
-}
-
-export function setAuth(token: string, username: string, isAdmin: boolean) {
-  localStorage.setItem('derma6_token', token)
-  localStorage.setItem('derma6_username', username)
-  localStorage.setItem('derma6_is_admin', String(isAdmin))
-}
-
-export function clearAuth() {
-  localStorage.removeItem('derma6_token')
-  localStorage.removeItem('derma6_username')
-  localStorage.removeItem('derma6_is_admin')
-}
-
-function handleUnauthorized() {
-  clearAuth()
+async function handleUnauthorized() {
+  // The backend rejected the token as invalid/expired/malformed (Req 6.4);
+  // drop the now-stale local Supabase session so the app stops retrying it.
+  await supabase.auth.signOut().catch(() => {})
   window.location.replace('/login')
 }
 
 async function authedFetch(path: string, init: RequestInit = {}) {
-  const token = getToken()
+  const token = await getAccessToken()
   const res = await fetch(path, {
     ...init,
     headers: {
@@ -40,7 +37,7 @@ async function authedFetch(path: string, init: RequestInit = {}) {
     },
   })
   if (res.status === 401) {
-    handleUnauthorized()
+    await handleUnauthorized()
     throw new Error('Session expired')
   }
   if (!res.ok) {
@@ -52,35 +49,49 @@ async function authedFetch(path: string, init: RequestInit = {}) {
 
 // ── Auth ──────────────────────────────────────────────────────────────────
 
-export async function apiRegister(username: string, password: string) {
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
-  })
+/**
+ * GET /api/auth/username-available?u=<candidate>. Public — no bearer token
+ * required. Backs the live-typing availability check during signup
+ * (Req 4.2) and the pre-submit gate that blocks completion on a taken
+ * username (Req 4.3).
+ */
+export async function apiCheckUsername(u: string): Promise<boolean> {
+  const res = await fetch(`/api/auth/username-available?u=${encodeURIComponent(u)}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Registration failed')
+    throw new Error(err.detail ?? 'Username check failed')
   }
-  return res.json() as Promise<{ access_token: string; username: string; is_admin: boolean }>
+  const data = (await res.json()) as { available: boolean }
+  return data.available
 }
 
-export async function apiLogin(username: string, password: string) {
-  const res = await fetch('/api/auth/login', {
+/**
+ * POST /api/auth/complete-signup. Public — Supabase issues no session while
+ * email confirmation is pending, so this call cannot carry a bearer token.
+ * Provisions the local `users` row keyed by the Supabase-issued UUID, using
+ * the explicitly-submitted email and username (Req 4.4).
+ */
+export async function apiCompleteSignup(
+  supabase_user_id: string,
+  email: string,
+  username: string,
+): Promise<{ user_id: string; username: string }> {
+  const res = await fetch('/api/auth/complete-signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ supabase_user_id, email, username }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Login failed')
+    throw new Error(err.detail ?? 'Signup failed')
   }
-  return res.json() as Promise<{ access_token: string; username: string; is_admin: boolean }>
+  return res.json() as Promise<{ user_id: string; username: string }>
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────
 
 export interface UserProfile {
+  user_id: string
   username: string
   skin_type: string | null
   skin_concerns: string[]
@@ -89,6 +100,7 @@ export interface UserProfile {
   location: string | null
   medical_flags: string[]
   onboarding_complete: boolean
+  is_admin: boolean
 }
 
 export async function apiGetProfile(): Promise<UserProfile> {
@@ -202,7 +214,7 @@ export async function apiDeleteSkinAnalysis(id: number): Promise<void> {
 }
 
 export async function apiAnalyzeSkin(file: File): Promise<SkinAnalysisResult> {
-  const token = getToken()
+  const token = await getAccessToken()
   const body = new FormData()
   body.append('file', file)
   const res = await fetch('/api/me/analyze-skin', {
@@ -211,7 +223,7 @@ export async function apiAnalyzeSkin(file: File): Promise<SkinAnalysisResult> {
     body,
   })
   if (res.status === 401) {
-    handleUnauthorized()
+    await handleUnauthorized()
     throw new Error('Session expired')
   }
   if (!res.ok) {

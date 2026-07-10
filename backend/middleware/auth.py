@@ -1,7 +1,8 @@
 """JWT authentication middleware for FastAPI.
 
-Validates Bearer tokens on all routes except public paths.
-On success, sets request.state.username from the token's 'sub' claim.
+Validates Supabase-issued Bearer tokens on all routes except public paths.
+On success, sets request.state.user_id from the token's 'sub' claim (the
+Supabase user UUID).
 """
 
 from jose import JWTError
@@ -9,11 +10,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from backend.auth import decode_access_token
+from backend.auth import verify_supabase_jwt
 
 _PUBLIC_PATHS = frozenset({
-    "/api/auth/login",
-    "/api/auth/register",
+    "/api/auth/complete-signup",
+    "/api/auth/username-available",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -32,9 +33,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
         token = auth_header[len("Bearer "):]
         try:
-            username = decode_access_token(token)
+            claims = verify_supabase_jwt(token)
         except JWTError:
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
-        request.state.username = username
+        request.state.user_id = claims["sub"]
         return await call_next(request)

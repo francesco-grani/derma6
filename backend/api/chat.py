@@ -15,11 +15,11 @@ router = APIRouter(tags=["chat"])
 @router.post("/api/chat")
 async def chat(
     req: ChatRequest,
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     _: None = Depends(check_chat_content),
 ):
     return StreamingResponse(
-        stream_agent_response(username, req.message, req.session_id),
+        stream_agent_response(user_id, req.message, req.session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -29,7 +29,7 @@ async def chat(
 
 
 @router.get("/api/me/chat/history", response_model=list[ChatHistoryMessage])
-def chat_history(session_id: str, username: str = Depends(get_current_user)):
+def chat_history(session_id: str, user_id: str = Depends(get_current_user)):
     """Return persisted chat history for a session."""
     messages = serialise_history(session_id)
     return [

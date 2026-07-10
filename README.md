@@ -67,7 +67,7 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 | **Frontend** | React 19, Vite 8, Tailwind 4, shadcn/ui |
 | **Routing** | TanStack Router (type-safe file routes) |
 | **Data fetching** | TanStack Query |
-| **LLM** | OpenRouter — `anthropic/claude-haiku-4-5` (agent), `google/gemini-2.5-flash` (vision) |
+| **LLM** | OpenRouter — `anthropic/claude-haiku-4.5` (agent), `google/gemini-2.5-flash` (vision) |
 | **Embeddings** | OpenRouter — `qwen/qwen3-embedding-8b` |
 | **Vector store** | ChromaDB |
 | **Relational store** | SQLite + SQLAlchemy |

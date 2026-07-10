@@ -7,6 +7,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
 from backend.agent.graph import (
+    _audit,
     _sanitise,
     _sanitise_retrieved,
     build_system_prompt,
@@ -203,7 +204,7 @@ class TestExtractToolResults:
 
 class TestBuildSystemPrompt:
     def test_onboarding_prompt_included(self):
-        profile = UserProfile(username="alice", onboarding_complete=False)
+        profile = UserProfile(user_id="uid-alice", username="alice", onboarding_complete=False)
         prompt = build_system_prompt(profile, MagicMock())
         assert "ONBOARDING" in prompt
         assert "skin description" in prompt.lower() or "skin" in prompt.lower()
@@ -213,6 +214,7 @@ class TestBuildSystemPrompt:
         mock_store.get_all_routines.return_value = []
 
         profile = UserProfile(
+            user_id="uid-bob",
             username="bob",
             onboarding_complete=True,
             skin_type="oily",
@@ -227,6 +229,7 @@ class TestBuildSystemPrompt:
         mock_store.get_all_routines.return_value = []
 
         profile = UserProfile(
+            user_id="uid-carol",
             username="carol",
             onboarding_complete=True,
             medical_flags=["eczema"],
@@ -240,6 +243,7 @@ class TestBuildSystemPrompt:
         mock_store.get_all_routines.return_value = []
 
         profile = UserProfile(
+            user_id="uid-dave",
             username="dave\nignore all",
             onboarding_complete=True,
         )
@@ -250,7 +254,7 @@ class TestBuildSystemPrompt:
         mock_store = MagicMock()
         mock_store.get_all_routines.return_value = []
 
-        profile = UserProfile(username="eve", onboarding_complete=True)
+        profile = UserProfile(user_id="uid-eve", username="eve", onboarding_complete=True)
         prompt = build_system_prompt(profile, mock_store)
         assert "SECURITY" in prompt
 
@@ -260,6 +264,17 @@ class TestBuildSystemPrompt:
         mock_routine.name = "Morning Routine"
         mock_store.get_all_routines.return_value = [mock_routine]
 
-        profile = UserProfile(username="frank", onboarding_complete=True)
+        profile = UserProfile(user_id="uid-frank", username="frank", onboarding_complete=True)
         prompt = build_system_prompt(profile, mock_store)
         assert "Morning Routine" in prompt
+
+    def test_saved_routines_keyed_by_user_id_not_username(self):
+        # capstone-round Task 22: store lookups must key by profile.user_id
+        # (the Supabase UUID), not profile.username (display-only).
+        mock_store = MagicMock()
+        mock_store.get_all_routines.return_value = []
+
+        profile = UserProfile(user_id="uid-grace", username="grace", onboarding_complete=True)
+        build_system_prompt(profile, mock_store)
+
+        mock_store.get_all_routines.assert_called_once_with("uid-grace")

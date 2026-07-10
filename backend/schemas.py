@@ -4,7 +4,6 @@ All schemas are in Pydantic v2 format and use proper field validators
 for custom validation logic.
 """
 
-import re
 from datetime import datetime
 from typing import Optional
 
@@ -12,14 +11,18 @@ from pydantic import BaseModel, field_validator
 
 from backend.config import settings
 
-_PASSWORD_RE = re.compile(r"^(?=.*[^a-zA-Z]).{8,}$")
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 
-class RegisterRequest(BaseModel):
+class CompleteSignupRequest(BaseModel):
+    """Provisions the local user row after Supabase has created the auth identity
+    (Req 4.4). `supabase_user_id` is the provider-issued UUID that becomes the
+    local `users.id` primary key; `email` and `username` were submitted by the
+    user during signup and are never derived automatically (Req 4.6)."""
+
+    supabase_user_id: str
+    email: str
     username: str
-    password: str
 
     @field_validator("username")
     @classmethod
@@ -30,27 +33,6 @@ class RegisterRequest(BaseModel):
         if len(v) > 50:
             raise ValueError("Username must be 50 characters or fewer.")
         return v
-
-    @field_validator("password")
-    @classmethod
-    def password_valid(cls, v: str) -> str:
-        if not _PASSWORD_RE.match(v):
-            raise ValueError(
-                "Password must be at least 8 characters and contain at least one non-letter character."
-            )
-        return v
-
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    username: str
-    is_admin: bool = False
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
@@ -95,7 +77,13 @@ class RenameRequest(BaseModel):
 
 class Alternative(BaseModel):
     condition: str
-    probability: str
+    # Optional (Req 1.6): not every alternative condition the vision model
+    # considers has a computed percentage. Explicitly nullable rather than
+    # silently omitted so the strict schema represents optionality (see
+    # backend.llm.structured.to_strict_json_schema). Additive/backward-
+    # compatible widening (Req 1.5): existing consumers reading
+    # alt.probability as a string still work when it's present.
+    probability: str | None = None
 
 
 class SkinAnalysisResult(BaseModel):
@@ -126,7 +114,7 @@ class SaveConditionRequest(BaseModel):
 
 
 class UserSummary(BaseModel):
-    id: int
+    id: str
     username: str
     skin_type: Optional[str]
     skin_concerns: Optional[str]
@@ -146,6 +134,7 @@ class UserSummary(BaseModel):
 class UserProfile(BaseModel):
     """User profile information from onboarding."""
 
+    user_id: str  # the Supabase UUID / local users.id primary key
     username: str
     skin_type: str | None = None
     skin_concerns: list[str] = []
@@ -154,6 +143,22 @@ class UserProfile(BaseModel):
     location: str | None = None
     medical_flags: list[str] = []
     onboarding_complete: bool = False
+    is_admin: bool = False  # sourced from users.is_admin only, never from the JWT (Req 8.2)
+
+
+class RoutineStepInput(BaseModel):
+    """Typed tool-argument shape for a single routine step (Req 2.1, 2.2).
+
+    Used as the element type of save_routine_tool's `steps: list[RoutineStepInput]`
+    parameter (backend/agent/graph.py) — replaces the prior comma-separated
+    `steps: str` + JSON-encoded `suggestions: str` tool arguments. A step missing
+    `ingredient` is rejected by LangGraph's ToolNode (Pydantic validation) before
+    the tool closure body runs (Req 2.4).
+    """
+
+    ingredient: str
+    suggested_product: str | None = None
+    budget_product: str | None = None
 
 
 class RoutineStepSchema(BaseModel):

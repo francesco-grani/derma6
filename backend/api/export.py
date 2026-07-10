@@ -70,21 +70,25 @@ def _e(text: str) -> str:
 
 # ── HTML generation ───────────────────────────────────────────────────────────
 
-def generate_export_html(username: str, store: ProfileStore, session_store: SessionStore) -> str:  # noqa: C901
+def generate_export_html(user_id: str, store: ProfileStore, session_store: SessionStore) -> str:  # noqa: C901
     from datetime import datetime, timezone
 
     try:
-        profile = store.get_profile(username)
+        profile = store.get_profile(user_id)
     except ProfileStoreError:
         profile = None
 
+    # Display username fetched once from the profile lookup above (Req 7.3) — every
+    # other lookup in this function is keyed by the Supabase UUID `user_id`.
+    username = profile.username if profile else "User"
+
     try:
-        routines: list[RoutineSchema] = store.get_all_routines(username)
+        routines: list[RoutineSchema] = store.get_all_routines(user_id)
     except ProfileStoreError:
         routines = []
 
     try:
-        sessions_meta = session_store.get_sessions(username)
+        sessions_meta = session_store.get_sessions(user_id)
     except SessionStoreError:
         sessions_meta = []
     chat_sessions = [
@@ -251,7 +255,7 @@ def generate_export_html(username: str, store: ProfileStore, session_store: Sess
 </html>"""
 
 
-def generate_export_pdf(username: str, store: ProfileStore, session_store: SessionStore) -> bytes:  # noqa: C901
+def generate_export_pdf(user_id: str, store: ProfileStore, session_store: SessionStore) -> bytes:  # noqa: C901
     """Generate a PDF export using xhtml2pdf (pure Python, no system libs)."""
     try:
         import io
@@ -262,17 +266,21 @@ def generate_export_pdf(username: str, store: ProfileStore, session_store: Sessi
     from datetime import datetime, timezone
 
     try:
-        profile = store.get_profile(username)
+        profile = store.get_profile(user_id)
     except ProfileStoreError:
         profile = None
 
+    # Display username fetched once from the profile lookup above (Req 7.3) — every
+    # other lookup in this function is keyed by the Supabase UUID `user_id`.
+    username = profile.username if profile else "User"
+
     try:
-        routines: list[RoutineSchema] = store.get_all_routines(username)
+        routines: list[RoutineSchema] = store.get_all_routines(user_id)
     except ProfileStoreError:
         routines = []
 
     try:
-        sessions_meta = session_store.get_sessions(username)
+        sessions_meta = session_store.get_sessions(user_id)
     except SessionStoreError:
         sessions_meta = []
     chat_sessions = [(s, serialise_history(s["session_id"])) for s in sessions_meta]
@@ -418,13 +426,20 @@ def generate_export_pdf(username: str, store: ProfileStore, session_store: Sessi
 @router.get("/export")
 def export(
     format: str = Query(default="html", pattern="^(html|pdf)$"),
-    username: str = Depends(get_current_user),
+    user_id: str = Depends(get_current_user),
     store: ProfileStore = Depends(get_profile_store),
     session_store: SessionStore = Depends(get_session_store),
 ):
+    # Display username fetched once here for the download filename (Req 7.3); the
+    # generate_* helpers below each do their own profile lookup for the report body.
+    try:
+        username = store.get_profile(user_id).username
+    except ProfileStoreError:
+        username = "user"
+
     if format == "pdf":
         try:
-            pdf_bytes = generate_export_pdf(username, store, session_store)
+            pdf_bytes = generate_export_pdf(user_id, store, session_store)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         return Response(
@@ -432,7 +447,7 @@ def export(
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.pdf"'},
         )
-    html_content = generate_export_html(username, store, session_store)
+    html_content = generate_export_html(user_id, store, session_store)
     return HTMLResponse(
         content=html_content,
         headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.html"'},

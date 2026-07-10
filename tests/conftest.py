@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 os.environ.setdefault("OPENROUTER_API_KEY", "test-key-unit-tests")
 os.environ.setdefault("DATABASE_URL", "sqlite:////tmp/test_derma6_unit.db")
 os.environ.setdefault("CHROMA_PERSIST_DIR", "/tmp/test_chroma_unit")
+os.environ.setdefault("SUPABASE_URL", "https://test-project.supabase.co")
 
 # ── Stub chromadb so kb_search._retriever = Retriever() never opens a real DB ─
 if "chromadb" not in sys.modules:
@@ -87,6 +88,15 @@ def profile_store(tmp_path):
 
     db = tmp_path / "test.db"
     return ProfileStore(db_url=f"sqlite:///{db}")
+
+
+@pytest.fixture
+def session_store(tmp_path):
+    """SessionStore backed by a per-test temporary SQLite file."""
+    from backend.db.session_store import SessionStore
+
+    db = tmp_path / "test.db"
+    return SessionStore(db_url=f"sqlite:///{db}")
 
 
 # pytest_addoption and pytest_collection_modifyitems live in the root conftest.py

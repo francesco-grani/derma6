@@ -9,7 +9,7 @@ import logging
 import re
 import uuid
 from contextlib import AsyncExitStack
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 
 from langchain_core.messages import (
     AIMessage,
@@ -35,9 +35,16 @@ from backend.db.profile_store import ProfileStore
 from backend.middleware.content_filter import scrub_pii_output
 from backend.pricing import calculate_cost
 from backend.rate_limiter import RateLimiter
-from backend.schemas import BackendResponse, RoutineSchema, RoutineStepSchema, ToolResult, UserProfile
+from backend.schemas import (
+    BackendResponse,
+    RoutineSchema,
+    RoutineStepInput,
+    RoutineStepSchema,
+    ToolResult,
+    UserProfile,
+)
 from backend.tools.conflict_checker import conflict_checker
-from backend.tools.introduction_scheduler import introduction_scheduler
+from backend.tools.introduction_scheduler import build_introduction_plan
 from backend.tools.kb_search import kb_search
 from backend.tools.routine_sequencer import routine_sequencer
 from backend.tools.spf_recommender import spf_recommender
@@ -198,23 +205,29 @@ def _tool_instructions(username: str) -> str:
         "  MULTIPLE ROUTINES: if you presented a Morning Routine AND an Evening Routine, call "
         "save_routine_tool TWICE — once for each. Never combine their steps into a single call.\n"
         "  name: descriptive, e.g. 'Morning Routine' or 'Evening Routine'.\n"
-        "  steps: COMMA-SEPARATED individual step names FOR THAT ROUTINE ONLY, no arrows, no slashes.\n"
-        "  suggestions (optional): JSON object mapping step name (lowercase) to products, e.g. "
-        '{\"cleanser\": {\"suggested\": \"CeraVe Foaming\", \"budget\": \"Neutrogena OFW\"}}. '
-        "Pass empty string if no suggestions are available.\n"
+        "  steps: an ORDERED LIST of step objects for THAT ROUTINE ONLY (application order), "
+        "one object per step, e.g. "
+        '[{\"ingredient\": \"Cleanser\", \"suggested_product\": \"CeraVe Foaming\", '
+        '\"budget_product\": \"Neutrogena OFW\"}, {\"ingredient\": \"Moisturizer\"}]. '
+        "Each step object: ingredient (required), suggested_product (optional), "
+        "budget_product (optional). Omit suggested_product/budget_product entirely when no pick "
+        "is available — do not invent products, and never pass a comma-separated or "
+        "arrow-separated string.\n"
         "THE TOOL IS THE DIALOG: save_routine_tool shows the user an interactive save card. "
         "Calling the tool IS the save action. Never narrate it. "
         "FORBIDDEN after a routine list: 'Would you like to save', 'Shall I save', "
         "'I will save', 'Saving now', 'Let me save', 'Routine Name:', 'Steps:'.\n"
         "- skin_type_advisor_tool: Save the inferred skin type to the user's profile. "
-        "Gather enough information (up to 3 exchanges total), then pick the best label from: "
-        "oily, dry, combination, sensitive, dehydrated, acneic. "
-        "Input: your chosen skin type label (one word from that list). "
-        "If still uncertain after 3 exchanges, use 'combination'. "
+        "Gather enough information (up to 3 exchanges total), then choose one enumerated value: "
+        "oily, dry, combination, sensitive, dehydrated, or acneic. "
+        "skin_type is a fixed-choice (enum) argument — any value outside this set is rejected "
+        "before the tool body runs. "
+        "If still uncertain after 3 exchanges, choose 'combination' as your best guess. "
         "NEVER pass a description — only the final skin type label.\n"
         "- update_skin_concerns_tool: Save the user's skin concerns. "
         "MUST be called as soon as the user states their concerns. "
-        "Input: comma-separated concerns, e.g. \"acne, dark spots\"\n"
+        "Input: concerns — a list of concern strings, e.g. [\"acne\", \"dark spots\"]. "
+        "Pass each concern as its own list item, never a single comma-separated string.\n"
         "- update_beard_style_tool: Show an interactive card for the user to select their facial hair style "
         "and save the result. Call with the literal string 'ask' — the tool shows the card itself. "
         "NEVER ask a text question before calling this tool.\n"
@@ -226,7 +239,9 @@ def _tool_instructions(username: str) -> str:
         "NEVER call for conditions already in the user's medical flags. Input: condition name\n"
         "- spf_recommender: Recommend an SPF product. Input: the user's query as-is\n"
         "- introduction_scheduler_tool: Build a phased introduction plan and save it to the "
-        "profile. Input: comma-separated active ingredients, e.g. \"retinol, niacinamide\"\n"
+        "profile. Input: actives — a list of active ingredient names, e.g. "
+        "[\"retinol\", \"niacinamide\"]. Pass each active as its own list item, never a "
+        "comma-separated or pipe-separated string.\n"
         "- finalize_onboarding_tool: Complete onboarding after all 4 questions are answered. "
         "Input: the literal string 'ready'. Shows the user an interactive profile review card — "
         "do NOT summarise the profile yourself before calling this.\n"
@@ -239,22 +254,21 @@ def _tool_instructions(username: str) -> str:
 
 # ── Profile-writing tool closures ────────────────────────────────────────────
 
-def _make_tools(username: str, store: ProfileStore) -> list:
-    """Return username-bound tool list. Username and store injected via closure — LLM never sees them."""
+def _make_tools(user_id: str, store: ProfileStore) -> list:
+    """Return user_id-bound tool list. Username and store injected via closure — LLM never sees them."""
 
     @lc_tool
-    def skin_type_advisor_tool(skin_type: str) -> str:
+    def skin_type_advisor_tool(
+        skin_type: Literal["oily", "dry", "combination", "sensitive", "dehydrated", "acneic"]
+    ) -> str:
         """Save the user's inferred skin type to their profile.
         skin_type: one of 'oily', 'dry', 'combination', 'sensitive', 'dehydrated', 'acneic'.
         Call this once you have gathered enough information to make a confident classification."""
-        from backend.tools.skin_type_advisor import SKIN_TYPES, _CHARACTERISTICS
-        skin_type = skin_type.strip().lower()
-        if skin_type not in SKIN_TYPES:
-            skin_type = "combination"
-        _audit(username, "skin_type_advisor_tool", skin_type)
+        from backend.tools.skin_type_advisor import _CHARACTERISTICS
+        _audit(user_id, "skin_type_advisor_tool", skin_type)
         characteristic = _CHARACTERISTICS.get(skin_type, "")
         try:
-            store.update_skin_type(username, skin_type)
+            store.update_skin_type(user_id, skin_type)
             return (
                 f"Skin type: {skin_type}\n\n"
                 f"Characteristics: {characteristic}\n\n"
@@ -264,43 +278,40 @@ def _make_tools(username: str, store: ProfileStore) -> list:
             logger.error("skin_type_advisor_tool failed: %s", exc)
             return "Sorry, I could not save your skin type. Please try again."
 
+    # Verification spike finding (capstone-round Task 1, scripts/verify_structured_output.py,
+    # recorded 2026-07-09 against the live OpenRouter API, 3 consecutive runs):
+    # nested list[RoutineStepInput]-shaped tool arguments (object fields inside a list)
+    # are reliably populated by settings.llm_model (anthropic/claude-haiku-4.5) via
+    # bind_tools() — the documented flattened-parallel-lists fallback
+    # (ingredients: list[str], suggested_products: list[str | None],
+    # budget_products: list[str | None]) is NOT needed. Task 5 retypes this closure to
+    # `save_routine_tool(name: str, steps: list[RoutineStepInput])` directly. If
+    # settings.llm_model is ever changed, re-run the verification script and update
+    # this comment.
     @lc_tool
-    def save_routine_tool(name: str, steps: str, suggestions: str = "") -> str:
+    def save_routine_tool(name: str, steps: list[RoutineStepInput]) -> str:
         """Save a named skincare routine to the user's profile.
         name: descriptive name e.g. 'Morning Routine'.
-        steps: COMMA-SEPARATED list of individual step names in application order.
-               Each step must be a single ingredient or product name with NO arrows,
-               slashes, or other delimiters. Example: 'Cleanser,Niacinamide Serum,Moisturiser,SPF'
-        suggestions: optional JSON object mapping step name (lowercase) to product picks.
-               Format: {"cleanser": {"suggested": "CeraVe Foaming", "budget": "Neutrogena OFW"}, ...}
-               Omit or pass "" if no product suggestions are available."""
-        _audit(username, "save_routine_tool", f"name={name[:50]}")
-        step_list = [s.strip() for s in re.split(r"[,→/\n]|->", steps) if s.strip()]
-        if not step_list:
+        steps: ordered list of routine steps (application order). Each step object has:
+               ingredient (required): the ingredient/product name for this step.
+               suggested_product (optional): a recommended product pick for this step.
+               budget_product (optional): a budget-friendly product pick for this step."""
+        _audit(user_id, "save_routine_tool", f"name={name[:50]}")
+        if not steps:
             return "Error: no steps provided."
         routine_name = name.strip() or "My Routine"
 
-        sugg_map: dict = {}
-        if suggestions and suggestions.strip():
-            try:
-                sugg_map = json.loads(suggestions)
-                if not isinstance(sugg_map, dict):
-                    sugg_map = {}
-            except (json.JSONDecodeError, ValueError):
-                sugg_map = {}
-
         preview_items = []
-        for step in step_list:
-            item: dict = {"ingredient": step}
-            sugg = sugg_map.get(step.lower(), {})
-            if sugg.get("suggested"):
-                item["suggested"] = sugg["suggested"]
-            if sugg.get("budget"):
-                item["budget"] = sugg["budget"]
+        for step in steps:
+            item: dict = {"ingredient": step.ingredient}
+            if step.suggested_product:
+                item["suggested"] = step.suggested_product
+            if step.budget_product:
+                item["budget"] = step.budget_product
             preview_items.append(item)
 
         try:
-            existing_routine = store.get_routine(username, routine_name)
+            existing_routine = store.get_routine(user_id, routine_name)
         except Exception:
             existing_routine = None
 
@@ -342,39 +353,46 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         step_schemas = [
             RoutineStepSchema(
                 position=i + 1,
-                ingredient=step,
-                product_name=sugg_map.get(step.lower(), {}).get("suggested"),
-                budget_product=sugg_map.get(step.lower(), {}).get("budget"),
+                ingredient=step.ingredient,
+                product_name=step.suggested_product,
+                budget_product=step.budget_product,
             )
-            for i, step in enumerate(step_list)
+            for i, step in enumerate(steps)
         ]
         routine = RoutineSchema(name=routine_name, steps=step_schemas)
         try:
-            store.save_routine(username, routine)
-            logger.info("Routine '%s' saved for %s: %d steps", routine_name, username, len(step_list))
-            return f"✅ '{routine_name}' saved ({len(step_list)} steps). You can view it in the Routine Viewer."
+            store.save_routine(user_id, routine)
+            logger.info("Routine '%s' saved for %s: %d steps", routine_name, user_id, len(steps))
+            return f"✅ '{routine_name}' saved ({len(steps)} steps). You can view it in the Routine Viewer."
         except Exception as exc:
             logger.error("save_routine_tool failed: %s", exc)
             return "Sorry, I could not save the routine. Please try again."
 
     @lc_tool
-    def introduction_scheduler_tool(actives: str) -> str:
+    def introduction_scheduler_tool(actives: list[str]) -> str:
         """Create a phased introduction schedule for new actives and save it to the profile.
-        Input: comma-separated active ingredient names."""
-        _audit(username, "introduction_scheduler_tool", actives[:100])
-        return introduction_scheduler.invoke(f"actives: {actives} | username: {username}")
+        actives: list of active ingredient names, e.g. ['retinol', 'niacinamide']."""
+        _audit(user_id, "introduction_scheduler_tool", ", ".join(actives)[:100])
+        if not actives:
+            return "Error: no actives provided."
+        plan, formatted = build_introduction_plan(actives)
+        try:
+            store.save_introduction_plan(user_id, plan)
+        except Exception as exc:
+            logger.error("introduction_scheduler_tool failed: %s", exc)
+            return "Sorry, I could not save your introduction schedule. Please try again."
+        return formatted
 
     @lc_tool
-    def update_skin_concerns_tool(concerns: str) -> str:
+    def update_skin_concerns_tool(concerns: list[str]) -> str:
         """Save the user's skin concerns to their profile.
-        Input: comma-separated concerns, e.g. 'acne, dark spots, dryness'"""
-        _audit(username, "update_skin_concerns_tool", concerns[:100])
-        concern_list = [c.strip() for c in concerns.split(",") if c.strip()]
-        if not concern_list:
+        concerns: list of concern labels, e.g. ['acne', 'dark spots', 'dryness']."""
+        _audit(user_id, "update_skin_concerns_tool", ", ".join(concerns)[:100])
+        if not concerns:
             return "Error: at least one concern is required."
         try:
-            store.update_skin_concerns(username, concern_list)
-            return f"Skin concerns saved: {', '.join(concern_list)}."
+            store.update_skin_concerns(user_id, concerns)
+            return f"Skin concerns saved: {', '.join(concerns)}."
         except Exception as exc:
             logger.error("update_skin_concerns_tool failed: %s", exc)
             return "Sorry, I could not save your skin concerns. Please try again."
@@ -383,7 +401,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
     def update_beard_style_tool(trigger: str) -> str:
         """Show the user an interactive card to select their facial hair style.
         Always call with the literal string 'ask' — the card handles the selection."""
-        _audit(username, "update_beard_style_tool", "show_card")
+        _audit(user_id, "update_beard_style_tool", "show_card")
 
         decision: dict = interrupt({
             "kind": "beard_style_select",
@@ -398,7 +416,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         chosen = decision.get("choice", "grow")
         labels = {"shave": "clean-shaven", "trim": "trims/maintains beard", "grow": "lets beard grow"}
         try:
-            store.update_beard_style(username, chosen)
+            store.update_beard_style(user_id, chosen)
             return f"Facial hair style saved: {labels.get(chosen, chosen)}."
         except Exception as exc:
             logger.error("update_beard_style_tool failed: %s", exc)
@@ -408,7 +426,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
     def update_location_tool(trigger: str) -> str:
         """Show the user an interactive card to enter their country or region.
         Always call with the literal string 'ask' — the card handles the input."""
-        _audit(username, "update_location_tool", "show_card")
+        _audit(user_id, "update_location_tool", "show_card")
 
         decision: dict = interrupt({
             "kind": "location_input",
@@ -423,7 +441,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         if not loc:
             return "Location not provided — skipped."
         try:
-            store.update_location(username, loc)
+            store.update_location(user_id, loc)
             return f"Location saved: {loc}. I'll prioritise products available in your region."
         except Exception as exc:
             logger.error("update_location_tool failed: %s", exc)
@@ -437,10 +455,10 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         condition = condition.strip()
         if not condition:
             return "Error: condition name must not be empty."
-        _audit(username, "add_medical_flag_tool", condition[:50])
+        _audit(user_id, "add_medical_flag_tool", condition[:50])
 
         try:
-            existing_flags = store.get_profile(username).medical_flags
+            existing_flags = store.get_profile(user_id).medical_flags
             if any(f.lower() == condition.lower() for f in existing_flags):
                 return f"'{condition}' is already in your medical profile — no change needed."
         except Exception:
@@ -461,7 +479,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
             return f"Medical condition '{condition}' not saved."
 
         try:
-            store.add_medical_flag(username, condition)
+            store.add_medical_flag(user_id, condition)
             return (
                 f"Medical flag '{condition}' saved. A dermatologist disclaimer will appear "
                 "on responses that include specific recommendations."
@@ -476,9 +494,9 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         Shows the user an interactive profile review card before saving.
         Call this immediately after collecting skin type, concerns, shaving, and medical answers.
         Input: pass the literal string 'ready'."""
-        _audit(username, "finalize_onboarding_tool", ready[:20])
+        _audit(user_id, "finalize_onboarding_tool", ready[:20])
         try:
-            profile = store.get_profile(username)
+            profile = store.get_profile(user_id)
         except Exception as exc:
             return f"Error reading profile: {exc}"
 
@@ -507,7 +525,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
 
         if choice == "confirm":
             try:
-                store.complete_onboarding(username)
+                store.complete_onboarding(user_id)
                 return "✅ Profile saved and onboarding complete! I'll now tailor all advice to your skin."
             except Exception as exc:
                 logger.error("finalize_onboarding_tool save failed: %s", exc)
@@ -529,7 +547,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         ingredient_a, ingredient_b: the two conflicting ingredients.
         verdict: conflict verdict from conflict_checker.
         reason: reason string from conflict_checker."""
-        _audit(username, "propose_conflict_resolution_tool", f"{ingredient_a} + {ingredient_b}")
+        _audit(user_id, "propose_conflict_resolution_tool", f"{ingredient_a} + {ingredient_b}")
 
         decision: dict = interrupt({
             "kind": "conflict_resolution",
@@ -549,7 +567,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
         if choice in ("remove_a", "remove_b"):
             to_remove = ingredient_a.strip() if choice == "remove_a" else ingredient_b.strip()
             try:
-                routines = store.get_all_routines(username)
+                routines = store.get_all_routines(user_id)
                 removed_from: list[str] = []
                 for routine in routines:
                     if any(s.ingredient.lower() == to_remove.lower() for s in routine.steps):
@@ -558,7 +576,7 @@ def _make_tools(username: str, store: ProfileStore) -> list:
                             RoutineStepSchema(position=i + 1, ingredient=s, product_name=None)
                             for i, s in enumerate(kept)
                         ]
-                        store.save_routine(username, RoutineSchema(name=routine.name, steps=new_steps))
+                        store.save_routine(user_id, RoutineSchema(name=routine.name, steps=new_steps))
                         removed_from.append(routine.name)
                 if removed_from:
                     return f"Removed {to_remove} from: {', '.join(removed_from)}."
@@ -589,9 +607,9 @@ def _make_tools(username: str, store: ProfileStore) -> list:
     ]
 
 
-def _audit(username: str, tool_name: str, args_summary: str) -> None:
+def _audit(user_id: str, tool_name: str, args_summary: str) -> None:
     _AUDIT_LOGGER.info(
-        "TOOL_CALL username=%s tool=%s args=%s", username, tool_name, args_summary
+        "TOOL_CALL user_id=%s tool=%s args=%s", user_id, tool_name, args_summary
     )
 
 
@@ -633,7 +651,7 @@ def build_system_prompt(profile: UserProfile, store: ProfileStore) -> str:
         safe_concerns = [_sanitise(c) for c in profile.skin_concerns]
         safe_location = _sanitise(profile.location) if profile.location else None
         try:
-            existing_routines = [r.name for r in store.get_all_routines(profile.username)]
+            existing_routines = [r.name for r in store.get_all_routines(profile.user_id)]
         except Exception:
             existing_routines = []
         routines_str = ", ".join(f"'{_sanitise(n)}'" for n in existing_routines) if existing_routines else "none"
@@ -841,12 +859,12 @@ _rate_limiter = RateLimiter()
 
 
 async def stream_agent_response(
-    username: str,
+    user_id: str,
     message: str,
     session_id: str,
 ) -> AsyncIterator[str]:
     """Async generator that yields SSE-formatted lines for one chat turn."""
-    if not _rate_limiter.check(username):
+    if not _rate_limiter.check(user_id):
         yield _sse({"type": "error", "content": "Rate limit exceeded. Please wait before sending another message."})
         yield "data: [DONE]\n\n"
         return
@@ -857,14 +875,13 @@ async def stream_agent_response(
         return
 
     try:
-        _store.get_or_create_user(username)
-        profile = _store.get_profile(username)
+        profile = _store.get_profile(user_id)
         system_prompt = build_system_prompt(profile, _store)
         chat_history = get_history(session_id)
         prior_messages = list(chat_history.messages)
         is_first_message = len(prior_messages) == 0
 
-        tools = _make_tools(username, _store)
+        tools = _make_tools(user_id, _store)
         graph = build_graph(tools, system_prompt)
 
         input_messages = prior_messages + [HumanMessage(content=message)]
@@ -875,7 +892,7 @@ async def stream_agent_response(
         run_id = f"{session_id}-{uuid.uuid4().hex[:8]}"
         graph_config = {
             "configurable": {"thread_id": run_id},
-            "metadata": {"username": username},
+            "metadata": {"user_id": user_id},
         }
 
         prev_node: str | None = None
@@ -949,7 +966,7 @@ async def stream_agent_response(
 
         logger.info(
             "stream_agent_response complete for %s: citations=%d rag_docs=%d tools=%d",
-            username, len(citations), len(rag_context), len(tool_results_objs),
+            user_id, len(citations), len(rag_context), len(tool_results_objs),
         )
 
         metadata_payload: dict = {
@@ -969,7 +986,7 @@ async def stream_agent_response(
                 yield _sse({"type": "session_title", "session_id": session_id, "title": title})
 
     except Exception as exc:
-        logger.error("stream_agent_response error for %s: %s", username, exc)
+        logger.error("stream_agent_response error for %s: %s", user_id, exc)
         yield _sse({"type": "error", "content": f"An error occurred: {exc}"})
 
     finally:
@@ -977,7 +994,7 @@ async def stream_agent_response(
 
 
 async def stream_resume_response(
-    username: str,
+    user_id: str,
     session_id: str,
     run_id: str,
     choice: str,
@@ -986,14 +1003,14 @@ async def stream_resume_response(
     """Resume a paused HITL graph with the user's decision."""
 
     try:
-        profile = _store.get_profile(username)
+        profile = _store.get_profile(user_id)
         system_prompt = build_system_prompt(profile, _store)
-        tools = _make_tools(username, _store)
+        tools = _make_tools(user_id, _store)
         graph = build_graph(tools, system_prompt)
 
         graph_config = {
             "configurable": {"thread_id": run_id},
-            "metadata": {"username": username},
+            "metadata": {"user_id": user_id},
         }
 
         accumulated_text: list[str] = []
@@ -1048,7 +1065,7 @@ async def stream_resume_response(
         })
 
     except Exception as exc:
-        logger.error("stream_resume_response error for %s: %s", username, exc)
+        logger.error("stream_resume_response error for %s: %s", user_id, exc)
         yield _sse({"type": "error", "content": f"An error occurred: {exc}"})
 
     finally:

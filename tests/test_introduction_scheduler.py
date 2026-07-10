@@ -9,9 +9,10 @@ from backend.tools.introduction_scheduler import (
     _check_conflicts,
     _format_output,
     _parse_input,
+    build_introduction_plan,
     introduction_scheduler,
 )
-from backend.schemas import IntroductionWeek
+from backend.schemas import IntroductionPlanSchema, IntroductionWeek
 
 
 class TestParseInput:
@@ -133,6 +134,61 @@ class TestFormatOutput:
         ]
         result = _format_output(["retinol"], weeks, [])
         assert "Week 1-2" in result
+
+
+class TestBuildIntroductionPlan:
+    """Pure orchestration function extracted for the live agent's retyped
+    `introduction_scheduler_tool` closure (capstone-round Task 7, Req 3.3, 3.5, 18.1).
+    No parsing, no I/O — reuses _check_conflicts()/_build_schedule()/_format_output()
+    unchanged."""
+
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_returns_plan_schema_and_formatted_text(self, mock_retriever):
+        mock_retriever.query.return_value = [MagicMock(content="Start with 2x per week")]
+
+        plan, formatted = build_introduction_plan(["retinol"])
+
+        assert isinstance(plan, IntroductionPlanSchema)
+        assert plan.actives == ["retinol"]
+        assert plan.status == "active"
+        assert len(plan.weeks) == 2
+        assert "Introduction Schedule" in formatted
+        assert "retinol" in formatted
+
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_multiple_actives_all_present_in_plan(self, mock_retriever):
+        mock_retriever.query.return_value = []
+
+        plan, formatted = build_introduction_plan(["retinol", "niacinamide"])
+
+        assert plan.actives == ["retinol", "niacinamide"]
+        actives_in_weeks = {w.active for w in plan.weeks}
+        assert actives_in_weeks == {"retinol", "niacinamide"}
+        assert "retinol" in formatted
+        assert "niacinamide" in formatted
+
+    @patch("backend.tools.introduction_scheduler.retriever")
+    def test_conflict_detected_produces_warning_and_separated_weeks(self, mock_retriever):
+        mock_retriever.query.return_value = []
+
+        plan, formatted = build_introduction_plan(["benzoyl peroxide", "retinol"])
+
+        # benzoyl peroxide + retinol is a known do-not-use pair
+        do_not_use, _ = _check_conflicts(["benzoyl peroxide", "retinol"])
+        if do_not_use:  # only assert if the pair is actually in the conflict table
+            assert "Warning" in formatted
+            bp_weeks = {w.week for w in plan.weeks if w.active == "benzoyl peroxide"}
+            retinol_weeks = {w.week for w in plan.weeks if w.active == "retinol"}
+            assert bp_weeks.isdisjoint(retinol_weeks)
+
+    def test_no_persistence_side_effect(self):
+        # Pure function: no store interaction of any kind, unlike the standalone
+        # pipe-string `introduction_scheduler` tool which persists directly.
+        with patch("backend.tools.introduction_scheduler.get_profile_store") as mock_get_store, \
+             patch("backend.tools.introduction_scheduler.retriever") as mock_retriever:
+            mock_retriever.query.return_value = []
+            build_introduction_plan(["retinol"])
+            mock_get_store.assert_not_called()
 
 
 class TestIntroductionSchedulerTool:

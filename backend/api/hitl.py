@@ -11,9 +11,9 @@ router = APIRouter(tags=["hitl"])
 
 
 @router.post("/api/chat/resume")
-async def resume_chat(req: ResumeRequest, username: str = Depends(get_current_user)):
+async def resume_chat(req: ResumeRequest, user_id: str = Depends(get_current_user)):
     return StreamingResponse(
-        stream_resume_response(username, req.session_id, req.run_id, req.choice, req.note),
+        stream_resume_response(user_id, req.session_id, req.run_id, req.choice, req.note),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

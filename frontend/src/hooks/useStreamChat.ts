@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getToken } from '@/lib/api'
+import { getAccessToken } from '@/lib/api'
 import type { InterruptPayload } from '@/components/chat/InterruptCard'
 
 export interface RagItem {
@@ -39,17 +39,21 @@ export function useStreamChat(sessionId: string | null) {
   useEffect(() => {
     setPendingInterrupt(null)
     if (!sessionId) { setMessages([]); return }
-    const token = getToken()
-    if (!token) return
-    fetch(`/api/me/chat/history?session_id=${encodeURIComponent(sessionId)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : [])
-      .then((history: ChatMessage[]) => {
-        // Don't overwrite messages if a send already started (e.g. initial-message from sessionStorage)
-        if (!streamingRef.current) setMessages(history)
+    let cancelled = false
+    getAccessToken().then(token => {
+      if (!token || cancelled) return
+      return fetch(`/api/me/chat/history?session_id=${encodeURIComponent(sessionId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
-      .catch(() => {})
+        .then(r => r.ok ? r.json() : [])
+        .then((history: ChatMessage[]) => {
+          // Don't overwrite messages if a send already started (e.g. initial-message from sessionStorage)
+          if (!cancelled && !streamingRef.current) setMessages(history)
+        })
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [sessionId])
 
   const sendMessage = useCallback(async (text: string) => {
@@ -65,11 +69,12 @@ export function useStreamChat(sessionId: string | null) {
     abortRef.current = ctrl
 
     try {
+      const token = await getAccessToken()
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ message: text, session_id: sessionId }),
         signal: ctrl.signal,
@@ -166,11 +171,12 @@ export function useStreamChat(sessionId: string | null) {
     setMessages(prev => [...prev, { role: 'assistant', content: '' }])
 
     try {
+      const token = await getAccessToken()
       const res = await fetch('/api/chat/resume', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${getToken()}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ session_id: sessionId, run_id, choice, note }),
       })

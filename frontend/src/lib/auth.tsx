@@ -1,40 +1,96 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import { clearAuth, getIsAdmin, getToken, getUsername, setAuth } from './api'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import type { Session } from '@supabase/supabase-js'
+import { supabase } from './supabaseClient'
+import { apiGetProfile } from './api'
 
 interface AuthContextValue {
+  /** Raw Supabase session; null when signed out. */
+  session: Session | null
+  /** Bearer token for the current session, or null when signed out. */
   token: string | null
   username: string | null
   isAdmin: boolean
-  login: (token: string, username: string, isAdmin: boolean) => void
-  logout: () => void
+  /** True until the initial `getSession()` call has resolved. */
+  loading: boolean
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(getToken)
-  const [username, setUsername] = useState<string | null>(getUsername)
-  const [isAdmin, setIsAdmin] = useState<boolean>(getIsAdmin)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [username, setUsername] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  function login(t: string, u: string, admin: boolean) {
-    setAuth(t, u, admin)
-    setToken(t)
-    setUsername(u)
-    setIsAdmin(admin)
+  // Establish the initial session on mount, then keep it in sync via
+  // Supabase's auth-state listener (handles sign-in, sign-out, and the
+  // automatic token-refresh Req 6.2 requires, none of which is hand-rolled
+  // here the way the old localStorage-backed state was).
+  useEffect(() => {
+    let cancelled = false
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return
+      setSession(data.session)
+      setLoading(false)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+      setLoading(false)
+      if (!newSession) {
+        setUsername(null)
+        setIsAdmin(false)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  // Once a session exists, fetch isAdmin (and username) once via the
+  // backend profile endpoint — Supabase's session/JWT carries no
+  // application-level username or admin-role data (Req 8.2).
+  useEffect(() => {
+    if (!session) return
+    let cancelled = false
+
+    apiGetProfile()
+      .then(profile => {
+        if (cancelled) return
+        setUsername(profile.username)
+        setIsAdmin(profile.is_admin)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setUsername(null)
+        setIsAdmin(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session])
+
+  async function logout() {
+    await supabase.auth.signOut()
   }
 
-  function logout() {
-    clearAuth()
-    setToken(null)
-    setUsername(null)
-    setIsAdmin(false)
+  const value: AuthContextValue = {
+    session,
+    token: session?.access_token ?? null,
+    username,
+    isAdmin,
+    loading,
+    logout,
   }
 
-  return (
-    <AuthContext.Provider value={{ token, username, isAdmin, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
