@@ -23,6 +23,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: |
           cd frontend
           npm ci
