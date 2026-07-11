@@ -20,6 +20,7 @@ dependencies = [
     "sentence-transformers>=3.0",
     "transformers>=4.40,<5.0",
     "openai>=2.42.0",
+    "pgvector>=0.3",
     "pydantic-settings>=2.0",
     "python-dotenv>=1.2.2",
     "python-jose[cryptography]>=3.5.0",
@@ -50,6 +51,7 @@ filterwarnings = [
 ]
 markers = [
     "eval: deepeval LLM quality evaluations (require --run-eval flag and live API key)",
+    "pgvector: pgvector integration tests (require --run-pgvector flag and a live Postgres with vector available)",
 ]
 
 [dependency-groups]
@@ -80,6 +82,7 @@ omit = [
     # Session/chat persistence — thin wrappers around LangChain/SQLAlchemy
     "backend/db/session_store.py",
     "backend/db/chat_history.py",
+    "backend/db/memory_store.py",
     # LangGraph streaming (requires live LLM + graph runtime)
     "backend/agent/graph.py",
 ]

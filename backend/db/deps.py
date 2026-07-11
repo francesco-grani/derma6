@@ -9,12 +9,14 @@ from collections.abc import Generator
 
 from sqlalchemy.orm import Session
 
+from backend.db.memory_store import MemoryStore
 from backend.db.models import engine
 from backend.db.profile_store import ProfileStore
 from backend.db.session_store import SessionStore
 
 _profile_store = ProfileStore(engine=engine)
 _session_store = SessionStore(engine=engine)
+_memory_store = MemoryStore(engine=engine)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -29,3 +31,7 @@ def get_profile_store() -> ProfileStore:
 
 def get_session_store() -> SessionStore:
     return _session_store
+
+
+def get_memory_store() -> MemoryStore:
+    return _memory_store

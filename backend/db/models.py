@@ -7,10 +7,20 @@ and mapped_column for column definitions.
 from datetime import datetime
 from typing import Optional
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from backend.config import settings
+
+# Verification spike finding (capstone-round Task 27, recorded 2026-07-11 against the
+# live OpenRouter API): settings.embedding_model (qwen/qwen3-embedding-8b) produces
+# 4096-dimensional vectors — vector(4096) width confirmed empirically, not assumed.
+# Re-run the embed_documents() check (see .claude/specs/capstone-round/task-27-findings.md)
+# and update this constant, plus alembic/versions/*_user_memory_facts.py, if
+# EMBEDDING_MODEL is ever changed — a width change requires a new migration and a full
+# re-embed/backfill of existing facts, not just an env var change.
+MEMORY_EMBEDDING_DIM = 4096
 
 
 class Base(DeclarativeBase):
@@ -61,6 +71,10 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         order_by="SkinAnalysis.created_at",
+    )
+    memory_facts: Mapped[list["UserMemoryFact"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
 
 
@@ -159,6 +173,44 @@ class SkinAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="skin_analyses")
+
+
+class UserMemoryFact(Base):
+    """A durably-stored freeform fact captured from a past conversation
+    (capstone-round Bundle 3, Req 9-12) — profile fields already tracked on
+    `User` (skin type, concerns, etc.) are deliberately excluded, see
+    `backend/agent/memory_extraction.py::filter_denylisted_facts`."""
+
+    __tablename__ = "user_memory_facts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    fact_text: Mapped[str]
+    # vector(4096) width is fixed to the EMBEDDING_MODEL configured at migration time
+    # (MEMORY_EMBEDDING_DIM above, confirmed via capstone-round Task 27's live spike,
+    # not guessed) — changing EMBEDDING_MODEL later requires a new migration plus a
+    # full re-embed/backfill of existing facts, not just an env var change.
+    embedding: Mapped[list[float]] = mapped_column(Vector(MEMORY_EMBEDDING_DIM))
+    # Nullable + ON DELETE SET NULL: a fact outlives the session it was extracted
+    # from if that session is later deleted (unlike user_id's CASCADE above).
+    source_session_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("chat_sessions.id", ondelete="SET NULL"), default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    user: Mapped["User"] = relationship(back_populates="memory_facts")
+
+    # No ANN index (HNSW/ivfflat) on `embedding`: pgvector caps both at 2000
+    # dimensions, but MEMORY_EMBEDDING_DIM is 4096 (verified empirically, Task
+    # 27) — `CREATE INDEX ... USING hnsw` fails outright at this width
+    # ("column cannot have more than 2000 dimensions for hnsw index",
+    # discovered running Task 38's live-Postgres regression pass). Not a
+    # practical problem: MemoryStore.search_facts()/find_nearest() always
+    # filter by user_id first, so cosine-distance is computed over one user's
+    # handful of facts, not the whole table — an unindexed sequential scan is
+    # fine at this scale. Revisit only if per-user fact counts grow large
+    # enough for that scan to matter (e.g. via a halfvec-typed index, which
+    # supports higher dimensionality at reduced precision).
 
 
 # Database engine — module-level singleton; tables are NOT created here.

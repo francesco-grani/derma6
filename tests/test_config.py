@@ -62,3 +62,44 @@ class TestSupabaseUrlRequired:
 
         with pytest.raises(ValidationError):
             Settings(_env_file=None, **_REQUIRED)  # type: ignore[call-arg, arg-type]
+
+
+class TestMemorySettingsDefaults:
+    def test_defaults_load_correctly(self) -> None:
+        settings = _make_settings(SUPABASE_URL="https://myproj.supabase.co")
+
+        assert settings.memory_extraction_model is None
+        assert settings.memory_similarity_threshold == 0.92
+        assert settings.memory_retrieval_top_k == 5
+
+    def test_explicit_values_are_respected(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            MEMORY_EXTRACTION_MODEL="anthropic/claude-haiku-4.5",
+            MEMORY_SIMILARITY_THRESHOLD="0.85",
+            MEMORY_RETRIEVAL_TOP_K="3",
+        )
+
+        assert settings.memory_extraction_model == "anthropic/claude-haiku-4.5"
+        assert settings.memory_similarity_threshold == 0.85
+        assert settings.memory_retrieval_top_k == 3
+
+
+class TestEffectiveMemoryExtractionModel:
+    def test_falls_back_to_llm_model_when_unset(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+        )
+
+        assert settings.memory_extraction_model is None
+        assert settings.effective_memory_extraction_model == "anthropic/claude-haiku-4.5"
+
+    def test_uses_explicit_override_when_set(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+            MEMORY_EXTRACTION_MODEL="openai/gpt-4o-mini",
+        )
+
+        assert settings.effective_memory_extraction_model == "openai/gpt-4o-mini"

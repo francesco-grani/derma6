@@ -110,6 +110,28 @@ class SaveConditionRequest(BaseModel):
     condition: str
 
 
+# ── Cross-session memory (Bundle 3) ─────────────────────────────────────────────
+
+
+class MemoryFactSchema(BaseModel):
+    """A single durably-stored freeform fact extracted from a past conversation."""
+
+    id: int
+    fact_text: str
+    # Nullable: the FK is ON DELETE SET NULL (backend/db/models.py::UserMemoryFact) —
+    # a fact outlives the session it was extracted from if that session is deleted.
+    source_session_id: str | None = None
+    created_at: datetime
+
+
+class MemoryExtractionResult(BaseModel):
+    """LLM output shape for `structured_completion()`-driven fact extraction
+    (backend/agent/memory_extraction.py). Empty `facts` is valid and expected
+    (Req 9.4) — most turns contain nothing memory-worthy."""
+
+    facts: list[str] = []
+
+
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
 

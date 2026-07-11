@@ -13,6 +13,13 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Run deepeval LLM quality evaluations (requires live OPENROUTER_API_KEY)",
     )
+    parser.addoption(
+        "--run-pgvector",
+        action="store_true",
+        default=False,
+        help="Run pgvector integration tests (requires a live Postgres with the "
+        "vector extension available — see DATABASE_URL)",
+    )
 
 
 def pytest_collection_modifyitems(
@@ -23,3 +30,8 @@ def pytest_collection_modifyitems(
         for item in items:
             if "eval" in item.keywords:
                 item.add_marker(skip_eval)
+    if not config.getoption("--run-pgvector"):
+        skip_pgvector = pytest.mark.skip(reason="pass --run-pgvector to run pgvector integration tests")
+        for item in items:
+            if "pgvector" in item.keywords:
+                item.add_marker(skip_pgvector)

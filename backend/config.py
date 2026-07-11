@@ -107,6 +107,25 @@ class Settings(BaseSettings):
         supabase_url = info.data.get("supabase_url", "")
         return f"{supabase_url}/auth/v1/.well-known/jwks.json"
 
+    # Cross-session memory (Bundle 3 — extraction/retrieval of freeform facts)
+    memory_extraction_model: str | None = Field(
+        default=None,
+        alias="MEMORY_EXTRACTION_MODEL",
+        description="Model used for memory-fact extraction. Falls back to llm_model "
+        "when unset (see effective_memory_extraction_model).",
+    )
+    memory_similarity_threshold: float = Field(
+        default=0.92, alias="MEMORY_SIMILARITY_THRESHOLD"
+    )
+    memory_retrieval_top_k: int = Field(default=5, alias="MEMORY_RETRIEVAL_TOP_K")
+
+    @property
+    def effective_memory_extraction_model(self) -> str:
+        """The model actually used for memory-fact extraction: an explicit
+        override if configured, otherwise the same model driving the live chat
+        agent (llm_model)."""
+        return self.memory_extraction_model or self.llm_model
+
     # Input validation
     max_message_chars: int = Field(default=2000, alias="MAX_MESSAGE_CHARS")
 

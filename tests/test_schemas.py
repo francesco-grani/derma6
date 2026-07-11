@@ -1,5 +1,7 @@
 """Unit tests for backend.schemas Pydantic models."""
 
+from datetime import datetime
+
 import pytest
 from pydantic import ValidationError
 
@@ -10,6 +12,8 @@ from backend.schemas import (
     CompleteSignupRequest,
     IntroductionPlanSchema,
     IntroductionWeek,
+    MemoryExtractionResult,
+    MemoryFactSchema,
     RoutineSchema,
     RoutineStepInput,
     RoutineStepSchema,
@@ -200,3 +204,41 @@ class TestToolResult:
         tr = ToolResult(tool_name="kb_search", summary="Found 2 docs about retinol.")
         assert tr.tool_name == "kb_search"
         assert "retinol" in tr.summary
+
+
+class TestMemoryFactSchema:
+    def test_valid_fact(self):
+        fact = MemoryFactSchema(
+            id=1,
+            fact_text="Prefers fragrance-free products",
+            source_session_id="sess-1",
+            created_at=datetime(2026, 7, 11, 12, 0, 0),
+        )
+        assert fact.id == 1
+        assert fact.fact_text == "Prefers fragrance-free products"
+        assert fact.source_session_id == "sess-1"
+
+    def test_source_session_id_nullable(self):
+        # FK is ON DELETE SET NULL (UserMemoryFact.source_session_id) — a fact
+        # outlives the session it was extracted from if that session is deleted.
+        fact = MemoryFactSchema(
+            id=2,
+            fact_text="Lives in a humid climate",
+            source_session_id=None,
+            created_at=datetime(2026, 7, 11, 12, 0, 0),
+        )
+        assert fact.source_session_id is None
+
+    def test_missing_fact_text_raises(self):
+        with pytest.raises(ValidationError, match="fact_text"):
+            MemoryFactSchema(id=3, created_at=datetime(2026, 7, 11, 12, 0, 0))
+
+
+class TestMemoryExtractionResult:
+    def test_defaults_to_empty_facts(self):
+        result = MemoryExtractionResult()
+        assert result.facts == []
+
+    def test_with_facts(self):
+        result = MemoryExtractionResult(facts=["Uses well water", "Vegan"])
+        assert result.facts == ["Uses well water", "Vegan"]

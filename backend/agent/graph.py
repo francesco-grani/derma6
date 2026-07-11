@@ -4,6 +4,7 @@ Replaces the AE.2.5 LangChain create_agent() with an explicit StateGraph,
 keeping the same system prompt, tool closure pattern, and streaming API.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -28,12 +29,14 @@ from langgraph.types import interrupt, Command
 
 from openai import AsyncOpenAI
 
+from backend.agent.memory_extraction import extract_and_store_facts
 from backend.config import settings
 from backend.db.chat_history import get_history
-from backend.db.deps import get_profile_store, get_session_store
+from backend.db.deps import get_memory_store, get_profile_store, get_session_store
 from backend.db.profile_store import ProfileStore
 from backend.middleware.content_filter import scrub_pii_output
 from backend.pricing import calculate_cost
+from backend.rag.embeddings import OpenRouterEmbeddings
 from backend.rate_limiter import RateLimiter
 from backend.schemas import (
     BackendResponse,
@@ -83,6 +86,8 @@ async def close_checkpointer() -> None:
 
 _store = get_profile_store()
 _sess_store = get_session_store()
+_memory_store = get_memory_store()
+_memory_embeddings = OpenRouterEmbeddings()
 
 _llm = ChatOpenAI(
     model=settings.llm_model,
@@ -643,7 +648,9 @@ def _audit(user_id: str, tool_name: str, args_summary: str) -> None:
 
 # ── System prompt builder ────────────────────────────────────────────────────
 
-def build_system_prompt(profile: UserProfile, store: ProfileStore) -> str:
+def build_system_prompt(
+    profile: UserProfile, store: ProfileStore, memory_facts: list[str] | None = None
+) -> str:
     username = _sanitise(profile.username) if profile.username else "unknown"
     sections: list[str] = [_PERSONA, f"CURRENT USER: username='{username}'"]
 
@@ -733,6 +740,15 @@ def build_system_prompt(profile: UserProfile, store: ProfileStore) -> str:
             f'Disclaimer (copy verbatim when applicable): '
             f'"⚠️ I\'m an AI assistant, not a dermatologist. Given your {flags_str}, '
             f'please consult a qualified dermatologist before making changes to your routine."'
+        )
+
+    if memory_facts:
+        safe_facts = [_sanitise(f, max_len=300) for f in memory_facts]
+        sections.append(
+            "ADDITIONAL CONTEXT FROM PAST CONVERSATIONS (freeform facts the user "
+            "shared previously — use naturally where relevant, don't just recite "
+            "this list back to them):\n"
+            + "\n".join(f"- {f}" for f in safe_facts)
         )
 
     sections.extend([
@@ -913,6 +929,20 @@ async def _set_title_if_first_message(session_id: str, message: str) -> str:
 
 _rate_limiter = RateLimiter()
 
+# Holds strong references to in-flight background fact-extraction tasks (Req 12.1,
+# 12.2) — asyncio.create_task() alone doesn't prevent garbage collection of a task
+# with no other referent, which can silently cancel it mid-run.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _schedule_fact_extraction(user_id: str, session_id: str, user_message: str, answer: str) -> None:
+    """Fire-and-forget: never awaited by the caller, so extraction latency and any
+    failure inside it (Req 12.3, swallowed by extract_and_store_facts itself) can
+    never block or fail the chat response that already completed."""
+    task = asyncio.create_task(extract_and_store_facts(user_id, session_id, user_message, answer))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
 
 async def stream_agent_response(
     user_id: str,
@@ -930,9 +960,27 @@ async def stream_agent_response(
         yield "data: [DONE]\n\n"
         return
 
+    answer: str | None = None
     try:
         profile = _store.get_profile(user_id)
-        system_prompt = build_system_prompt(profile, _store)
+
+        # Req 11.4, 17.1: retrieval failure degrades to "no facts retrieved"
+        # (fail-open) rather than blocking the turn — memory context is an
+        # enhancement, not a dependency of the chat response.
+        memory_facts: list[str] = []
+        try:
+            query_embedding = await asyncio.to_thread(_memory_embeddings.embed_query, message)
+            retrieved = _memory_store.search_facts(
+                user_id, query_embedding, settings.memory_retrieval_top_k
+            )
+            memory_facts = [f.fact_text for f in retrieved]
+        except Exception as exc:
+            logger.warning(
+                "Memory retrieval failed for %s; continuing without memory context: %s",
+                user_id, exc,
+            )
+
+        system_prompt = build_system_prompt(profile, _store, memory_facts)
         chat_history = get_history(session_id)
         prior_messages = list(chat_history.messages)
         is_first_message = len(prior_messages) == 0
@@ -1055,6 +1103,10 @@ async def stream_agent_response(
 
     finally:
         yield "data: [DONE]\n\n"
+        # Only a turn that produced a final answer (no error, no pending interrupt)
+        # is memory-worthy — `answer` stays None on either of those paths above.
+        if answer:
+            _schedule_fact_extraction(user_id, session_id, message, answer)
 
 
 async def stream_resume_response(
@@ -1066,6 +1118,7 @@ async def stream_resume_response(
 ) -> AsyncIterator[str]:
     """Resume a paused HITL graph with the user's decision."""
 
+    answer: str | None = None
     try:
         profile = _store.get_profile(user_id)
         system_prompt = build_system_prompt(profile, _store)
@@ -1139,6 +1192,12 @@ async def stream_resume_response(
 
     finally:
         yield "data: [DONE]\n\n"
+        # Only a turn that produced a final answer (no error, no pending interrupt)
+        # is memory-worthy — `answer` stays None on either of those paths above.
+        # `note` (the freeform text attached to the user's HITL decision, if any)
+        # stands in for a "user message" here — a resume has no fresh chat message.
+        if answer:
+            _schedule_fact_extraction(user_id, session_id, note, answer)
 
 
 def _sse(payload: dict) -> str:
