@@ -36,6 +36,17 @@ export function useStreamChat(sessionId: string | null) {
   const streamingRef = useRef(false)
   const qc = useQueryClient()
 
+  // Abort any in-flight stream and reset streaming state whenever the session
+  // changes, so a still-running response from the *previous* session can't
+  // block (or get mistaken for) the newly-selected session's history load.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      streamingRef.current = false
+      setStreaming(false)
+    }
+  }, [sessionId])
+
   // Load history whenever sessionId changes
   useEffect(() => {
     setPendingInterrupt(null)
