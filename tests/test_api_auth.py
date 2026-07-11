@@ -1,19 +1,19 @@
-"""Tests for backend.api.auth (capstone-round Bundle 2, Task 18, Req 4.1-4.6, 17.1, 17.3).
+"""Tests for backend.api.auth.
 
 These are route-level tests exercised through FastAPI's `TestClient` against
 a minimal app that mounts only `backend.api.auth.router` (mirroring
 `tests/test_middleware_auth.py`'s approach of avoiding `backend.main`'s full
 router set, since several other routers still reference the pre-rekey
-`get_current_user`/`username` contract until Tasks 19-22 land). Both routes
-under test are public (no JWT/Bearer token involved), so the auth middleware
+`get_current_user`/`username` contract until Tasks 19-22 land). The route
+under test is public (no JWT/Bearer token involved), so the auth middleware
 itself is intentionally not mounted here — that behavior is covered by
 `tests/test_middleware_auth.py`.
 
 `get_profile_store` is overridden via FastAPI's `dependency_overrides` to
 return a `ProfileStore` backed by a per-test temporary SQLite file (matching
 the `profile_store` fixture already used in `tests/test_profile_store.py`),
-so these tests exercise the real `ProfileStore.get_or_create_user_by_id` /
-`get_user_id_by_username` methods rather than mocks.
+so these tests exercise the real `ProfileStore.get_or_create_user_by_id`
+method rather than mocks.
 """
 
 from fastapi import FastAPI
@@ -28,40 +28,6 @@ def _make_client(store) -> TestClient:
     app.include_router(auth_router)
     app.dependency_overrides[get_profile_store] = lambda: store
     return TestClient(app)
-
-
-class TestUsernameAvailable:
-    """Req 4.2, 4.3: live-typing availability check and pre-submit gate."""
-
-    def test_available_username_returns_true(self, profile_store):
-        client = _make_client(profile_store)
-
-        response = client.get("/api/auth/username-available", params={"u": "brandnew"})
-
-        assert response.status_code == 200
-        assert response.json() == {"available": True}
-
-    def test_taken_username_returns_false(self, profile_store):
-        profile_store.get_or_create_user_by_id(
-            "user-1", "taken@example.com", "alreadytaken"
-        )
-        client = _make_client(profile_store)
-
-        response = client.get("/api/auth/username-available", params={"u": "alreadytaken"})
-
-        assert response.status_code == 200
-        assert response.json() == {"available": False}
-
-    def test_candidate_is_stripped_before_lookup(self, profile_store):
-        profile_store.get_or_create_user_by_id(
-            "user-1", "taken@example.com", "spacedout"
-        )
-        client = _make_client(profile_store)
-
-        response = client.get("/api/auth/username-available", params={"u": "  spacedout  "})
-
-        assert response.status_code == 200
-        assert response.json() == {"available": False}
 
 
 class TestCompleteSignup:
@@ -102,7 +68,7 @@ class TestCompleteSignup:
         assert profile.username == "provisioned"
         assert profile.user_id == "22222222-2222-2222-2222-222222222222"
 
-    def test_username_taken_returns_409(self, profile_store):
+    def test_duplicate_username_allowed(self, profile_store):
         profile_store.get_or_create_user_by_id(
             "33333333-3333-3333-3333-333333333333", "first@example.com", "duplicate"
         )
@@ -114,6 +80,24 @@ class TestCompleteSignup:
                 "supabase_user_id": "44444444-4444-4444-4444-444444444444",
                 "email": "second@example.com",
                 "username": "duplicate",
+            },
+        )
+
+        assert response.status_code == 201
+        assert response.json()["username"] == "duplicate"
+
+    def test_email_taken_returns_409(self, profile_store):
+        profile_store.get_or_create_user_by_id(
+            "77777777-7777-7777-7777-777777777777", "dup@example.com", "userone"
+        )
+        client = _make_client(profile_store)
+
+        response = client.post(
+            "/api/auth/complete-signup",
+            json={
+                "supabase_user_id": "88888888-8888-8888-8888-888888888888",
+                "email": "dup@example.com",
+                "username": "usertwo",
             },
         )
 

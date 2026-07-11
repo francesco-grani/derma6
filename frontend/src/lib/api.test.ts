@@ -18,7 +18,7 @@ vi.mock('./supabaseClient', () => ({
 }))
 
 // Imported after the mock so `api.ts` picks up the mocked `./supabaseClient`.
-import { apiCheckUsername, apiCompleteSignup, apiGetProfile } from './api'
+import { apiCompleteSignup, apiGetProfile } from './api'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -102,38 +102,6 @@ describe('api.ts', () => {
     })
   })
 
-  describe('apiCheckUsername', () => {
-    it('GETs /api/auth/username-available with the encoded candidate and returns availability', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ available: true }))
-
-      const result = await apiCheckUsername('new user')
-
-      expect(fetchMock).toHaveBeenCalledWith('/api/auth/username-available?u=new%20user')
-      expect(result).toBe(true)
-    })
-
-    it('returns false when the backend reports the username is taken', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ available: false }))
-
-      await expect(apiCheckUsername('taken')).resolves.toBe(false)
-    })
-
-    it('does not attach a bearer token (public endpoint)', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ available: true }))
-
-      await apiCheckUsername('bob')
-
-      expect(mocks.getSession).not.toHaveBeenCalled()
-      expect(fetchMock.mock.calls[0]).toHaveLength(1)
-    })
-
-    it('throws on a non-ok response', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'server error' }, 500))
-
-      await expect(apiCheckUsername('bob')).rejects.toThrow('server error')
-    })
-  })
-
   describe('apiCompleteSignup', () => {
     it('POSTs the supabase_user_id/email/username and returns the provisioned user', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ user_id: 'uuid-1', username: 'bob' }, 201))
@@ -159,11 +127,11 @@ describe('api.ts', () => {
       expect(mocks.getSession).not.toHaveBeenCalled()
     })
 
-    it('surfaces a 409 "username taken" error from the backend', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ detail: 'username already taken' }, 409))
+    it('surfaces a 409 "email already registered" error from the backend', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ detail: 'email already registered' }, 409))
 
       await expect(apiCompleteSignup('uuid-1', 'bob@example.com', 'bob')).rejects.toThrow(
-        'username already taken',
+        'email already registered',
       )
     })
   })

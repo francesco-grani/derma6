@@ -63,24 +63,16 @@ class TestGetOrCreateUserById:
         bob = profile_store.get_profile("uid-bob")
         assert bob.skin_type is None
 
-    def test_duplicate_username_raises(self, profile_store):
-        profile_store.get_or_create_user_by_id("uid-1", "one@example.com", "sameusername")
-        with pytest.raises(ProfileStoreError, match="username already taken"):
-            profile_store.get_or_create_user_by_id("uid-2", "two@example.com", "sameusername")
+    def test_duplicate_username_allowed(self, profile_store):
+        one = profile_store.get_or_create_user_by_id("uid-1", "one@example.com", "samename")
+        two = profile_store.get_or_create_user_by_id("uid-2", "two@example.com", "samename")
+        assert one.username == two.username == "samename"
+        assert one.user_id != two.user_id
 
     def test_duplicate_email_raises(self, profile_store):
         profile_store.get_or_create_user_by_id("uid-1", "same@example.com", "userone")
         with pytest.raises(ProfileStoreError, match="email already registered"):
             profile_store.get_or_create_user_by_id("uid-2", "same@example.com", "usertwo")
-
-
-class TestGetUserIdByUsername:
-    def test_returns_id_for_existing_username(self, profile_store):
-        _make_user(profile_store, "carol")
-        assert profile_store.get_user_id_by_username("carol") == "uid-carol"
-
-    def test_returns_none_for_unknown_username(self, profile_store):
-        assert profile_store.get_user_id_by_username("nobody") is None
 
 
 class TestGetProfile:

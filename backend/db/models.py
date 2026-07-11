@@ -25,10 +25,10 @@ class User(Base):
     __tablename__ = "users"
 
     # Supabase-issued UUID string; always supplied at insert time, never
-    # generated locally (Req 7.1). Username remains a secondary, uniquely
-    # indexed attribute (Req 7.3) — it is no longer the join key.
+    # generated locally. Username is a plain, non-unique display name (e.g.
+    # first name only) — not an identifier.
     id: Mapped[str] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(unique=True, index=True)
+    username: Mapped[str]
     email: Mapped[str] = mapped_column(unique=True, index=True)
     skin_type: Mapped[Optional[str]] = mapped_column(default=None)
     skin_concerns: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]

@@ -49,7 +49,11 @@ export default function SignInPage() {
   async function handleResend() {
     setResendState('sending')
     try {
-      const { error: resendError } = await supabase.auth.resend({ type: 'signup', email })
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+      })
       if (resendError) throw resendError
       setResendState('sent')
     } catch {

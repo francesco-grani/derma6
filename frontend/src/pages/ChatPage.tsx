@@ -186,6 +186,7 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
           : isUser
             ? msg.content
             : (
+              <>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -250,6 +251,18 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
               >
                 {msg.content}
               </ReactMarkdown>
+              {msg.working && (
+                <span className="flex gap-1 items-center pt-0.5">
+                  {[0, 150, 300].map(delay => (
+                    <span
+                      key={delay}
+                      className="inline-block w-1.5 h-1.5 rounded-full animate-bounce"
+                      style={{ background: '#1C2520', opacity: 0.35, animationDelay: `${delay}ms` }}
+                    />
+                  ))}
+                </span>
+              )}
+              </>
             )
         }
       </div>

@@ -644,10 +644,10 @@ function StatusBadge({
 
 // ── Page root ─────────────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const { username } = useAuth()
+  const { isAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState<Tab>('users')
 
-  if (username !== 'admin') {
+  if (!isAdmin) {
     return (
       <div className="flex-1 p-6" style={{ background: C.bg }}>
         <p style={{ color: C.textError }}>Access denied.</p>

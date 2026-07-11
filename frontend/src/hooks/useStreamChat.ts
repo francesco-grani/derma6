@@ -20,6 +20,7 @@ export interface ChatMessage {
   citations?: string[]
   rag_context?: RagItem[]
   tool_results?: ToolResultItem[]
+  working?: boolean
 }
 
 export interface PendingInterrupt {
@@ -112,29 +113,36 @@ export function useStreamChat(sessionId: string | null) {
           try {
             const event = JSON.parse(raw)
             if (event.type === 'text') {
-              updateLast(msg => ({ ...msg, content: msg.content + event.content }))
+              updateLast(msg => ({ ...msg, content: msg.content + event.content, working: false }))
+            } else if (event.type === 'tool_start') {
+              updateLast(msg => ({ ...msg, working: true }))
             } else if (event.type === 'clear_text') {
-              updateLast(msg => ({ ...msg, content: '' }))
+              updateLast(msg => ({ ...msg, content: '', working: false }))
             } else if (event.type === 'metadata') {
               updateLast(msg => ({
                 ...msg,
                 citations: event.citations ?? [],
                 rag_context: event.rag_context ?? [],
                 tool_results: event.tool_results ?? [],
+                working: false,
               }))
             } else if (event.type === 'session_title') {
               qc.invalidateQueries({ queryKey: ['sessions'] })
             } else if (event.type === 'interrupt') {
-              // Drop the empty assistant placeholder; InterruptCard takes its place
+              // Drop the empty assistant placeholder; InterruptCard takes its place.
+              // Control has passed to the user now, so clear any lingering "working"
+              // indicator on the message that triggered this (e.g. save_routine_tool).
               setMessages(prev => {
                 const last = prev[prev.length - 1]
-                return last?.role === 'assistant' && last.content === ''
-                  ? prev.slice(0, -1)
-                  : prev
+                if (last?.role !== 'assistant') return prev
+                if (last.content === '') return prev.slice(0, -1)
+                const copy = [...prev]
+                copy[copy.length - 1] = { ...last, working: false }
+                return copy
               })
               setPendingInterrupt({ payload: event as InterruptPayload, run_id: event.run_id as string })
             } else if (event.type === 'error') {
-              updateLast(msg => ({ ...msg, content: msg.content || `⚠️ ${event.content}` }))
+              updateLast(msg => ({ ...msg, content: msg.content || `⚠️ ${event.content}`, working: false }))
             }
           } catch {
             // ignore malformed SSE lines
@@ -166,9 +174,14 @@ export function useStreamChat(sessionId: string | null) {
   const resolveInterrupt = useCallback(async (choice: string, note: string, run_id: string) => {
     if (!sessionId) return
     streamingRef.current = true
+
+    const option = pendingInterrupt?.payload.options.find(o => o.value === choice)
+    const displayContent = note.trim() || option?.label || choice
+    const userMsg: ChatMessage = { role: 'user', content: displayContent }
+
     setPendingInterrupt(null)
     setStreaming(true)
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }])
+    setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }])
 
     try {
       const token = await getAccessToken()
@@ -208,19 +221,37 @@ export function useStreamChat(sessionId: string | null) {
           try {
             const event = JSON.parse(raw)
             if (event.type === 'text') {
-              updateLast(msg => ({ ...msg, content: msg.content + event.content }))
+              updateLast(msg => ({ ...msg, content: msg.content + event.content, working: false }))
+            } else if (event.type === 'tool_start') {
+              updateLast(msg => ({ ...msg, working: true }))
             } else if (event.type === 'clear_text') {
-              updateLast(msg => ({ ...msg, content: '' }))
+              updateLast(msg => ({ ...msg, content: '', working: false }))
             } else if (event.type === 'metadata') {
               updateLast(msg => ({
                 ...msg,
                 citations: event.citations ?? [],
                 rag_context: event.rag_context ?? [],
                 tool_results: event.tool_results ?? [],
+                working: false,
               }))
               qc.invalidateQueries({ queryKey: ['routines'] })
+            } else if (event.type === 'interrupt') {
+              // Backend hit another interrupt right away (e.g. a second parallel
+              // tool call awaiting its own confirmation) — chain into a new card
+              // instead of silently dropping the event and leaving the UI stuck.
+              // Also clear any lingering "working" indicator now that control has
+              // passed back to the user.
+              setMessages(prev => {
+                const last = prev[prev.length - 1]
+                if (last?.role !== 'assistant') return prev
+                if (last.content === '') return prev.slice(0, -1)
+                const copy = [...prev]
+                copy[copy.length - 1] = { ...last, working: false }
+                return copy
+              })
+              setPendingInterrupt({ payload: event as InterruptPayload, run_id: event.run_id as string })
             } else if (event.type === 'error') {
-              updateLast(msg => ({ ...msg, content: msg.content || `⚠️ ${event.content}` }))
+              updateLast(msg => ({ ...msg, content: msg.content || `⚠️ ${event.content}`, working: false }))
             }
           } catch { /* ignore malformed SSE */ }
         }
@@ -237,7 +268,7 @@ export function useStreamChat(sessionId: string | null) {
       streamingRef.current = false
       setStreaming(false)
     }
-  }, [sessionId, qc])
+  }, [sessionId, qc, pendingInterrupt])
 
   return { messages, streaming, pendingInterrupt, sendMessage, resolveInterrupt, clearMessages }
 }

@@ -70,11 +70,10 @@ class TestUserPrimaryKey:
         assert col.unique is True
         assert col.index is True
 
-    def test_username_remains_unique_and_indexed_secondary_attribute(self):
-        """Req 7.3: username is still uniquely indexed but is no longer the PK/join key."""
+    def test_username_is_not_unique(self):
+        """Username is a plain display name (e.g. first name), not an identifier."""
         col = User.__table__.c.username
-        assert col.unique is True
-        assert col.index is True
+        assert col.unique is not True
         assert col.primary_key is False
 
     def test_duplicate_email_rejected(self, engine):
@@ -85,6 +84,14 @@ class TestUserPrimaryKey:
             session.add(_make_user(str(uuid.uuid4()), username="bob", email="dup@example.com"))
             with pytest.raises(Exception):
                 session.commit()
+
+    def test_duplicate_username_allowed(self, engine):
+        with Session(engine) as session:
+            session.add(_make_user(str(uuid.uuid4()), username="alice", email="a1@example.com"))
+            session.commit()
+
+            session.add(_make_user(str(uuid.uuid4()), username="alice", email="a2@example.com"))
+            session.commit()  # no IntegrityError
 
 
 class TestForeignKeyTypesCascade:

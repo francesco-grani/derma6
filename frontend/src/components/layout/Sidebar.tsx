@@ -39,8 +39,8 @@ export default function Sidebar() {
     profile.skin_concerns.length > 0
   )
 
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    await logout()
     navigate({ to: '/login' })
   }
 

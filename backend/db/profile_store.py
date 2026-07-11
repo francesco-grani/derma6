@@ -57,9 +57,9 @@ class ProfileStore:
         existing row rather than erroring.
 
         Raises:
-            ProfileStoreError: 'username already taken' / 'email already
-                registered' when the uniqueness constraint on the *other*
-                field is violated by a different user_id.
+            ProfileStoreError: 'email already registered' when the uniqueness
+                constraint on email is violated by a different user_id.
+                Username is not unique and never raises.
         """
         try:
             with Session(self._engine) as session:
@@ -80,8 +80,6 @@ class ProfileStore:
                 except IntegrityError as exc:
                     session.rollback()
                     detail = str(exc.orig).lower()
-                    if "username" in detail:
-                        raise ProfileStoreError("username already taken") from exc
                     if "email" in detail:
                         raise ProfileStoreError("email already registered") from exc
                     raise ProfileStoreError(str(exc)) from exc
@@ -91,17 +89,6 @@ class ProfileStore:
             raise
         except SQLAlchemyError as exc:
             logger.error("get_or_create_user_by_id failed for '%s': %s", user_id, exc)
-            raise ProfileStoreError(str(exc)) from exc
-
-    def get_user_id_by_username(self, username: str) -> Optional[str]:
-        """Secondary lookup, used only by the username-availability check and
-        anywhere a human-entered username needs resolving to the PK (Req 7.3)."""
-        try:
-            with Session(self._engine) as session:
-                user = session.query(User).filter_by(username=username).first()
-                return user.id if user is not None else None
-        except SQLAlchemyError as exc:
-            logger.error("get_user_id_by_username failed for '%s': %s", username, exc)
             raise ProfileStoreError(str(exc)) from exc
 
     def get_profile(self, user_id: str) -> UserProfile:

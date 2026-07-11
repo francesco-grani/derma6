@@ -1,82 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { apiCheckUsername, apiCompleteSignup } from '@/lib/api'
+import { apiCompleteSignup } from '@/lib/api'
 import { supabase } from '@/lib/supabaseClient'
 
-type Availability = 'idle' | 'checking' | 'available' | 'taken' | 'error'
-
-/** Debounce delay for the live username-availability check (Req 4.2). */
-const USERNAME_DEBOUNCE_MS = 400
-
-/** Matches `CompleteSignupRequest`'s backend username-length validator (2-50 chars). */
-const MIN_USERNAME_LENGTH = 2
+/** Matches `CompleteSignupRequest`'s backend length validator (2-50 chars). */
+const MIN_FIRST_NAME_LENGTH = 2
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [username, setUsername] = useState('')
-  // Result of the most recently *completed* availability check, tagged with
-  // the candidate it applies to. Every display state is derived from this
-  // plus the live `username` field below rather than stored directly, so
-  // the effect only ever calls `setState` from inside its async callback
-  // (a genuine "subscribe to an external system" case) and never
-  // synchronously in the effect body itself.
-  const [lastCheck, setLastCheck] = useState<{ candidate: string; result: 'available' | 'taken' | 'error' } | null>(null)
+  const [firstName, setFirstName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [signedUp, setSignedUp] = useState(false)
 
-  const candidate = username.trim()
-  const candidateTooShort = candidate.length < MIN_USERNAME_LENGTH
-  const availability: Availability =
-    candidateTooShort ? 'idle'
-    : lastCheck && lastCheck.candidate === candidate ? lastCheck.result
-    : 'checking'
-
-  // Live debounced username-availability check (Req 4.2): waits for the user
-  // to stop typing before hitting the backend, and discards stale results if
-  // the username changes again before the request resolves.
-  useEffect(() => {
-    if (candidateTooShort) return
-    let cancelled = false
-    const timer = setTimeout(() => {
-      apiCheckUsername(candidate)
-        .then(available => {
-          if (cancelled) return
-          setLastCheck({ candidate, result: available ? 'available' : 'taken' })
-        })
-        .catch(() => {
-          if (cancelled) return
-          setLastCheck({ candidate, result: 'error' })
-        })
-    }, USERNAME_DEBOUNCE_MS)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [candidate, candidateTooShort])
+  const canSubmit = firstName.trim().length >= MIN_FIRST_NAME_LENGTH
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    // Belt-and-braces: the submit button is already disabled until
-    // availability === 'available' (Req 4.3), but guard here too in case of
-    // a fast Enter-key submit racing the debounce.
-    if (availability !== 'available') return
+    if (!canSubmit) return
     setError('')
     setLoading(true)
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+      })
       if (signUpError) throw signUpError
       const supabaseUserId = data.user?.id
       if (!supabaseUserId) throw new Error('Sign-up did not return a user id.')
       // Provision the local `users` row (Req 4.4). If this fails after the
       // auth identity already exists, surface the error clearly rather than
       // silently showing the "check your email" screen (Req 4.5).
-      await apiCompleteSignup(supabaseUserId, email, username.trim())
+      await apiCompleteSignup(supabaseUserId, email, firstName.trim())
       setSignedUp(true)
     } catch (err) {
       setError((err as Error).message)
@@ -106,13 +67,6 @@ export default function SignUpPage() {
     )
   }
 
-  const availabilityHint =
-    availability === 'checking' ? 'Checking availability…'
-    : availability === 'available' ? 'Username available ✓'
-    : availability === 'taken' ? 'Username already taken'
-    : availability === 'error' ? 'Could not check availability — try again'
-    : ''
-
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#3E4D3F' }}>
       <Card className="w-full max-w-sm shadow-xl" style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
@@ -134,24 +88,14 @@ export default function SignUpPage() {
               style={{ background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
               className="placeholder:text-[#9EAD9E]"
             />
-            <div className="flex flex-col gap-1">
-              <Input
-                placeholder="Username"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                required
-                style={{ background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
-                className="placeholder:text-[#9EAD9E]"
-              />
-              {availabilityHint && (
-                <p
-                  className="text-xs px-1"
-                  style={{ color: availability === 'available' ? '#7A9B7D' : '#C4933F' }}
-                >
-                  {availabilityHint}
-                </p>
-              )}
-            </div>
+            <Input
+              placeholder="First name"
+              value={firstName}
+              onChange={e => setFirstName(e.target.value)}
+              required
+              style={{ background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
+              className="placeholder:text-[#9EAD9E]"
+            />
             <div className="relative">
               <Input
                 type={showPassword ? 'text' : 'password'}
@@ -183,7 +127,7 @@ export default function SignUpPage() {
             )}
             <Button
               type="submit"
-              disabled={loading || availability !== 'available'}
+              disabled={loading || !canSubmit}
               style={{ background: '#7A9B7D', color: '#1C2520', fontWeight: 600 }}
               className="mt-1"
             >

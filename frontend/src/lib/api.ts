@@ -50,26 +50,10 @@ async function authedFetch(path: string, init: RequestInit = {}) {
 // ── Auth ──────────────────────────────────────────────────────────────────
 
 /**
- * GET /api/auth/username-available?u=<candidate>. Public — no bearer token
- * required. Backs the live-typing availability check during signup
- * (Req 4.2) and the pre-submit gate that blocks completion on a taken
- * username (Req 4.3).
- */
-export async function apiCheckUsername(u: string): Promise<boolean> {
-  const res = await fetch(`/api/auth/username-available?u=${encodeURIComponent(u)}`)
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Username check failed')
-  }
-  const data = (await res.json()) as { available: boolean }
-  return data.available
-}
-
-/**
  * POST /api/auth/complete-signup. Public — Supabase issues no session while
  * email confirmation is pending, so this call cannot carry a bearer token.
  * Provisions the local `users` row keyed by the Supabase-issued UUID, using
- * the explicitly-submitted email and username (Req 4.4).
+ * the explicitly-submitted email and display name (Req 4.4).
  */
 export async function apiCompleteSignup(
   supabase_user_id: string,

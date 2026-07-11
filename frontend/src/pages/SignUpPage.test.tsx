@@ -22,13 +22,11 @@ vi.mock('@tanstack/react-router', async () => {
 // inside the factories without a TDZ error — same pattern as
 // `lib/auth.test.tsx` / `lib/api.test.ts`.
 const mocks = vi.hoisted(() => ({
-  apiCheckUsername: vi.fn(),
   apiCompleteSignup: vi.fn(),
   signUp: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
-  apiCheckUsername: mocks.apiCheckUsername,
   apiCompleteSignup: mocks.apiCompleteSignup,
 }))
 
@@ -40,9 +38,9 @@ vi.mock('@/lib/supabaseClient', () => ({
   },
 }))
 
-function fillForm({ email, username, password }: { email: string; username: string; password: string }) {
+function fillForm({ email, firstName, password }: { email: string; firstName: string; password: string }) {
   fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: email } })
-  fireEvent.change(screen.getByPlaceholderText('Username'), { target: { value: username } })
+  fireEvent.change(screen.getByPlaceholderText('First name'), { target: { value: firstName } })
   fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: password } })
 }
 
@@ -51,16 +49,10 @@ beforeEach(() => {
 })
 
 describe('SignUpPage', () => {
-  it('blocks submit while the chosen username is taken (Req 4.2, 4.3)', async () => {
-    mocks.apiCheckUsername.mockResolvedValue(false)
-
+  it('blocks submit while the first-name field is empty', async () => {
     render(<SignUpPage />)
-    fillForm({ email: 'bob@example.com', username: 'bob', password: 'MyPass1!' })
+    fillForm({ email: 'bob@example.com', firstName: '', password: 'MyPass1!' })
 
-    // Debounced availability check (Req 4.2) resolves against the real
-    // (non-fake) timer used by the component.
-    await waitFor(() => expect(mocks.apiCheckUsername).toHaveBeenCalledWith('bob'))
-    await waitFor(() => expect(screen.getByText('Username already taken')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Create account →' })).toBeDisabled()
 
     // Submitting the form while the button is disabled must not proceed to sign-up.
@@ -68,15 +60,13 @@ describe('SignUpPage', () => {
     expect(mocks.signUp).not.toHaveBeenCalled()
   })
 
-  it('completes a full sign-up: availability confirmed → signUp() → completeSignup() → check-email screen', async () => {
-    mocks.apiCheckUsername.mockResolvedValue(true)
+  it('completes a full sign-up: signUp() → completeSignup() → check-email screen', async () => {
     mocks.signUp.mockResolvedValue({ data: { user: { id: 'uuid-123' }, session: null }, error: null })
     mocks.apiCompleteSignup.mockResolvedValue({ user_id: 'uuid-123', username: 'newuser' })
 
     render(<SignUpPage />)
-    fillForm({ email: 'newuser@example.com', username: 'newuser', password: 'MyPass1!' })
+    fillForm({ email: 'newuser@example.com', firstName: 'newuser', password: 'MyPass1!' })
 
-    await waitFor(() => expect(screen.getByText('Username available ✓')).toBeInTheDocument())
     const submitButton = screen.getByRole('button', { name: 'Create account →' })
     expect(submitButton).toBeEnabled()
 
@@ -85,7 +75,11 @@ describe('SignUpPage', () => {
     })
 
     await waitFor(() => {
-      expect(mocks.signUp).toHaveBeenCalledWith({ email: 'newuser@example.com', password: 'MyPass1!' })
+      expect(mocks.signUp).toHaveBeenCalledWith({
+        email: 'newuser@example.com',
+        password: 'MyPass1!',
+        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+      })
     })
     expect(mocks.apiCompleteSignup).toHaveBeenCalledWith('uuid-123', 'newuser@example.com', 'newuser')
 

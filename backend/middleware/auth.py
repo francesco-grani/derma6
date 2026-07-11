@@ -14,7 +14,6 @@ from backend.auth import verify_supabase_jwt
 
 _PUBLIC_PATHS = frozenset({
     "/api/auth/complete-signup",
-    "/api/auth/username-available",
     "/docs",
     "/openapi.json",
     "/redoc",

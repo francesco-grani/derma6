@@ -102,7 +102,6 @@ def _make_app() -> Starlette:
         routes=[
             Route("/api/protected", _echo_user_id),
             Route("/api/auth/complete-signup", _echo_user_id, methods=["GET"]),
-            Route("/api/auth/username-available", _echo_user_id, methods=["GET"]),
             Route("/health", _echo_user_id),
         ],
     )
@@ -116,12 +115,11 @@ def client():
 
 
 class TestPublicPaths:
-    """Req 6.3/6.4: the new signup-time routes bypass auth; the old
+    """Req 6.3/6.4: the new signup-time route bypasses auth; the old
     locally-issued-token routes no longer exist as public paths."""
 
-    def test_complete_signup_and_username_available_are_public(self):
+    def test_complete_signup_is_public(self):
         assert "/api/auth/complete-signup" in _PUBLIC_PATHS
-        assert "/api/auth/username-available" in _PUBLIC_PATHS
 
     def test_login_and_register_are_no_longer_public(self):
         assert "/api/auth/login" not in _PUBLIC_PATHS
@@ -129,11 +127,6 @@ class TestPublicPaths:
 
     def test_public_path_bypasses_auth_without_a_token(self, client):
         response = client.get("/api/auth/complete-signup")
-
-        assert response.status_code == 200
-
-    def test_username_available_bypasses_auth_without_a_token(self, client):
-        response = client.get("/api/auth/username-available")
 
         assert response.status_code == 200
 

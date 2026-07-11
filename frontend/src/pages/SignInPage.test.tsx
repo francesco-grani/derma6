@@ -72,7 +72,11 @@ describe('SignInPage', () => {
     })
 
     await waitFor(() => {
-      expect(mocks.resend).toHaveBeenCalledWith({ type: 'signup', email: 'unverified@example.com' })
+      expect(mocks.resend).toHaveBeenCalledWith({
+        type: 'signup',
+        email: 'unverified@example.com',
+        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+      })
     })
     await waitFor(() => {
       expect(screen.getByText('Verification email resent ✓')).toBeInTheDocument()
