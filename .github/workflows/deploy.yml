@@ -1,8 +1,12 @@
 name: Deploy
 
+# Manual-only on this (private submission) repo — the workflow is kept here to
+# demonstrate the CI/CD setup, but the actual live deployment runs from the
+# public mirror (derma6) on every push to its main, so this repo doesn't also
+# race a second deploy against the same Hetzner server. Trigger by hand via
+# `gh workflow run deploy.yml` or the Actions tab's "Run workflow" button.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
