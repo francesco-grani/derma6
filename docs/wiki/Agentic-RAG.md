@@ -1,5 +1,7 @@
 # Agentic RAG Pipeline
 
+**TL;DR** — `kb_search` isn't a single ChromaDB query any more; it's a 7-node LangGraph sub-graph: decompose the query → hybrid dense+sparse retrieval (HyDE + BM25, merged via RRF) → cross-encoder rerank → CRAG self-grading, which retries locally before falling back to the web (or LLM-only, the default). Everything is env-var tunable with safe defaults, and the outer agent/FastAPI layer/API contract never change — the whole pipeline lives inside the `kb_search` tool boundary.
+
 The `kb_search` tool runs a 7-node LangGraph `StateGraph` that implements four agentic retrieval patterns. The outer ReAct agent, FastAPI layer, and API contract are completely unchanged — the pipeline lives entirely inside the tool boundary.
 
 ---

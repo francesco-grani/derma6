@@ -1,5 +1,7 @@
 # Knowledge Base Maintenance
 
+**TL;DR** — the KB is 20 markdown documents in `knowledge_base/`, re-embedded into ChromaDB by `uv run python scripts/index_kb.py` after any edit. There's no separate source-fetching script any more (`enrich_kb.py` was removed) — new/updated documents are written directly. Evaluation of KB retrieval quality now runs through the deepeval suite (`eval/golden_dataset.json`), not the old RAGAs pipeline — see [Evaluation](Evaluation.md).
+
 The Derma6 knowledge base (KB) consists of 20 markdown documents covering skincare actives, ingredient science, and routine principles. They live in `knowledge_base/` and are embedded into ChromaDB.
 
 ---
@@ -33,20 +35,7 @@ This drops and rebuilds the ChromaDB collection from scratch. It uses the OpenRo
 1. Create a markdown file in `knowledge_base/`, e.g. `niacinamide.md`.
 2. Structure: `# Title`, then sections for mechanism, skin types, interactions, evidence. Keep under 4000 chars to avoid overly large chunks.
 3. Run `uv run python scripts/index_kb.py` to re-embed.
-4. Optionally add Q&A pairs to `eval/eval_dataset.json` to cover the new ingredient in RAGAs eval.
-
----
-
-## Refreshing sources
-
-Raw fetch data is stored in `data/raw/` (not committed). To regenerate from live sources:
-
-```bash
-uv run python scripts/enrich_kb.py   # fetches + normalises sources via LLM
-uv run python scripts/index_kb.py    # re-embeds
-```
-
-`enrich_kb.py` calls each configured source URL, merges results with an LLM normalisation pass, and writes the final markdown to `knowledge_base/`. API calls are batched; expect ~5–10 min for a full refresh.
+4. Optionally add a `kb-*` case to `eval/golden_dataset.json` covering the new ingredient — see [Adding new test cases](Evaluation.md#adding-new-test-cases) in the Evaluation wiki page.
 
 ---
 
@@ -67,24 +56,19 @@ The `conflict_checker` tool loads this file at startup (via `settings.conflict_t
 
 ---
 
-## Running RAGAs evaluation
+## Evaluating retrieval quality
 
-```bash
-uv run python scripts/eval_rag.py              # agent mode (full e2e)
-uv run python scripts/eval_rag.py --retriever  # retriever mode (pipeline only)
-```
-
-The golden dataset is `eval/eval_dataset.json` — 15 Q&A pairs covering the KB. Metrics reported: faithfulness, answer relevancy, context precision, context recall.
-
-Add new Q&A pairs to the dataset whenever the KB grows significantly.
+The old standalone RAGAs pipeline (`scripts/eval_rag.py`, `eval/eval_dataset.json`) is gone — retrieval quality is now covered by the deepeval suite's "KB — RAG Pipeline" category (8 of the 28 test cases: `ContextualRelevancyMetric`, `ContextualPrecisionMetric`, `ContextualRecallMetric`), which exercises the real agentic RAG pipeline end-to-end rather than a bare retriever. See [Evaluation](Evaluation.md) for how to run it and add cases.
 
 ---
 
 ## Retrieval tuning
 
+These two variables size the candidate pool going into `hybrid_retrieve` — the first stage of the agentic RAG pipeline, not the whole retrieval story any more (rerank and CRAG narrow it further downstream; see [Agentic RAG](Agentic-RAG.md) for the full pipeline reference and its own config vars).
+
 | Variable | Default | Effect |
 |---|---|---|
-| `RETRIEVAL_TOP_K` | 4 | Number of chunks returned per query |
+| `RETRIEVAL_TOP_K` | 4 | Number of chunks returned per query (per dense/sparse branch, before RRF merge) |
 | `RETRIEVAL_MIN_SCORE` | 0.3 | Minimum cosine similarity to include a chunk |
 
-Raise `MIN_SCORE` to reduce noise; lower it to catch harder queries. Run RAGAs eval after any change to verify the trade-off.
+Raise `MIN_SCORE` to reduce noise; lower it to catch harder queries. Re-run `capture_outputs.py --ids kb-01,kb-02,kb-03,kb-04 --update-golden` and the KB deepeval cases after any change to verify the trade-off.

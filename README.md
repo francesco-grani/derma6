@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Derma6 v2</strong> — AI skincare assistant for male beginners.
+  <strong>Derma6 v3</strong> — AI skincare assistant for male beginners.
   Diagnose your skin type · Build a personalised routine · Catch ingredient conflicts · Schedule active introductions.
 </p>
 
@@ -22,9 +22,13 @@
 
 ---
 
-## What changed from v1
+## Version history
 
-Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architecture. Same skincare domain, same 10 core behaviours — production-grade stack:
+Three iterations, each a separate project milestone: **v1** (Streamlit prototype) → **v2** (decoupled FastAPI + React rebuild) → **v3**, this version (Capstone round — agentic RAG, Supabase, security hardening).
+
+### v1 → v2 — Streamlit monolith → decoupled architecture
+
+Same skincare domain, same 10 core behaviours — production-grade stack:
 
 | | v1 | v2 |
 |---|---|---|
@@ -39,6 +43,22 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 | **Sessions** | Single conversation | Multi-session with history |
 | **Skin analysis** | None | Vision LLM (photo upload → skin advice) |
 
+### v2 → v3 — agentic RAG, Supabase, structured output, memory (Capstone round)
+
+| | v2 | v3 |
+|---|---|---|
+| **Retrieval** | Single-shot ChromaDB top-K | 7-node agentic RAG — HyDE + BM25 hybrid retrieval, cross-encoder rerank, CRAG self-correction, web fallback |
+| **HITL** | None | 6 tools pause the graph via `interrupt()` for user confirmation before any write |
+| **Auth** | Custom JWT (username + bcrypt) | Supabase Auth — email/password, UUID identity, JWKS (ES256) verification |
+| **Persistence** | SQLite | Supabase-managed Postgres via Alembic migrations |
+| **HITL checkpointer** | — | LangGraph `AsyncPostgresSaver` — interrupted runs survive a restart and resume from any instance |
+| **Tool arguments** | Delimited strings, manually parsed | Schema-enforced structured output — nested Pydantic models, `Literal` enums, typed lists |
+| **Vision analysis parsing** | Manual `json.loads()` | `structured_completion()` — OpenAI strict-mode JSON schema with a prompt-based fallback |
+| **Conversation memory** | Per-session only | Cross-session — freeform facts extracted after each turn, deduped by cosine similarity, recalled into future system prompts |
+| **Evaluation** | None | deepeval suite — 28 tests across 7 categories, admin-dashboard visible |
+| **Security posture** | Ad hoc | Full AI-driven vulnerability scan, all findings remediated — see [Security](#security) |
+| **Deployment** | Local only | Hetzner VPS, Docker Compose + Caddy, GitHub Actions CI/CD |
+
 ---
 
 ## Features
@@ -46,14 +66,15 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 | | Feature | Description |
 |---|---|---|
 | 💬 | **Chat** | Streaming conversation with the skincare agent, organised into named sessions |
-| 🔬 | **Skin analysis** | Upload a photo — a vision LLM (GPT-4o) analyses your skin and feeds findings into the agent |
+| 🔬 | **Skin analysis** | Upload a photo — a vision LLM analyses your skin and feeds findings into the agent |
 | 🧴 | **Routine builder** | Generates AM/PM routines sequenced by application order, conflict-aware |
 | ⚠️ | **Ingredient conflict checker** | Cross-references products against a compatibility matrix (e.g. Retinol + Salicylic Acid) |
 | 📅 | **Active scheduling** | Gradual introduction plan for strong actives to minimise irritation |
 | 👤 | **Skin profile** | Persistent profile — skin type, concerns, medical flags, shaving routine |
 | 📚 | **Focused KB** | 20 documents on skincare actives: Paula's Choice, INCI Decoder, PubMed, r/SkincareAddiction |
 | 📤 | **Export** | Download full skincare plan (profile + routines + chat) as HTML or PDF |
-| 🔐 | **Auth** | JWT login — each user gets their own isolated data |
+| 🔐 | **Auth** | Supabase Auth (email/password) — JWKS-verified sessions, per-user data isolation enforced end-to-end |
+| 🧠 | **Cross-session memory** | Freeform facts from past conversations are extracted, deduped, and recalled in later chats |
 | 🔭 | **LangSmith** | Full agent trace per chat turn when `LANGSMITH_API_KEY` is set |
 
 ---
@@ -68,10 +89,12 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 | **Routing** | TanStack Router (type-safe file routes) |
 | **Data fetching** | TanStack Query |
 | **LLM** | OpenRouter — `anthropic/claude-haiku-4.5` (agent), `google/gemini-2.5-flash` (vision) |
+| **Structured output** | Pydantic v2 → OpenAI strict-mode JSON schema (`backend/llm/structured.py`), prompt-based fallback |
 | **Embeddings** | OpenRouter — `qwen/qwen3-embedding-8b` |
-| **Vector store** | ChromaDB |
-| **Relational store** | SQLite + SQLAlchemy |
-| **Auth** | JWT (`python-jose`), bcrypt passwords |
+| **Vector store** | ChromaDB (KB), `pgvector` (cross-session memory facts) |
+| **Relational store** | Postgres (Supabase-managed) + SQLAlchemy 2.x + Alembic migrations |
+| **HITL persistence** | LangGraph `AsyncPostgresSaver` — interrupted runs survive restarts |
+| **Auth** | Supabase Auth — JWKS (ES256) verification, HS256 fallback |
 | **Observability** | LangSmith (optional), structured JSON logging, Sentry (optional) |
 | **Package manager** | uv (Python), npm (frontend) |
 
@@ -81,36 +104,42 @@ Derma6 v2 replaces the Streamlit monolith with a decoupled three-layer architect
 
 ```
 Browser (React)
-    │  HTTP / SSE
+    │  HTTP / SSE  (Authorization: Bearer <Supabase JWT>)
     ▼
-FastAPI  ──►  JWTAuthMiddleware
-    ├── POST /auth/login|register
-    ├── POST /chat/stream    ──►  SSE token stream
-    ├── GET  /profile/me
-    ├── GET  /routines/me
-    ├── POST /analysis/skin
-    ├── GET  /sessions/me
-    └── GET  /export/pdf|html
+FastAPI  ──►  JWTAuthMiddleware (verifies against Supabase JWKS)
+    ├── POST /api/auth/complete-signup   ──►  provisions the local user row
+    ├── POST /api/chat                   ──►  SSE token stream
+    ├── POST /api/chat/resume            ──►  resumes an interrupted HITL run
+    ├── GET  /api/me/profile · PATCH
+    ├── GET  /api/me/routines · PATCH · DELETE
+    ├── GET  /api/me/sessions · POST · DELETE
+    ├── POST /api/me/analyze-skin
+    ├── GET  /api/me/export
+    └── GET  /api/admin/*                ──►  admin-only (users, eval dashboard)
     │
     ▼
 LangGraph StateGraph (explicit ReAct loop)
-    ├── llm_node   ──►  OpenRouter (gpt-4o-mini)
-    └── tool_node  ──►  6 domain tools
+    ├── llm_node   ──►  OpenRouter (claude-haiku-4.5)
+    └── tool_node  ──►  13 tools (7 domain + 6 HITL)
     │
-    ├── 6 Tools ───────────────────────────────────────────────
-    │   ├── kb_search             ChromaDB semantic search
-    │   ├── conflict_checker      JSON conflict matrix (deterministic)
-    │   ├── routine_sequencer     Application-order sorting
-    │   ├── skin_type_advisor     Type classification from KB + chat
-    │   ├── introduction_scheduler  Gradual actives plan
-    │   └── spf_recommender       SPF matching to skin profile
+    ├── Domain tools ──────────────────────────────────────────
+    │   ├── kb_search               agentic RAG pipeline (7-node sub-graph)
+    │   ├── conflict_checker        JSON conflict matrix (deterministic)
+    │   ├── routine_sequencer       Application-order sorting
+    │   ├── skin_type_advisor_tool  Type classification from KB + chat
+    │   ├── introduction_scheduler_tool  Gradual actives plan
+    │   ├── update_skin_concerns_tool    Direct profile write
+    │   └── spf_recommender         SPF matching to skin profile
     │
-    ├── SQLite ─────────────────────────────────────────────────
-    │   ├── users          (hashed password, role)
-    │   ├── chat_messages  (per session)
-    │   ├── sessions       (named conversation threads)
-    │   ├── skin_profiles  (type, concerns, flags, routines)
-    │   └── rate_limits    (per-user in-memory window)
+    ├── HITL tools (interrupt() before writing) ───────────────
+    │   └── save_routine · update_beard_style · update_location ·
+    │       add_medical_flag · finalize_onboarding · propose_conflict_resolution
+    │
+    ├── Postgres (Supabase-managed) ────────────────────────────
+    │   ├── users, routines, routine_steps, chat_sessions,
+    │   │   introduction_plans, skin_analyses, user_memory_facts (pgvector)
+    │   ├── message_store              (LangChain chat history)
+    │   └── LangGraph checkpoint tables (AsyncPostgresSaver — HITL resume state)
     │
     └── ChromaDB ───────────────────────────────────────────────
         └── 20-doc KB (1000-char chunks, 150-char overlap)
@@ -120,16 +149,26 @@ The agent runs as an explicit `StateGraph` (not `create_react_agent`). This was 
 
 ### Security
 
+Derma6 went through a full AI-driven vulnerability scan of the codebase using [deepsec](https://www.npmjs.com/package/deepsec) — 37 findings across auth, data isolation, prompt-injection surfaces, and CI/CD, all remediated and re-verified via a revalidation pass down to 0 remaining true positives. See [docs/wiki/Security.md](docs/wiki/Security.md) for the full technical write-up; highlights:
+
+- **Session & run ownership** — `session_id`/`run_id` are resolved against their owning user before any chat read/write or HITL resume, closing an IDOR that let one authenticated user read or hijack another user's conversation
+- **Client-side cache isolation** — React Query keys are scoped by user id; logout and Supabase's `onAuthStateChange` both synchronously clear the query cache and session storage, closing a cross-account data leak on fast account switches
+- **Signup provisioning integrity** — the local user row is provisioned only from a verified Supabase JWT's claims, never from client-supplied values
+- **Prompt-injection containment** — all profile data reaching the system prompt is wrapped in a single `json.dumps`-escaped `PROFILE_DATA` block, so no phrasing in a free-text field can be read as an instruction; a shared jailbreak-pattern regex additionally validates free-text profile fields and chat input
+- **JWKS rotation correctness** — the signing-key cache is replaced wholesale (never merged) on refresh, with a bounded TTL so a revoked key can't stay trusted indefinitely
+- **CI/CD & container hardening** — GitHub Actions pinned to commit SHAs, SSH host key pinned and verified out-of-band (no trust-on-first-use), container runs as a non-root user
+
+Plus the baseline protections:
 - Input capped at 2000 characters (`MAX_MESSAGE_CHARS`)
-- Prompt injection defence: `SECURITY` instruction placed last in the system prompt (sandwich pattern)
-- JWT tokens expire in 24 h; auto-logout on 401 in the frontend
-- Per-user rate limiting: 10 requests / 60 s (in-memory; resets on restart — see v2 backlog)
+- Jailbreak detection + input/output PII filtering on every chat turn (see [Content filter](#content-filter) below)
+- Supabase-issued sessions with automatic refresh; auto-logout on 401 in the frontend
+- Per-user rate limiting: 10 requests / 60 s (in-memory; resets on restart — see [Roadmap](#roadmap))
 - Medical flags trigger a `⚠️ Consult a dermatologist` notice only on specific recommendations
 - `BaseHTTPMiddleware` safe for SSE because it never reads the response body
 
 ### Content filter
 
-`backend/middleware/content_filter.py` runs as a FastAPI `Depends` before the agent on every `/api/chat` request:
+`backend/middleware/content_filter.py` runs as a FastAPI `Depends` before the agent on every `/api/chat` and `/api/chat/resume` request:
 
 - **Jailbreak detection** — regex patterns for `ignore previous instructions`, `DAN mode`, `act as if you are`, persona-switch phrases, and similar injection patterns; returns HTTP 400 on match
 - **Input PII detection** — blocks email addresses, phone numbers, credit card numbers, and SSNs with a user-friendly error message
@@ -148,7 +187,7 @@ Several agent tools use LangGraph's `interrupt()` to pause the graph and wait fo
 
 ### Agent tools
 
-Thirteen tools are registered with the LangGraph agent. Six are domain tools (read-only or stateless); seven are HITL tools that trigger an `interrupt()` — pausing the graph so the user can confirm before any write.
+Thirteen tools are registered with the LangGraph agent. Seven are domain tools (read-only, stateless, or direct writes); six are HITL tools that trigger an `interrupt()` — pausing the graph so the user can confirm before any write.
 
 #### Domain tools
 
@@ -157,8 +196,9 @@ Thirteen tools are registered with the LangGraph agent. Six are domain tools (re
 | `kb_search` | Agentic RAG pipeline — 7-node LangGraph graph inside the tool boundary |
 | `conflict_checker` | Deterministic lookup against the ingredient conflict matrix |
 | `routine_sequencer` | Orders ingredients by correct application step |
-| `skin_type_advisor_tool` | Classifies skin type from KB evidence and saves it to the profile |
+| `skin_type_advisor_tool` | Classifies skin type from KB evidence and saves it to the profile (enum-constrained) |
 | `introduction_scheduler_tool` | Builds a gradual schedule for introducing strong actives |
+| `update_skin_concerns_tool` | Saves the skin concerns list directly; no interrupt needed |
 | `spf_recommender` | Recommends SPF products suitable for the user's profile |
 
 #### HITL tools (each calls `interrupt()` before writing)
@@ -171,9 +211,8 @@ Thirteen tools are registered with the LangGraph agent. Six are domain tools (re
 | `add_medical_flag_tool` | `medical_flag_confirm` | Asks user to confirm before adding a diagnosed condition |
 | `finalize_onboarding_tool` | `onboarding_review` | Shows a full profile review card; confirms onboarding complete |
 | `propose_conflict_resolution_tool` | `conflict_resolution` | Shows options to remove one conflicting ingredient from all routines |
-| `update_skin_concerns_tool` | direct write | Saves skin concerns list; no interrupt needed |
 
-The audit logger (`derma6.audit`) records every tool call with username, tool name, and a sanitised args summary before the tool executes.
+The audit logger (`derma6.audit`) records every tool call with `user_id`, tool name, and a sanitised args summary before the tool executes.
 
 ---
 
@@ -200,6 +239,18 @@ query_decompose → hybrid_retrieve → rerank → crag_grade
 | `generate` | Formats context string in `kb_search`-compatible format + appends `__RAG_PIPELINE_META__` block |
 
 All parameters are configurable via environment variables with safe defaults — see [Agentic RAG](docs/wiki/Agentic-RAG.md) in the wiki for the full reference.
+
+---
+
+## Cross-Session Memory
+
+Every chat turn ends with a fire-and-forget background task that extracts freeform, memory-worthy facts ("prefers fragrance-free products", "travels for work often") via schema-enforced LLM extraction, embeds them, and skips storage if a near-duplicate already exists (cosine similarity ≥ `MEMORY_SIMILARITY_THRESHOLD`, default 0.92). On later turns, the incoming message is embedded and the top-K nearest facts for that user (`MEMORY_RETRIEVAL_TOP_K`, default 5) are pulled into the system prompt.
+
+- **Fail-open by design** — a failure to extract or retrieve never blocks or fails the chat response; the turn just proceeds with no facts
+- **Denylisted against profile fields** — facts that overlap with data already tracked structurally (skin type, concerns, beard style, ...) are filtered out before storage, so memory only captures what the structured profile doesn't
+- **Per-user isolation** — every query filters by `user_id` first; there is no cross-user retrieval path
+
+See [docs/wiki/Memory.md](docs/wiki/Memory.md) for the storage schema, dedup logic, and the `pgvector` dimension caveat that rules out an ANN index at the current embedding width.
 
 ---
 
@@ -243,12 +294,17 @@ uv sync
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env — fill in OPENROUTER_API_KEY and SECRET_KEY (see .env.example for instructions)
+# Edit .env — fill in OPENROUTER_API_KEY, DATABASE_URL, and SUPABASE_URL
+# (create a Supabase project first; SUPABASE_JWT_SECRET is only needed as an
+#  HS256 fallback — the live JWKS/ES256 path needs no extra config beyond the URL)
 
-# 3. Build the knowledge base (first run only)
+# 3. Apply database migrations (Postgres via Supabase)
+uv run alembic upgrade head
+
+# 4. Build the knowledge base (first run only)
 uv run python scripts/index_kb.py
 
-# 4. Start the API server
+# 5. Start the API server
 uv run uvicorn backend.main:app --reload
 ```
 
@@ -263,15 +319,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`.
-
-### Generating a SECRET_KEY
-
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-Paste the output into `.env` as `SECRET_KEY`.
+The app will be available at `http://localhost:5173`. It also needs a `frontend/.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (same Supabase project as the backend).
 
 ---
 
@@ -302,12 +350,16 @@ Runs on every push to any branch. Two parallel jobs:
 
 ### Deploy (`deploy.yml`)
 
-Runs on every push to `main`:
-
-1. Build frontend (`npm run build`)
-2. `rsync` backend to Hetzner VPS (excludes `.env`, `data/`, `.venv/`)
-3. `rsync` `frontend/dist/` → `/app/www/`
+1. Build frontend (`npm run build`, with `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` injected from repo secrets — Vite bakes `VITE_*` vars in at build time, so the runner needs them even though the app itself never sees `.env`)
+2. `rsync --delete` backend to a Hetzner VPS (excludes `.env`, `data/`, `logs/`, dev/tooling directories, `frontend/`)
+3. `rsync` `frontend/dist/` → the web root
 4. SSH in and run `docker compose up --build -d`
+
+Hardening on the deploy path:
+- Every third-party GitHub Action (`checkout`, `setup-node`, `setup-python`, `setup-uv`) is pinned to a commit SHA, not a mutable tag
+- The SSH host key is pinned and verified out-of-band rather than trust-on-first-use (`ssh-keyscan` against the runner would be spoofable)
+- The container in `docker-compose.yml` runs as a dedicated non-root user, not root
+- Reverse proxy is Caddy (auto-TLS), fronting the FastAPI backend and serving the built SPA with client-side-routing fallback
 
 Use `[skip ci]` in the commit message to bypass both workflows.
 
@@ -323,13 +375,12 @@ Use `[skip ci]` in the commit message to bypass both workflows.
 
 ---
 
-## v2 Backlog
+## Roadmap
 
-- HITL interrupts (requires `AsyncSqliteSaver`, `thread_id`, resume endpoint)
 - Conditional routing / multi-agent graph topology
-- WebSockets upgrade for bidirectional mid-stream signals
-- Persistent rate limiter (current in-memory window resets on restart)
-- Deployment (Cloudflare Pages + Railway — CORS origin and `VITE_API_URL` to be locked)
+- WebSockets upgrade for bidirectional mid-stream signals (would also unlock true multi-tab HITL)
+- Persistent rate limiter (current window is in-memory and resets on restart)
+- ANN index for memory-fact retrieval once per-user fact counts outgrow an unindexed scan (`pgvector`'s HNSW/ivfflat cap out at 2000 dims below the current 4096-dim embeddings — see [docs/wiki/Memory.md](docs/wiki/Memory.md))
 
 ---
 
@@ -337,9 +388,12 @@ Use `[skip ci]` in the commit message to bypass both workflows.
 
 - [Architecture deep-dive](docs/wiki/Architecture.md)
 - [Agentic RAG Pipeline](docs/wiki/Agentic-RAG.md)
+- [Cross-Session Memory](docs/wiki/Memory.md)
+- [Security](docs/wiki/Security.md)
 - [Knowledge Base Maintenance](docs/wiki/Knowledge-Base-Maintenance.md)
 - [API Reference](docs/wiki/API-Reference.md)
+- [Evaluation](docs/wiki/Evaluation.md)
 
 ---
 
-<sub>Derma6 v2 · Built with Claude Code · Powered by OpenRouter</sub>
+<sub>Derma6 v3 · Built with Claude Code · Powered by OpenRouter</sub>

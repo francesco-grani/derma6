@@ -1,6 +1,8 @@
 # Evaluation
 
-Derma6 uses [deepeval](https://github.com/confident-ai/deepeval) to measure the quality of all six agent tools and the agentic RAG pipeline. Results are visible in the Admin → Eval Dashboard.
+**TL;DR** — [deepeval](https://github.com/confident-ai/deepeval), 28 test configurations across 7 categories (GEval LLM-as-judge, programmatic, and contextual-RAG metrics), run via `uv run pytest --run-eval` or from Admin → Eval Dashboard. Always refresh `actual_output` from live tool runs (`capture_outputs.py`) before evaluating — the dataset never stores handwritten expected outputs as the thing being scored.
+
+Derma6 uses deepeval to measure the quality of all six agent tools and the agentic RAG pipeline. Results are visible in the Admin → Eval Dashboard.
 
 ---
 

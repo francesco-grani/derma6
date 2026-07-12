@@ -31,7 +31,10 @@ async def kb_search(query: str) -> str:
     try:
         result = await _rag_pipeline.ainvoke(query)
         logger.info("kb_search: agentic RAG pipeline returned result for query=%r", query[:60])
-        return result
+        # Deferred import: backend.agent.graph imports this module at load time,
+        # so a top-level import here would be circular.
+        from backend.agent.graph import _sanitise_retrieved
+        return _sanitise_retrieved(result)
     except Exception as exc:
         logger.error("kb_search failed: %s", exc)
         return "Sorry, I could not search the knowledge base right now."
