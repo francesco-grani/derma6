@@ -35,10 +35,14 @@ frontend/.env.local
 # Claude Code
 .claude/
 skills-lock.json
+CLAUDE.md
 
 # LangGraph / DeepEval runtime
 .langgraph_api/
 .deepeval/
+
+# Security scanning tooling
+.deepsec/
 
 # Local study notes
 STUDY_GUIDE.md
@@ -46,3 +50,4 @@ STUDY_GUIDE.md
 # Private submission files (not for public repo)
 135.md
 AE.CAP_afa.md
+BACKLOG.md
