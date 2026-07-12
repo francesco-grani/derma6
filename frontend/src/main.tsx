@@ -10,9 +10,11 @@ import {
   Outlet,
 } from '@tanstack/react-router'
 import './index.css'
-import { AuthProvider } from './lib/auth'
+import { AuthProvider, useAuth } from './lib/auth'
 import { SessionProvider } from './lib/sessionContext'
 import { supabase } from './lib/supabaseClient'
+import { Button } from './components/ui/button'
+import { Card, CardContent, CardHeader } from './components/ui/card'
 import Sidebar from './components/layout/Sidebar'
 import SignUpPage from './pages/SignUpPage'
 import SignInPage from './pages/SignInPage'
@@ -29,14 +31,19 @@ const queryClient = new QueryClient()
 // ── Root route ────────────────────────────────────────────────────────────
 
 const rootRoute = createRootRoute({
+  // security-remediation Req 20.2, 20.3, 20.5: AuthProvider is innermost so its
+  // logout() can synchronously reach both the QueryClient (to clear cached
+  // per-user data) and SessionContext (to reset the in-memory chat sessionId)
+  // via useQueryClient()/useSession() — previously AuthProvider wrapped both
+  // and couldn't reach either.
   component: () => (
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        <AuthProvider>
           <Outlet />
-        </SessionProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+        </AuthProvider>
+      </SessionProvider>
+    </QueryClientProvider>
   ),
 })
 
@@ -78,6 +85,34 @@ const verifyEmailCallbackRoute = createRoute({
 // ── Protected layout ─────────────────────────────────────────────────────
 
 function AppLayout() {
+  // security-remediation Req 21.4/21.5: a verified session whose local
+  // signup provisioning failed even after AuthProvider's automatic retry
+  // gets a distinguishable recovery screen here, instead of proceeding into
+  // Sidebar/Outlet as if the account were ready.
+  const { provisioningError, retryProvisioning } = useAuth()
+
+  if (provisioningError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#3E4D3F' }}>
+        <Card className="w-full max-w-sm shadow-xl" style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
+          <CardHeader className="text-center pb-2">
+            <img src="/Derma6_logo.png" alt="Derma6" className="mx-auto mb-2" style={{ height: 120, width: 'auto' }} />
+          </CardHeader>
+          <CardContent className="text-center flex flex-col gap-3">
+            <p style={{ color: '#C4933F', fontWeight: 600 }}>Account setup incomplete</p>
+            <p className="text-sm" style={{ color: '#9EAD9E' }}>{provisioningError}</p>
+            <Button
+              onClick={() => void retryProvisioning()}
+              style={{ background: '#7A9B7D', color: '#1C2520', fontWeight: 600 }}
+            >
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

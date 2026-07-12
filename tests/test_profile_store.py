@@ -6,6 +6,7 @@ from backend.db.profile_store import ProfileStore, ProfileStoreError
 from backend.schemas import (
     IntroductionPlanSchema,
     IntroductionWeek,
+    ProfilePatch,
     RoutineSchema,
     RoutineStepSchema,
 )
@@ -184,6 +185,57 @@ class TestUpdateLocation:
         assert profile_store.get_profile("uid-oscar").location == "Germany"
 
 
+class TestApplyPatch:
+    """security-remediation Req 23.1, 23.2: apply_patch commits all fields
+    from a PATCH in a single transaction, or none of them."""
+
+    def test_applies_all_valid_fields_in_one_call(self, profile_store):
+        _make_user(profile_store, "petra")
+        patch = ProfilePatch(skin_type="oily", location="Berlin", skin_concerns=["acne"])
+
+        profile = profile_store.apply_patch("uid-petra", patch)
+
+        assert profile.skin_type == "oily"
+        assert profile.location == "Berlin"
+        assert profile.skin_concerns == ["acne"]
+
+    def test_leaves_other_fields_in_same_request_uncommitted_on_invalid_field(self, profile_store):
+        _make_user(profile_store, "quinn")
+        patch = ProfilePatch(skin_type="oily", beard_style="bogus")
+
+        with pytest.raises(ProfileStoreError, match="beard_style"):
+            profile_store.apply_patch("uid-quinn", patch)
+
+        # Nothing from the same request was committed — not even the
+        # otherwise-valid skin_type field.
+        profile = profile_store.get_profile("uid-quinn")
+        assert profile.skin_type is None
+
+    def test_beard_style_derives_has_shaving_routine(self, profile_store):
+        _make_user(profile_store, "rosa")
+        patch = ProfilePatch(beard_style="trim")
+
+        profile = profile_store.apply_patch("uid-rosa", patch)
+
+        assert profile.beard_style == "trim"
+        assert profile.has_shaving_routine is True
+
+    def test_unset_fields_are_left_unchanged(self, profile_store):
+        _make_user(profile_store, "sam")
+        profile_store.update_skin_type("uid-sam", "dry")
+        patch = ProfilePatch(location="Spain")
+
+        profile = profile_store.apply_patch("uid-sam", patch)
+
+        assert profile.location == "Spain"
+        assert profile.skin_type == "dry"
+
+    def test_nonexistent_user_raises(self, profile_store):
+        patch = ProfilePatch(skin_type="oily")
+        with pytest.raises(ProfileStoreError):
+            profile_store.apply_patch("uid-ghost", patch)
+
+
 class TestAddMedicalFlag:
     def test_adds_flag(self, profile_store):
         _make_user(profile_store, "leo")
@@ -236,6 +288,28 @@ class TestSaveRoutine:
         with pytest.raises(ProfileStoreError):
             profile_store.save_routine("uid-ghost", _make_routine("Morning", ["spf"]))
 
+    def test_same_name_upsert_still_allowed(self, profile_store):
+        # An exact-name re-save is a legitimate upsert of the same routine,
+        # not a collision (security-remediation Req 25.2).
+        _make_user(profile_store, "xena")
+        profile_store.save_routine("uid-xena", _make_routine("Morning", ["cleanser"]))
+        profile_store.save_routine("uid-xena", _make_routine("Morning", ["cleanser", "spf"]))
+        result = profile_store.get_routine("uid-xena", "Morning")
+        assert len(result.steps) == 2
+
+    def test_case_insensitive_collision_against_different_routine_rejected(self, profile_store):
+        # security-remediation Req 25.2: saving "morning" when "Morning"
+        # already exists must not create an ambiguous second entry.
+        _make_user(profile_store, "yara")
+        profile_store.save_routine("uid-yara", _make_routine("Morning", ["cleanser"]))
+
+        with pytest.raises(ProfileStoreError, match="already exists"):
+            profile_store.save_routine("uid-yara", _make_routine("morning", ["retinol"]))
+
+        routines = profile_store.get_all_routines("uid-yara")
+        assert len(routines) == 1
+        assert routines[0].name == "Morning"
+
 
 class TestGetAllRoutines:
     def test_returns_all(self, profile_store):
@@ -262,6 +336,34 @@ class TestRenameRoutine:
         _make_user(profile_store, "uma")
         with pytest.raises(ProfileStoreError, match="not found"):
             profile_store.rename_routine("uid-uma", "Nonexistent", "New")
+
+    def test_rename_to_new_unique_name_succeeds(self, profile_store):
+        _make_user(profile_store, "zack")
+        profile_store.save_routine("uid-zack", _make_routine("Morning", ["cleanser"]))
+        profile_store.rename_routine("uid-zack", "Morning", "AM Routine")
+        assert profile_store.get_routine("uid-zack", "AM Routine") is not None
+
+    def test_rename_colliding_case_insensitively_rejected_and_uncommitted(self, profile_store):
+        # security-remediation Req 25.1, 25.3: rename must not commit when
+        # the target name collides (case-insensitively) with another of the
+        # user's own routines.
+        _make_user(profile_store, "amy")
+        profile_store.save_routine("uid-amy", _make_routine("Morning", ["cleanser"]))
+        profile_store.save_routine("uid-amy", _make_routine("Evening", ["retinol"]))
+
+        with pytest.raises(ProfileStoreError, match="already exists"):
+            profile_store.rename_routine("uid-amy", "Morning", "evening")
+
+        names = sorted(r.name for r in profile_store.get_all_routines("uid-amy"))
+        assert names == ["Evening", "Morning"]
+
+    def test_rename_to_same_name_different_case_is_not_self_collision(self, profile_store):
+        # Renaming a routine to a case-variant of its OWN current name must
+        # not be rejected as a collision against itself.
+        _make_user(profile_store, "ben")
+        profile_store.save_routine("uid-ben", _make_routine("morning", ["cleanser"]))
+        profile_store.rename_routine("uid-ben", "morning", "Morning")
+        assert profile_store.get_routine("uid-ben", "Morning") is not None
 
 
 class TestDeleteRoutine:

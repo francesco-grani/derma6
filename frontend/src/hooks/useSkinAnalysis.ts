@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiAnalyzeSkin, apiDeleteSkinAnalysis, apiGetSkinAnalyses, apiSaveMedicalFlag } from '@/lib/api'
 import type { SkinAnalysisResult } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 
 export function useAnalyzeSkin() {
   const qc = useQueryClient()
@@ -13,8 +14,11 @@ export function useAnalyzeSkin() {
 }
 
 export function useSkinAnalyses() {
+  const { userId } = useAuth()
+  // security-remediation Req 20.1: keyed by userId so cached skin-analysis
+  // results (medical/photo data) can never be served to a different account.
   return useQuery({
-    queryKey: ['skin-analyses'],
+    queryKey: ['skin-analyses', userId],
     queryFn: apiGetSkinAnalyses,
   })
 }

@@ -12,11 +12,16 @@ so `require_admin`'s `db.get(User, user_id).is_admin` check exercises the
 real ORM column rather than a mock.
 """
 
-from fastapi import FastAPI
+import asyncio
+from unittest.mock import MagicMock
+
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from backend.api.admin import router as admin_router
+from backend.api.admin import _eval_state, router as admin_router
+from backend.api.admin import run_eval
 from backend.auth import get_current_user
 from backend.db.deps import get_db
 from backend.db.models import User
@@ -99,3 +104,72 @@ class TestRequireAdminSourcedFromDbNotJwt:
 
         _set_is_admin(profile_store._engine, "uid-carol", False)
         assert client.get("/api/admin/eval/status").status_code == 403
+
+
+class TestRunEvalLaunchRace:
+    """Task 73, Req 26.1/26.2: `run_eval()` flips `_eval_state["status"]` to
+    "running" synchronously, before scheduling the background task — not only
+    inside `_run_eval_background()` after it starts — so two near-simultaneous
+    requests can't both observe "idle" and both launch a run.
+
+    `run_eval()` is called directly (not through `TestClient`) so these tests
+    exercise the race at the coroutine level without also running the real
+    `_run_eval_background()` (which shells out to the eval runner subprocess).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_eval_state(self):
+        original = dict(_eval_state)
+        yield
+        _eval_state.clear()
+        _eval_state.update(original)
+
+    @pytest.mark.asyncio
+    async def test_flips_status_synchronously_before_returning(self):
+        _eval_state["status"] = "idle"
+        background_tasks = MagicMock()
+
+        await run_eval(background_tasks=background_tasks, _="uid-admin")
+
+        assert _eval_state["status"] == "running"
+        background_tasks.add_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_two_rapid_fire_calls_only_one_schedules_background_task(self):
+        """Simulates two near-simultaneous `POST /api/admin/eval/run` calls via
+        `asyncio.gather` — since `run_eval()` has no `await` between its status
+        check and its flip, the first call to actually run always completes
+        before the second call's check executes, so this reproduces the same
+        interleaving a real concurrent-request race would hit."""
+        _eval_state["status"] = "idle"
+        background_tasks_a = MagicMock()
+        background_tasks_b = MagicMock()
+
+        results = await asyncio.gather(
+            run_eval(background_tasks=background_tasks_a, _="uid-admin"),
+            run_eval(background_tasks=background_tasks_b, _="uid-admin"),
+            return_exceptions=True,
+        )
+
+        successes = [r for r in results if not isinstance(r, Exception)]
+        failures = [r for r in results if isinstance(r, Exception)]
+        assert len(successes) == 1
+        assert len(failures) == 1
+        assert isinstance(failures[0], HTTPException)
+        assert failures[0].status_code == 409
+
+        scheduled_count = sum(
+            1 for bg in (background_tasks_a, background_tasks_b) if bg.add_task.called
+        )
+        assert scheduled_count == 1
+
+    @pytest.mark.asyncio
+    async def test_second_call_rejected_while_already_running(self):
+        _eval_state["status"] = "running"
+        background_tasks = MagicMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await run_eval(background_tasks=background_tasks, _="uid-admin")
+
+        assert exc_info.value.status_code == 409
+        background_tasks.add_task.assert_not_called()

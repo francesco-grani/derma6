@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -18,12 +18,15 @@ from backend.db.models import Base, IntroductionPlan, Routine, RoutineStep, User
 from backend.schemas import (
     IntroductionPlanSchema,
     IntroductionWeek,
+    ProfilePatch,
     RoutineSchema,
     RoutineStepSchema,
     UserProfile,
 )
 
 logger = logging.getLogger(__name__)
+
+VALID_BEARD_STYLES = {"shave", "trim", "grow"}
 
 
 class ProfileStoreError(Exception):
@@ -193,6 +196,41 @@ class ProfileStore:
             logger.error("update_location failed for '%s': %s", user_id, exc)
             raise ProfileStoreError(str(exc)) from exc
 
+    def apply_patch(self, user_id: str, patch: ProfilePatch) -> UserProfile:
+        """Apply a `PATCH /api/me/profile` request atomically (security-
+        remediation Req 23.1, 23.2): every field on `patch` is validated
+        before any of them are written, and all writes commit in a single
+        transaction — an invalid field can never leave previously-valid
+        fields from the same request partially committed, the way calling
+        the field-level `update_*` methods above in sequence could.
+        """
+        if patch.beard_style is not None and patch.beard_style not in VALID_BEARD_STYLES:
+            raise ProfileStoreError(f"beard_style must be one of {VALID_BEARD_STYLES}")
+
+        try:
+            with Session(self._engine) as session:
+                user = self._get_user_or_raise(session, user_id)
+                if patch.skin_type is not None:
+                    user.skin_type = patch.skin_type.strip()
+                if patch.beard_style is not None:
+                    user.beard_style = patch.beard_style
+                    user.has_shaving_routine = patch.beard_style in ("shave", "trim")
+                if patch.location is not None:
+                    user.location = patch.location.strip()
+                if patch.skin_concerns is not None:
+                    user.skin_concerns = json.dumps(
+                        [c.strip() for c in patch.skin_concerns if c.strip()]
+                    )
+                self._check_onboarding_complete(session, user)
+                session.commit()
+                session.refresh(user)
+                return self._user_to_profile(user)
+        except ProfileStoreError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.error("apply_patch failed for '%s': %s", user_id, exc)
+            raise ProfileStoreError(str(exc)) from exc
+
     def add_medical_flag(self, user_id: str, flag: str) -> None:
         """Append a medical flag, ignoring duplicates."""
         try:
@@ -216,8 +254,27 @@ class ProfileStore:
     # Routine CRUD
     # ------------------------------------------------------------------
 
+    def _find_colliding_routine(
+        self, session: Session, user_id: str, name: str, exclude_routine_id: Optional[int] = None
+    ) -> Optional[Routine]:
+        """Return an existing routine of `user_id` whose name matches `name`
+        case-insensitively, other than `exclude_routine_id` itself, or None
+        (security-remediation Req 25.1, 25.2)."""
+        query = session.query(Routine).filter(
+            Routine.user_id == user_id, func.lower(Routine.name) == name.lower()
+        )
+        if exclude_routine_id is not None:
+            query = query.filter(Routine.id != exclude_routine_id)
+        return query.first()
+
     def save_routine(self, user_id: str, routine: RoutineSchema) -> None:
-        """Upsert a routine by name: delete existing steps, recreate everything."""
+        """Upsert a routine by name: delete existing steps, recreate everything.
+
+        A case-insensitive name collision against a *different* existing
+        routine is rejected (security-remediation Req 25.2) — an exact-name
+        match is still treated as an upsert of that same routine, not a
+        collision.
+        """
         try:
             with Session(self._engine) as session:
                 user = self._get_user_or_raise(session, user_id)
@@ -226,7 +283,14 @@ class ProfileStore:
                     .filter_by(user_id=user.id, name=routine.name)
                     .first()
                 )
-                if existing is not None:
+                if existing is None:
+                    collision = self._find_colliding_routine(session, user.id, routine.name)
+                    if collision is not None:
+                        raise ProfileStoreError(
+                            f"A routine named '{collision.name}' already exists "
+                            "(names must be unique, case-insensitive)."
+                        )
+                else:
                     session.delete(existing)
                     session.flush()
 
@@ -252,7 +316,12 @@ class ProfileStore:
             raise ProfileStoreError(str(exc)) from exc
 
     def rename_routine(self, user_id: str, old_name: str, new_name: str) -> None:
-        """Rename a routine by its current name."""
+        """Rename a routine by its current name.
+
+        Rejects a case-insensitive collision against another of the user's
+        existing routines (security-remediation Req 25.1) without
+        committing.
+        """
         try:
             with Session(self._engine) as session:
                 user = self._get_user_or_raise(session, user_id)
@@ -263,6 +332,14 @@ class ProfileStore:
                 )
                 if routine is None:
                     raise ProfileStoreError(f"Routine '{old_name}' not found.")
+                collision = self._find_colliding_routine(
+                    session, user.id, new_name, exclude_routine_id=routine.id
+                )
+                if collision is not None:
+                    raise ProfileStoreError(
+                        f"A routine named '{collision.name}' already exists "
+                        "(names must be unique, case-insensitive)."
+                    )
                 routine.name = new_name
                 session.commit()
         except ProfileStoreError:

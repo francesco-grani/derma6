@@ -9,6 +9,10 @@ interface SessionContextValue {
   resumeOrCreate: () => Promise<string>
   /** Always create a fresh session and switch to it. */
   startNewSession: () => Promise<string>
+  /** Clear the in-memory sessionId (security-remediation Req 20.5) — called on
+   * logout so a subsequent sign-in in the same tab never resumes a session
+   * belonging to the account that just signed out. */
+  resetSession: () => void
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null)
@@ -33,8 +37,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     return created.session_id
   }, [])
 
+  const resetSession = useCallback(() => {
+    setSessionId(null)
+  }, [])
+
   return (
-    <SessionContext.Provider value={{ sessionId, setSessionId, resumeOrCreate, startNewSession }}>
+    <SessionContext.Provider
+      value={{ sessionId, setSessionId, resumeOrCreate, startNewSession, resetSession }}
+    >
       {children}
     </SessionContext.Provider>
   )

@@ -3,7 +3,6 @@ import { Link } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { apiCompleteSignup } from '@/lib/api'
 import { supabase } from '@/lib/supabaseClient'
 
 /** Matches `CompleteSignupRequest`'s backend length validator (2-50 chars). */
@@ -26,18 +25,21 @@ export default function SignUpPage() {
     setError('')
     setLoading(true)
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // The chosen display name travels as Supabase user_metadata (Req 21.1
+      // / Task 61 spike finding): Supabase issues no session while email
+      // confirmation is pending, so local provisioning can't happen from
+      // this page at all — it runs at first authenticated login instead
+      // (see `lib/auth.tsx`'s `AuthProvider`), reading the username back out
+      // of the verified JWT's user_metadata claim.
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/verify-email-callback`,
+          data: { username: firstName.trim() },
+        },
       })
       if (signUpError) throw signUpError
-      const supabaseUserId = data.user?.id
-      if (!supabaseUserId) throw new Error('Sign-up did not return a user id.')
-      // Provision the local `users` row (Req 4.4). If this fails after the
-      // auth identity already exists, surface the error clearly rather than
-      // silently showing the "check your email" screen (Req 4.5).
-      await apiCompleteSignup(supabaseUserId, email, firstName.trim())
       setSignedUp(true)
     } catch (err) {
       setError((err as Error).message)

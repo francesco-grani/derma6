@@ -8,6 +8,7 @@ verifies tokens Supabase already issued and resolves the corresponding local
 """
 
 import logging
+import time
 from typing import Any, Optional
 
 import httpx
@@ -20,11 +21,31 @@ from backend.db.models import User, engine
 
 logger = logging.getLogger(__name__)
 
-# Module-level JWKS cache, keyed by `kid`. Refreshed wholesale on a cache
-# miss (e.g. Supabase rotates its signing key) so a stale cache self-heals
-# on the very next request for a not-yet-seen `kid` — no TTL bookkeeping
-# needed, per the design's "cached, refreshed on kid cache-miss" note.
+# Module-level JWKS cache, keyed by `kid`. Refreshed wholesale (never merged)
+# on a cache miss (e.g. Supabase rotates its signing key) so a `kid` that has
+# rolled out of the live JWKS document stops being trusted immediately after
+# the next refresh (Req 24.1, 24.2).
 _jwks_cache: dict[str, dict[str, Any]] = {}
+
+# Throttle for unknown-`kid`-triggered refreshes (Req 24.4): repeated requests
+# bearing bogus/unknown `kid` values must not each force a live HTTP fetch
+# against the JWKS endpoint. Tracks the monotonic time of the last *attempted*
+# refresh (successful or not) — a burst of bogus kids within the interval
+# reuses the (still-missing) cache result instead of refetching.
+_JWKS_REFRESH_MIN_INTERVAL_SECONDS = 30
+_last_refresh_attempt: float | None = None
+
+# security-remediation deepsec-revalidation finding (Task 79, recorded
+# 2026-07-12): the original "refreshed on kid cache-miss, no TTL needed"
+# design left a gap — a `kid` that keeps hitting the cache is trusted
+# indefinitely between misses, even after Supabase revokes/rotates it out of
+# the live JWKS, since nothing ever forces a re-check of an already-cached
+# entry. `_cache_fetched_at` tracks the last *successful* fetch (distinct
+# from `_last_refresh_attempt`, which tracks attempts including failures);
+# once the cache is older than this, even a hit is treated as stale and
+# forces a refresh (still subject to the throttle above).
+_JWKS_CACHE_MAX_AGE_SECONDS = 300
+_cache_fetched_at: float | None = None
 
 
 def _fetch_jwks() -> dict[str, dict[str, Any]]:
@@ -45,9 +66,46 @@ def _fetch_jwks() -> dict[str, dict[str, Any]]:
 
 
 def _get_jwk(kid: str) -> Optional[dict[str, Any]]:
-    """Return the JWK for `kid`, refreshing the cache once on a miss."""
-    if kid not in _jwks_cache:
-        _jwks_cache.update(_fetch_jwks())
+    """Return the JWK for `kid`, refreshing the cache on a miss or once the
+    cache has aged past `_JWKS_CACHE_MAX_AGE_SECONDS` (Task 79).
+
+    A refresh replaces `_jwks_cache` wholesale rather than merging into it
+    (Req 24.1), so a retired `kid` stops resolving as soon as a fresh fetch
+    succeeds without it — unlike `.update()`, which would let a stale entry
+    linger forever. A failed refresh leaves `_jwks_cache` (and
+    `_cache_fetched_at`) untouched (Req 24.3): `_fetch_jwks()` raises before
+    this function ever reassigns them, so a transient outage can't clear out
+    currently-valid keys.
+
+    Refresh attempts are throttled (Req 24.4): repeated lookups within
+    `_JWKS_REFRESH_MIN_INTERVAL_SECONDS` of the last attempt reuse the
+    existing cache instead of hitting the network again — this applies
+    whether the refresh was triggered by an unknown `kid` or by the cache
+    simply aging out, so a burst of requests during one slow refresh doesn't
+    each trigger their own fetch.
+    """
+    global _jwks_cache, _last_refresh_attempt, _cache_fetched_at
+
+    now = time.monotonic()
+    cache_is_fresh = (
+        _cache_fetched_at is not None and now - _cache_fetched_at < _JWKS_CACHE_MAX_AGE_SECONDS
+    )
+    if kid in _jwks_cache and cache_is_fresh:
+        return _jwks_cache[kid]
+
+    if (
+        _last_refresh_attempt is not None
+        and now - _last_refresh_attempt < _JWKS_REFRESH_MIN_INTERVAL_SECONDS
+    ):
+        logger.warning(
+            "Skipping JWKS refresh for kid %r — throttled (last attempt %.1fs ago)",
+            kid, now - _last_refresh_attempt,
+        )
+        return _jwks_cache.get(kid)
+
+    _last_refresh_attempt = now
+    _jwks_cache = _fetch_jwks()
+    _cache_fetched_at = now
     return _jwks_cache.get(kid)
 
 

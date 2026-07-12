@@ -190,6 +190,40 @@ class TestForeignKeyTypesCascade:
             assert remaining == []
 
 
+class TestRoutineUniqueConstraint:
+    """security-remediation Req 25.1-25.3: UniqueConstraint('user_id', 'name')
+    is a DB-level, exact-case backstop behind ProfileStore's case-insensitive
+    application-level check — this locks in the raw-insert-level rejection
+    independent of ProfileStore."""
+
+    @pytest.fixture
+    def user_id(self, engine) -> str:
+        uid = str(uuid.uuid4())
+        with Session(engine) as session:
+            session.add(_make_user(uid))
+            session.commit()
+        return uid
+
+    def test_duplicate_name_for_same_user_rejected(self, engine, user_id):
+        with Session(engine) as session:
+            session.add(Routine(user_id=user_id, name="Morning"))
+            session.commit()
+
+            session.add(Routine(user_id=user_id, name="Morning"))
+            with pytest.raises(Exception):
+                session.commit()
+
+    def test_same_name_for_different_users_allowed(self, engine, user_id):
+        other_user_id = str(uuid.uuid4())
+        with Session(engine) as session:
+            session.add(_make_user(other_user_id, username="bob", email="bob@example.com"))
+            session.add(Routine(user_id=user_id, name="Morning"))
+            session.commit()
+
+            session.add(Routine(user_id=other_user_id, name="Morning"))
+            session.commit()  # no IntegrityError — scoped per user_id
+
+
 @pytest.mark.pgvector
 class TestUserMemoryFact:
     """Requires a live Postgres with the `vector` extension available (Task 27

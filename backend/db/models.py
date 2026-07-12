@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from backend.config import settings
@@ -82,6 +82,13 @@ class Routine(Base):
     """Represents a skincare routine (e.g., Morning, Evening)."""
 
     __tablename__ = "routines"
+    __table_args__ = (
+        # security-remediation Req 25.1-25.3: exact-case defense in depth,
+        # backstopping ProfileStore's case-insensitive app-level check
+        # (save_routine()/rename_routine()) in case some other write path
+        # ever bypasses it.
+        UniqueConstraint("user_id", "name", name="uq_routines_user_id_name"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"))

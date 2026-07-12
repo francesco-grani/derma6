@@ -89,6 +89,20 @@ class SessionStore:
         sessions = self.get_sessions(user_id)
         return sessions[0]["session_id"] if sessions else None
 
+    def get_session_owner(self, session_id: str) -> Optional[str]:
+        """Return the user_id that owns `session_id`, or None if the session
+        doesn't exist. Every session_id in this app is created up front via
+        create_session() (see frontend/src/lib/sessionContext.tsx) before it is
+        ever used in a chat request, so a missing row here means an unowned or
+        foreign session_id, not a legitimate not-yet-created one."""
+        try:
+            with Session(self._engine) as session:
+                row = session.get(ChatSession, session_id)
+                return row.user_id if row is not None else None
+        except SQLAlchemyError as exc:
+            logger.error("get_session_owner failed for %s: %s", session_id, exc)
+            return None
+
     def update_title(self, session_id: str, title: str) -> None:
         """Set or replace the title of a session."""
         try:

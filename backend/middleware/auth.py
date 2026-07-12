@@ -13,7 +13,6 @@ from starlette.responses import JSONResponse
 from backend.auth import verify_supabase_jwt
 
 _PUBLIC_PATHS = frozenset({
-    "/api/auth/complete-signup",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -37,4 +36,8 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
         request.state.user_id = claims["sub"]
+        # Full claim set, not just `sub` — `/api/auth/complete-signup` (Req
+        # 21.1) derives `email`/`user_metadata.username` from this instead of
+        # trusting a client-supplied request body.
+        request.state.user_claims = claims
         return await call_next(request)

@@ -112,6 +112,20 @@ async def _run_analyze_skin(
     return await analyze_skin(file=file, user_id=user_id, db=db)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """`analyze_skin`'s `_rate_limiter` (Task 65, Req 22.1) is a module-level
+    singleton — without a reset, request counts from one test would bleed into
+    the next, since almost every test above calls `analyze_skin()` with the
+    same default `user_id="test-user-id"`.
+    """
+    import backend.api.analysis as analysis_module
+
+    analysis_module._rate_limiter._user_requests.clear()
+    yield
+    analysis_module._rate_limiter._user_requests.clear()
+
+
 # --- tests --------------------------------------------------------------------
 
 
@@ -208,3 +222,104 @@ class TestAnalyzeSkinTerminalFailure:
 
         assert exc_info.value.status_code == 502
         assert exc_info.value.detail == "Vision model unavailable. Please try again."
+
+
+class TestAnalyzeSkinRateLimit:
+    """Task 65, Req 22.1: a per-user rate limit gates the (paid) vision LLM call."""
+
+    @pytest.mark.asyncio
+    async def test_requests_within_limit_all_succeed(self, monkeypatch):
+        monkeypatch.setattr("backend.rate_limiter.settings.rate_limit_requests", 2)
+        client = _mock_openai_client(
+            _completion(_VALID_RESULT_JSON), _completion(_VALID_RESULT_JSON)
+        )
+
+        first = await _run_analyze_skin(monkeypatch, client, user_id="rl-user")
+        second = await _run_analyze_skin(monkeypatch, client, user_id="rl-user")
+
+        assert first.condition == "Acne"
+        assert second.condition == "Acne"
+
+    @pytest.mark.asyncio
+    async def test_repeated_calls_past_limit_rejected_with_429(self, monkeypatch):
+        monkeypatch.setattr("backend.rate_limiter.settings.rate_limit_requests", 2)
+        client = _mock_openai_client(
+            _completion(_VALID_RESULT_JSON), _completion(_VALID_RESULT_JSON)
+        )
+
+        await _run_analyze_skin(monkeypatch, client, user_id="rl-user")
+        await _run_analyze_skin(monkeypatch, client, user_id="rl-user")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await _run_analyze_skin(monkeypatch, client, user_id="rl-user")
+
+        assert exc_info.value.status_code == 429
+        # Rejected before the vision LLM is ever called a third time.
+        assert client.chat.completions.create.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_different_users_have_independent_limits(self, monkeypatch):
+        monkeypatch.setattr("backend.rate_limiter.settings.rate_limit_requests", 1)
+        client = _mock_openai_client(
+            _completion(_VALID_RESULT_JSON), _completion(_VALID_RESULT_JSON)
+        )
+
+        await _run_analyze_skin(monkeypatch, client, user_id="rl-user-a")
+        # A different user's own quota is untouched by rl-user-a's usage.
+        result = await _run_analyze_skin(monkeypatch, client, user_id="rl-user-b")
+
+        assert result.condition == "Acne"
+
+
+class TestAnalyzeSkinSizeLimit:
+    """Task 66, Req 22.2/22.3: oversized uploads are rejected using the size
+    Starlette's multipart parser already observed, before/instead of an
+    unconditional full `await file.read()`.
+    """
+
+    @pytest.mark.asyncio
+    async def test_oversized_upload_rejected_via_declared_size_without_full_read(
+        self, monkeypatch
+    ):
+        from backend.api.analysis import _MAX_SIZE_BYTES, analyze_skin
+
+        file = _FakeUploadFile(b"", content_type="image/jpeg")
+        # Mirrors Starlette's real UploadFile.size, which is populated while the
+        # multipart parser writes the upload to its spooled tempfile — before
+        # analyze_skin() ever runs.
+        file.size = _MAX_SIZE_BYTES + 1
+        file.read = AsyncMock(
+            side_effect=AssertionError(
+                "file.read() must not be called for a declared-oversized upload"
+            )
+        )
+        monkeypatch.setattr(
+            "backend.api.analysis.AsyncOpenAI", lambda **kwargs: _mock_openai_client()
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await analyze_skin(file=file, user_id="test-user-id", db=_mock_db())
+
+        assert exc_info.value.status_code == 413
+        file.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_without_declared_size_falls_back_to_post_read_check(
+        self, monkeypatch
+    ):
+        """When `file.size` isn't populated (e.g. a bare UploadFile double, as
+        used by every other test in this file), the pre-existing post-read size
+        check still catches an oversized payload."""
+        from backend.api.analysis import _MAX_SIZE_BYTES, analyze_skin
+
+        oversized_content = b"x" * (_MAX_SIZE_BYTES + 1)
+        file = _FakeUploadFile(oversized_content, content_type="image/jpeg")
+        assert not hasattr(file, "size")
+        monkeypatch.setattr(
+            "backend.api.analysis.AsyncOpenAI", lambda **kwargs: _mock_openai_client()
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await analyze_skin(file=file, user_id="test-user-id", db=_mock_db())
+
+        assert exc_info.value.status_code == 413

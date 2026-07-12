@@ -49,21 +49,40 @@ def _generate_es256_keypair() -> tuple[str, dict]:
 _PRIVATE_PEM, _PUBLIC_JWK = _generate_es256_keypair()
 
 
-def _make_token(sub: str = "user-123", *, exp_delta: int = 3600) -> str:
+def _make_token(
+    sub: str = "user-123",
+    *,
+    exp_delta: int = 3600,
+    email: str | None = "user@example.com",
+    user_metadata: dict | None = None,
+) -> str:
     claims = {
         "sub": sub,
         "exp": int(time.time()) + exp_delta,
         "aud": "authenticated",
         "iss": _ISSUER,
     }
+    if email is not None:
+        claims["email"] = email
+    if user_metadata is not None:
+        claims["user_metadata"] = user_metadata
     return jwt.encode(claims, _PRIVATE_PEM, algorithm="ES256", headers={"kid": _KID})
 
 
 @pytest.fixture(autouse=True)
 def _reset_jwks_cache():
+    # Also reset the Task 70 refresh-throttle clock: each test in this file
+    # clears `_jwks_cache`, so a `kid` that verified cleanly in one test is a
+    # fresh cache-miss in the next — without resetting the throttle too,
+    # that legitimate next-test refresh would be wrongly suppressed as "too
+    # soon after" the previous test's refresh.
     auth_module._jwks_cache.clear()
+    auth_module._last_refresh_attempt = None
+    auth_module._cache_fetched_at = None
     yield
     auth_module._jwks_cache.clear()
+    auth_module._last_refresh_attempt = None
+    auth_module._cache_fetched_at = None
 
 
 @pytest.fixture
@@ -94,14 +113,16 @@ def mock_jwks_endpoint(monkeypatch, configure_supabase):
 
 async def _echo_user_id(request):
     """Test-only route: echoes back whatever the middleware stashed on state."""
-    return JSONResponse({"user_id": getattr(request.state, "user_id", None)})
+    return JSONResponse({
+        "user_id": getattr(request.state, "user_id", None),
+        "user_claims": getattr(request.state, "user_claims", None),
+    })
 
 
 def _make_app() -> Starlette:
     app = Starlette(
         routes=[
             Route("/api/protected", _echo_user_id),
-            Route("/api/auth/complete-signup", _echo_user_id, methods=["GET"]),
             Route("/health", _echo_user_id),
         ],
     )
@@ -115,20 +136,17 @@ def client():
 
 
 class TestPublicPaths:
-    """Req 6.3/6.4: the new signup-time route bypasses auth; the old
-    locally-issued-token routes no longer exist as public paths."""
-
-    def test_complete_signup_is_public(self):
-        assert "/api/auth/complete-signup" in _PUBLIC_PATHS
+    """Req 6.3/6.4/21.1: the old locally-issued-token routes no longer exist
+    as public paths. `/api/auth/complete-signup` also requires a Bearer
+    token now (security-remediation Req 21.1 — see backend/api/auth.py's
+    Task 61 spike-finding comment for why it moved off this list)."""
 
     def test_login_and_register_are_no_longer_public(self):
         assert "/api/auth/login" not in _PUBLIC_PATHS
         assert "/api/auth/register" not in _PUBLIC_PATHS
 
-    def test_public_path_bypasses_auth_without_a_token(self, client):
-        response = client.get("/api/auth/complete-signup")
-
-        assert response.status_code == 200
+    def test_complete_signup_is_no_longer_public(self):
+        assert "/api/auth/complete-signup" not in _PUBLIC_PATHS
 
     def test_health_still_public(self, client):
         response = client.get("/health")
@@ -189,3 +207,19 @@ class TestProtectedPaths:
 
         assert response.status_code == 200
         assert called_with["token"] == token
+
+    def test_valid_token_sets_full_user_claims(self, client, mock_jwks_endpoint):
+        """Req 21.1: `complete-signup` needs `email`/`user_metadata.username`
+        from the verified token, not just `sub` — the middleware must stash
+        the full claim set, not a trimmed-down subset."""
+        token = _make_token(
+            sub="abc-123", email="abc@example.com", user_metadata={"username": "abcuser"}
+        )
+
+        response = client.get("/api/protected", headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        claims = response.json()["user_claims"]
+        assert claims["sub"] == "abc-123"
+        assert claims["email"] == "abc@example.com"
+        assert claims["user_metadata"] == {"username": "abcuser"}

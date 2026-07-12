@@ -84,10 +84,16 @@ def _make_hs256_token(
 
 @pytest.fixture(autouse=True)
 def _reset_jwks_cache():
-    """Every test starts with a cold JWKS cache — no cross-test pollution."""
+    """Every test starts with a cold JWKS cache, a cold refresh-throttle
+    clock (Task 70), and a cold cache-age clock (Task 79) — no cross-test
+    pollution."""
     auth_module._jwks_cache.clear()
+    auth_module._last_refresh_attempt = None
+    auth_module._cache_fetched_at = None
     yield
     auth_module._jwks_cache.clear()
+    auth_module._last_refresh_attempt = None
+    auth_module._cache_fetched_at = None
 
 
 @pytest.fixture
@@ -194,6 +200,208 @@ class TestVerifySupabaseJwtJwksPath:
 
         with pytest.raises(JWTError):
             auth_module.verify_supabase_jwt(token)
+
+
+class TestJwksCacheEvictionAndThrottling:
+    """Task 70, Req 24: a refresh replaces the JWKS cache wholesale (so a
+    retired `kid` stops being trusted), a *failed* refresh preserves the
+    prior cache, and unknown-`kid`-triggered refreshes are throttled.
+    """
+
+    def test_retired_kid_rejected_after_refresh_replaces_cache(
+        self, configure_supabase, monkeypatch
+    ):
+        """Req 24.1/24.2: once a refresh fetches a JWKS document that no
+        longer contains a previously-cached kid, that kid's token must be
+        rejected — a `.update()`-based merge would instead let it linger."""
+        old_token = _make_es256_token(sub="user-old")
+
+        new_private_pem, new_public_jwk = _generate_es256_keypair()
+        new_public_jwk["kid"] = "rotated-in-kid"
+
+        state = {"rotated": False}
+
+        def _fake_get(url, timeout=None):
+            response = MagicMock()
+            response.raise_for_status.return_value = None
+            if state["rotated"]:
+                response.json.return_value = {"keys": [new_public_jwk]}
+            else:
+                response.json.return_value = {"keys": [_PUBLIC_JWK]}
+            return response
+
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value.get.side_effect = _fake_get
+        fake_client.__exit__.return_value = False
+        monkeypatch.setattr(auth_module.httpx, "Client", MagicMock(return_value=fake_client))
+
+        # Prime the cache with the old (currently live) key.
+        claims = auth_module.verify_supabase_jwt(old_token)
+        assert claims["sub"] == "user-old"
+
+        # Simulate Supabase rotating its signing key: the live JWKS document
+        # no longer contains the old kid. A token bearing the new, not-yet-
+        # cached kid forces a refresh — advance the monotonic clock past the
+        # refresh throttle window (Req 24.4) so this second refresh isn't
+        # itself suppressed as "too soon after the last attempt."
+        state["rotated"] = True
+        future = time.monotonic() + auth_module._JWKS_REFRESH_MIN_INTERVAL_SECONDS + 1
+        monkeypatch.setattr(auth_module.time, "monotonic", lambda: future)
+        new_token = jwt.encode(
+            {
+                "sub": "user-new",
+                "exp": int(time.time()) + 3600,
+                "aud": "authenticated",
+                "iss": _ISSUER,
+            },
+            new_private_pem,
+            algorithm="ES256",
+            headers={"kid": "rotated-in-kid"},
+        )
+        claims = auth_module.verify_supabase_jwt(new_token)
+        assert claims["sub"] == "user-new"
+
+        # The retired kid must no longer verify: the cache was replaced
+        # wholesale by the refresh above, not merged into.
+        with pytest.raises(JWTError):
+            auth_module.verify_supabase_jwt(old_token)
+
+    def test_failed_refresh_preserves_prior_cache_and_known_good_kids_still_verify(
+        self, mock_jwks_endpoint, monkeypatch
+    ):
+        """Req 24.3: a transient network/parse failure during refresh must not
+        clear out currently-valid cached keys."""
+        token = _make_es256_token(sub="user-a")
+        claims = auth_module.verify_supabase_jwt(token)
+        assert claims["sub"] == "user-a"
+        assert mock_jwks_endpoint["n"] == 1
+
+        # The endpoint now fails outright.
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value.get.side_effect = auth_module.httpx.HTTPError("boom")
+        fake_client.__exit__.return_value = False
+        monkeypatch.setattr(auth_module.httpx, "Client", MagicMock(return_value=fake_client))
+
+        unknown_token = _make_es256_token(sub="user-b", kid="some-unknown-kid")
+        with pytest.raises(JWTError):
+            auth_module.verify_supabase_jwt(unknown_token)
+
+        # The previously-cached, known-good kid still verifies — the failed
+        # refresh attempt above did not clear _jwks_cache.
+        claims = auth_module.verify_supabase_jwt(token)
+        assert claims["sub"] == "user-a"
+
+    def test_rapid_repeated_unknown_kid_lookups_trigger_bounded_fetches(
+        self, mock_jwks_endpoint
+    ):
+        """Req 24.4: a burst of tokens bearing unknown/bogus kids must not
+        each force a live JWKS refetch."""
+        for i in range(5):
+            token = _make_es256_token(kid=f"unknown-kid-{i}")
+            with pytest.raises(JWTError):
+                auth_module.verify_supabase_jwt(token)
+
+        # Only the first unknown-kid lookup should have triggered an actual
+        # HTTP fetch; the throttle window suppresses the rest.
+        assert mock_jwks_endpoint["n"] == 1
+
+
+class TestJwksCacheTtl:
+    """Task 79 (deepsec revalidation finding, Req 24): a `kid` that keeps
+    *hitting* the cache must not stay trusted forever between misses —
+    once the cache is older than `_JWKS_CACHE_MAX_AGE_SECONDS`, even a hit
+    forces a fresh fetch."""
+
+    def test_kid_hit_within_ttl_does_not_refetch(self, mock_jwks_endpoint):
+        token = _make_es256_token(sub="user-a")
+
+        auth_module.verify_supabase_jwt(token)
+        auth_module.verify_supabase_jwt(token)
+
+        assert mock_jwks_endpoint["n"] == 1
+
+    def test_kid_hit_past_ttl_triggers_refetch(self, mock_jwks_endpoint, monkeypatch):
+        token = _make_es256_token(sub="user-a")
+        auth_module.verify_supabase_jwt(token)
+        assert mock_jwks_endpoint["n"] == 1
+
+        future = (
+            time.monotonic()
+            + auth_module._JWKS_CACHE_MAX_AGE_SECONDS
+            + auth_module._JWKS_REFRESH_MIN_INTERVAL_SECONDS
+            + 1
+        )
+        monkeypatch.setattr(auth_module.time, "monotonic", lambda: future)
+
+        claims = auth_module.verify_supabase_jwt(token)
+
+        assert claims["sub"] == "user-a"
+        assert mock_jwks_endpoint["n"] == 2
+
+    def test_kid_rejected_if_revoked_by_the_time_the_ttl_forces_a_refetch(
+        self, configure_supabase, monkeypatch
+    ):
+        """The concrete deepsec-demonstrated exploit: a previously-cached kid
+        that Supabase has since revoked must eventually stop verifying, even
+        if no *other* unknown kid ever comes along to trigger a miss-based
+        refresh."""
+        state = {"revoked": False}
+
+        def _fake_get(url, timeout=None):
+            response = MagicMock()
+            response.raise_for_status.return_value = None
+            response.json.return_value = {"keys": [] if state["revoked"] else [_PUBLIC_JWK]}
+            return response
+
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value.get.side_effect = _fake_get
+        fake_client.__exit__.return_value = False
+        monkeypatch.setattr(auth_module.httpx, "Client", MagicMock(return_value=fake_client))
+
+        token = _make_es256_token(sub="user-a")
+        claims = auth_module.verify_supabase_jwt(token)
+        assert claims["sub"] == "user-a"
+
+        # Supabase revokes the key. No new/unknown kid ever shows up — only
+        # the same, still-cached kid, repeatedly, well past the TTL.
+        state["revoked"] = True
+        future = (
+            time.monotonic()
+            + auth_module._JWKS_CACHE_MAX_AGE_SECONDS
+            + auth_module._JWKS_REFRESH_MIN_INTERVAL_SECONDS
+            + 1
+        )
+        monkeypatch.setattr(auth_module.time, "monotonic", lambda: future)
+
+        with pytest.raises(JWTError):
+            auth_module.verify_supabase_jwt(token)
+
+    def test_failed_refresh_past_ttl_retains_prior_cache(self, mock_jwks_endpoint, monkeypatch):
+        """Req 24.3 must still hold once TTL-driven refreshes are in play:
+        a failed refresh past the TTL must not clear out the still-cached,
+        still-valid key."""
+        token = _make_es256_token(sub="user-a")
+        auth_module.verify_supabase_jwt(token)
+
+        future = (
+            time.monotonic()
+            + auth_module._JWKS_CACHE_MAX_AGE_SECONDS
+            + auth_module._JWKS_REFRESH_MIN_INTERVAL_SECONDS
+            + 1
+        )
+        monkeypatch.setattr(auth_module.time, "monotonic", lambda: future)
+
+        fake_client = MagicMock()
+        fake_client.__enter__.return_value.get.side_effect = auth_module.httpx.HTTPError("boom")
+        fake_client.__exit__.return_value = False
+        monkeypatch.setattr(auth_module.httpx, "Client", MagicMock(return_value=fake_client))
+
+        with pytest.raises(JWTError):
+            auth_module.verify_supabase_jwt(token)
+
+        # The failed refresh attempt above must not have cleared the prior,
+        # still-valid cache entry.
+        assert _KID in auth_module._jwks_cache
 
 
 class TestVerifySupabaseJwtHs256Fallback:

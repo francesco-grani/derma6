@@ -106,6 +106,22 @@ class TestPatchProfile:
         assert body["location"] == "Berlin"
         assert body["skin_concerns"] == ["acne", "redness"]
 
+    def test_invalid_field_leaves_other_fields_in_same_request_uncommitted(self, profile_store):
+        # security-remediation Req 23.1, 23.2: skin_type is valid on its own,
+        # but beard_style in the same request is not — the whole patch must
+        # be rejected atomically rather than committing skin_type anyway.
+        profile_store.get_or_create_user_by_id("uid-alice", "alice@example.com", "alice")
+        client = _make_client(profile_store, user_id="uid-alice")
+
+        response = client.patch(
+            "/api/me/profile",
+            json={"skin_type": "oily", "beard_style": "bogus"},
+        )
+
+        assert response.status_code == 422
+        profile = client.get("/api/me/profile").json()
+        assert profile["skin_type"] is None
+
     def test_patch_scoped_to_authenticated_user_id(self, profile_store):
         # Patching as bob must never affect alice's row.
         profile_store.get_or_create_user_by_id("uid-alice", "alice@example.com", "alice")

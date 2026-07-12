@@ -47,4 +47,9 @@ def rename_routine(
         store.rename_routine(user_id, name, new_name)
         return {"name": new_name}
     except ProfileStoreError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        # security-remediation Req 25.3: a name collision is a structured,
+        # distinguishable 409 rather than a generic 500 — RoutinesPage.tsx
+        # (Req 25.4) branches on this to show a specific message.
+        detail = str(exc)
+        status_code = 409 if "already exists" in detail else 500
+        raise HTTPException(status_code=status_code, detail=detail) from exc

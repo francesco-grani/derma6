@@ -93,6 +93,7 @@ export default function RoutinesPage() {
 
   const [renameTarget, setRenameTarget] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [enhanceTarget, setEnhanceTarget] = useState<Routine | null>(null)
   const [enhanceGoal, setEnhanceGoal] = useState('')
@@ -111,9 +112,17 @@ export default function RoutinesPage() {
 
   async function confirmRename() {
     if (!renameTarget || !newName.trim()) return
-    await renameRoutine.mutateAsync({ oldName: renameTarget, newName: newName.trim() })
-    setRenameTarget(null)
-    setNewName('')
+    setRenameError(null)
+    try {
+      await renameRoutine.mutateAsync({ oldName: renameTarget, newName: newName.trim() })
+      setRenameTarget(null)
+      setNewName('')
+    } catch (err) {
+      // security-remediation Req 25.4: a name-collision rejection (409, see
+      // apiRenameRoutine) is surfaced here rather than left as a silent
+      // failure — the dialog stays open so the user can pick another name.
+      setRenameError((err as Error).message)
+    }
   }
 
   async function confirmDelete() {
@@ -135,7 +144,7 @@ export default function RoutinesPage() {
                 <Button size="sm" variant="outline"
                   className="cursor-pointer"
                   style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent', fontSize: 12 }}
-                  onClick={() => { setRenameTarget(routine.name); setNewName(routine.name) }}>
+                  onClick={() => { setRenameTarget(routine.name); setNewName(routine.name); setRenameError(null) }}>
                   Rename
                 </Button>
                 <Button size="sm" variant="outline"
@@ -218,17 +227,20 @@ export default function RoutinesPage() {
       </div>
 
       {/* Rename dialog */}
-      <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
+      <Dialog open={!!renameTarget} onOpenChange={() => { setRenameTarget(null); setRenameError(null) }}>
         <DialogContent style={{ background: '#2E3D2F', border: '1px solid #4B5A4C' }}>
           <DialogHeader>
             <DialogTitle style={{ color: '#E0E8E0' }}>Rename routine</DialogTitle>
           </DialogHeader>
           <Input
             value={newName}
-            onChange={e => setNewName(e.target.value)}
+            onChange={e => { setNewName(e.target.value); setRenameError(null) }}
             style={{ background: '#3E4D3F', border: '1px solid #4B5A4C', color: '#E0E8E0' }}
             onKeyDown={e => e.key === 'Enter' && confirmRename()}
           />
+          {renameError && (
+            <p className="text-sm" style={{ color: '#F0B8B8' }}>{renameError}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" className="cursor-pointer" onClick={() => setRenameTarget(null)}
               style={{ borderColor: '#4B5A4C', color: '#9EAD9E', background: 'transparent' }}>

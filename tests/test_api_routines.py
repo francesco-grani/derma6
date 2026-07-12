@@ -136,3 +136,18 @@ class TestRenameRoutine:
         assert response.status_code == 500
         names = [r.name for r in profile_store.get_all_routines("uid-alice")]
         assert names == ["Morning"]
+
+    def test_rename_colliding_with_existing_routine_returns_409(self, profile_store):
+        # security-remediation Req 25.1, 25.3: renaming to a name that
+        # collides (case-insensitively) with another of the user's own
+        # routines is a structured 409, not a silently-committed duplicate.
+        profile_store.get_or_create_user_by_id("uid-alice", "alice@example.com", "alice")
+        profile_store.save_routine("uid-alice", _make_routine("Morning"))
+        profile_store.save_routine("uid-alice", _make_routine("Evening"))
+        client = _make_client(profile_store, user_id="uid-alice")
+
+        response = client.patch("/api/me/routines/Morning", json={"new_name": "evening"})
+
+        assert response.status_code == 409
+        names = sorted(r.name for r in profile_store.get_all_routines("uid-alice"))
+        assert names == ["Evening", "Morning"]

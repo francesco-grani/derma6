@@ -19,11 +19,50 @@ export async function getAccessToken(): Promise<string | null> {
   return data.session?.access_token ?? null
 }
 
+/** sessionStorage keys that must never survive a sign-out, whichever path
+ * triggers it (security-remediation Req 20.4; deepsec-revalidation follow-up
+ * Task 80). Single source of truth — `lib/auth.tsx`'s `AuthProvider.logout()`
+ * imports this instead of keeping its own copy, since both `logout()` and
+ * `handleUnauthorized()` below sign the user out and both must clear it.
+ * Kept in sync by hand with their single writers: SkinAnalysisPage.tsx's
+ * SESSION_KEY, and the 'derma6:initial-message' handoff key written by
+ * ProfilePage.tsx/RoutinesPage.tsx/SkinAnalysisPage.tsx and consumed by
+ * ChatPage.tsx. */
+export const SESSION_STORAGE_KEYS_TO_CLEAR_ON_SIGNOUT = [
+  'derma6:skin-analysis',
+  'derma6:initial-message',
+]
+
+function clearSignoutSessionStorage() {
+  for (const key of SESSION_STORAGE_KEYS_TO_CLEAR_ON_SIGNOUT) {
+    sessionStorage.removeItem(key)
+  }
+}
+
 async function handleUnauthorized() {
   // The backend rejected the token as invalid/expired/malformed (Req 6.4);
   // drop the now-stale local Supabase session so the app stops retrying it.
+  // This path bypasses `AuthProvider.logout()` entirely (it's called from
+  // outside React, on any 401), so it must clear sessionStorage itself
+  // rather than relying on `logout()` to have done it — the hard navigation
+  // below already discards all in-memory state (QueryClient, React state),
+  // but sessionStorage survives a navigation within the same tab (Task 80).
   await supabase.auth.signOut().catch(() => {})
+  clearSignoutSessionStorage()
   window.location.replace('/login')
+}
+
+/** Error thrown by `authedFetch` on a non-2xx response, carrying the HTTP
+ * status so callers can distinguish e.g. 412 "account setup incomplete"
+ * from other failures (security-remediation Req 21.4/21.5) without
+ * string-matching the message. */
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
 }
 
 async function authedFetch(path: string, init: RequestInit = {}) {
@@ -38,11 +77,11 @@ async function authedFetch(path: string, init: RequestInit = {}) {
   })
   if (res.status === 401) {
     await handleUnauthorized()
-    throw new Error('Session expired')
+    throw new ApiError('Session expired', 401)
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Request failed')
+    throw new ApiError(err.detail ?? 'Request failed', res.status)
   }
   return res
 }
@@ -50,25 +89,17 @@ async function authedFetch(path: string, init: RequestInit = {}) {
 // ── Auth ──────────────────────────────────────────────────────────────────
 
 /**
- * POST /api/auth/complete-signup. Public — Supabase issues no session while
- * email confirmation is pending, so this call cannot carry a bearer token.
- * Provisions the local `users` row keyed by the Supabase-issued UUID, using
- * the explicitly-submitted email and display name (Req 4.4).
+ * POST /api/auth/complete-signup. Authenticated (security-remediation Req
+ * 21.1) — Supabase issues no session while email confirmation is pending
+ * (see Task 61 spike finding), so this can only be called once a real
+ * session exists, i.e. after the user has verified their email and signed
+ * in. Identity (`user_id`, `email`, `username`) is derived entirely from
+ * the verified bearer token server-side; no body is sent. Idempotent — safe
+ * to retry (`lib/auth.tsx`'s `AuthProvider` calls this automatically the
+ * first time a session's profile fetch returns 412 "incomplete").
  */
-export async function apiCompleteSignup(
-  supabase_user_id: string,
-  email: string,
-  username: string,
-): Promise<{ user_id: string; username: string }> {
-  const res = await fetch('/api/auth/complete-signup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ supabase_user_id, email, username }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Signup failed')
-  }
+export async function apiCompleteSignup(): Promise<{ user_id: string; username: string }> {
+  const res = await authedFetch('/api/auth/complete-signup', { method: 'POST' })
   return res.json() as Promise<{ user_id: string; username: string }>
 }
 

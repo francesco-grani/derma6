@@ -1,6 +1,6 @@
 """Content filtering for incoming chat messages and outgoing LLM responses.
 
-Input guardrails (FastAPI dependency `check_chat_content`):
+Input guardrails (FastAPI dependencies `check_chat_content`, `check_resume_content`):
   - Jailbreak / prompt-injection patterns
   - PII detected in the user's message (email, phone, credit card, SSN)
 
@@ -11,6 +11,10 @@ Output guardrails (utility `scrub_pii_output`):
 
 Usage:
   Input  → Depends(check_chat_content) on the /api/chat route
+         → Depends(check_resume_content) on the /api/chat/resume route
+           (security-remediation Req 19.5 — the resume path's freeform `note`
+           field is a second user-controlled input channel into the agent and
+           must be filtered the same way `message` is)
   Output → scrub_pii_output(answer) in graph.py before chat_history.add_ai_message()
 """
 
@@ -19,28 +23,10 @@ import re
 
 from fastapi import HTTPException
 
-from backend.schemas import ChatRequest
+from backend.schemas import ChatRequest, ResumeRequest
+from backend.security_patterns import JAILBREAK_PATTERN as _JAILBREAK
 
 logger = logging.getLogger(__name__)
-
-# ── Jailbreak / prompt-injection detection ────────────────────────────────────
-
-_JAILBREAK = re.compile(
-    r"ignore\s+(previous|all|above|prior|your|these)\s+(instructions?|prompts?|rules?|constraints?)"
-    r"|you\s+are\s+now\s+(a\b|an\b|the\b|my\b|no\s+longer)"
-    r"|(forget|disregard|override|bypass|violate)\s+(your|all|the|previous|any)\s+"
-    r"(instructions?|rules?|training|constraints?|guidelines?|programming)"
-    r"|act\s+as\s+if\s+you\s+(are|were)"
-    r"|\bdan\s+mode\b|\bdo\s+anything\s+now\b|\bjailbreak\b"
-    r"|<\s*/?system\s*>"
-    r"|system\s*:\s*\S"
-    r"|(new|different|another)\s+(persona|personality|identity)"
-    r"|(switch|change|adopt)\s+(your\s+)?(persona|personality|role)"
-    r"|you\s+have\s+no\s+(restrictions?|limits?|guidelines?|rules?|constraints?|filters?)"
-    r"|(disable|remove|turn\s+off|bypass)\s+(your\s+)?(safety|filters?|restrictions?|guardrails?|moderation)"
-    r"|\bprompt\s+injection\b",
-    re.IGNORECASE,
-)
 
 # ── PII patterns (input) ──────────────────────────────────────────────────────
 # Ordered from most to least specific to avoid shadowing.
@@ -93,10 +79,13 @@ _PII_OUTPUT_SUBS: list[tuple[re.Pattern[str], str]] = [
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 
-async def check_chat_content(req: ChatRequest) -> None:
-    """Raise HTTP 400 if the message contains jailbreak attempts or PII."""
-    message = req.message
+def _check_content(message: str) -> None:
+    """Raise HTTP 400 if `message` contains jailbreak attempts or PII.
 
+    Shared by check_chat_content (message) and check_resume_content (note) —
+    both are free-text, user-controlled strings that reach the same agent/LLM
+    boundary, so they get the same guardrail (security-remediation Req 19.5).
+    """
     if _JAILBREAK.search(message):
         logger.warning("content_filter: jailbreak attempt blocked")
         raise HTTPException(
@@ -114,6 +103,19 @@ async def check_chat_content(req: ChatRequest) -> None:
                     "Just describe your skincare question and I'll help!"
                 ),
             )
+
+
+async def check_chat_content(req: ChatRequest) -> None:
+    """Raise HTTP 400 if the message contains jailbreak attempts or PII."""
+    _check_content(req.message)
+
+
+async def check_resume_content(req: ResumeRequest) -> None:
+    """Raise HTTP 400 if a HITL resume's freeform `note` contains jailbreak
+    attempts or PII (security-remediation Req 19.5). `note` defaults to ""
+    (schemas.ResumeRequest), which never matches either pattern set, so
+    interrupt kinds that don't use a note are unaffected."""
+    _check_content(req.note)
 
 
 # ── Output PII scrubber ───────────────────────────────────────────────────────

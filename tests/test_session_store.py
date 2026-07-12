@@ -165,3 +165,29 @@ class TestLegacyMigration:
         sessions = session_store.get_sessions(user_id)
 
         assert len(sessions) == 1
+
+
+# ── get_session_owner (security-remediation Task 51) ────────────────────────
+
+
+class TestGetSessionOwner:
+    def test_returns_owner_user_id_for_existing_session(self, profile_store, session_store):
+        user_id = _make_user(profile_store, "kate")
+        session_id = session_store.create_session(user_id)
+
+        assert session_store.get_session_owner(session_id) == user_id
+
+    def test_returns_none_for_unknown_session_id(self, session_store):
+        assert session_store.get_session_owner("nonexistent-session-id") is None
+
+    def test_does_not_return_a_different_users_ownership_as_a_match(
+        self, profile_store, session_store
+    ):
+        owner_id = _make_user(profile_store, "leo")
+        other_id = _make_user(profile_store, "mia")
+        session_id = session_store.create_session(owner_id)
+
+        owner = session_store.get_session_owner(session_id)
+
+        assert owner == owner_id
+        assert owner != other_id

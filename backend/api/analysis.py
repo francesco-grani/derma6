@@ -17,6 +17,7 @@ from backend.db.deps import get_db, get_profile_store
 from backend.db.models import SkinAnalysis
 from backend.db.profile_store import ProfileStore, ProfileStoreError
 from backend.llm.structured import StructuredOutputError, structured_completion
+from backend.rate_limiter import RateLimiter
 from backend.schemas import (
     Alternative,
     SaveConditionRequest,
@@ -32,6 +33,12 @@ _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 _VISION_MAX_PX = 2048  # longest side sent to the vision model
 _THUMB_MAX_PX = 256    # thumbnail stored for list view
+
+# Dedicated limiter instance (Req 22.1) — analyze-skin calls a paid vision LLM
+# per request, so it gets its own bucket rather than sharing state with the
+# chat endpoint's limiter in backend/agent/graph.py, even though both currently
+# draw from the same global settings.rate_limit_requests/window_seconds config.
+_rate_limiter = RateLimiter()
 
 
 def _prepare_for_vision(data: bytes) -> tuple[bytes, str]:
@@ -76,11 +83,29 @@ async def analyze_skin(
     user_id: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Req 22.1: per-user rate limit before invoking the (paid) vision LLM.
+    if not _rate_limiter.check(user_id):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please wait before trying again.",
+        )
+
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(
             status_code=415,
             detail="Unsupported image type. Use JPEG, PNG, or WebP.",
         )
+
+    # Req 22.2/22.3: reject oversized uploads using the size Starlette's multipart
+    # parser already observed while writing the upload to disk/spool (UploadFile.size
+    # is populated incrementally by UploadFile.write() during body parsing, which
+    # completes before this handler runs) rather than only finding out after an
+    # unconditional `await file.read()` has buffered the whole payload into a
+    # separate in-memory `bytes` object. Falls through to the post-read check below
+    # for the rare case `file.size` isn't populated (e.g. a non-Starlette UploadFile).
+    declared_size = getattr(file, "size", None)
+    if declared_size is not None and declared_size > _MAX_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large. Max 10 MB.")
 
     data = await file.read()
     logger.info(

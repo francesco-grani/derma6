@@ -101,8 +101,15 @@ async def run_eval(
     background_tasks: BackgroundTasks,
     _: str = Depends(require_admin),
 ):
+    # Req 26.1/26.2: flip status to "running" synchronously, right here, before
+    # scheduling the background task — not inside _run_eval_background() after
+    # it starts. Two near-simultaneous requests both run this coroutine on the
+    # same event loop with no `await` between the status check and the flip
+    # below, so the second request's check always observes the first
+    # request's flip rather than a race window where both see "idle".
     if _eval_state["status"] == "running":
         raise HTTPException(status_code=409, detail="Eval already running.")
+    _eval_state["status"] = "running"
     background_tasks.add_task(_run_eval_background)
     return {"message": "Eval started."}
 

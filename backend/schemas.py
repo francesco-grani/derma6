@@ -5,35 +5,12 @@ for custom validation logic.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, field_validator
 
 from backend.config import settings
-
-# ── Auth ──────────────────────────────────────────────────────────────────────
-
-
-class CompleteSignupRequest(BaseModel):
-    """Provisions the local user row after Supabase has created the auth identity
-    (Req 4.4). `supabase_user_id` is the provider-issued UUID that becomes the
-    local `users.id` primary key; `email` and `username` were submitted by the
-    user during signup and are never derived automatically (Req 4.6)."""
-
-    supabase_user_id: str
-    email: str
-    username: str
-
-    @field_validator("username")
-    @classmethod
-    def username_valid(cls, v: str) -> str:
-        v = v.strip()
-        if not v or len(v) < 2:
-            raise ValueError("Username must be at least 2 characters.")
-        if len(v) > 50:
-            raise ValueError("Username must be 50 characters or fewer.")
-        return v
-
+from backend.security_patterns import JAILBREAK_PATTERN
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
 
@@ -61,11 +38,43 @@ class ResumeRequest(BaseModel):
 # ── Profile / Routines ────────────────────────────────────────────────────────
 
 
+# Kept in sync by hand with backend.agent.graph's skin_type_advisor_tool
+# Literal (the original spec's Bundle 1 agent-tool layer) — security-
+# remediation Req 23.3 extends the same enum to this request-validation
+# layer so a value can never reach storage without going through the tool.
+_SKIN_TYPES = Literal["oily", "dry", "combination", "sensitive", "dehydrated", "acneic"]
+
+
+def _reject_jailbreak_phrases(v: str) -> str:
+    """Shared field_validator body (Req 23.3): free-text profile fields that
+    flow into the agent's system prompt (`location`, `skin_concerns`) are
+    checked against the same jailbreak-pattern regex the chat/resume input
+    guardrails use, rather than a second invented pattern set."""
+    if JAILBREAK_PATTERN.search(v):
+        raise ValueError("This value looks like it contains an instruction override attempt.")
+    return v
+
+
 class ProfilePatch(BaseModel):
-    skin_type: Optional[str] = None
+    skin_type: Optional[_SKIN_TYPES] = None
     beard_style: Optional[str] = None
     location: Optional[str] = None
     skin_concerns: Optional[list[str]] = None
+
+    @field_validator("location")
+    @classmethod
+    def location_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            _reject_jailbreak_phrases(v)
+        return v
+
+    @field_validator("skin_concerns")
+    @classmethod
+    def skin_concerns_valid(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None:
+            for item in v:
+                _reject_jailbreak_phrases(item)
+        return v
 
 
 class RenameRequest(BaseModel):

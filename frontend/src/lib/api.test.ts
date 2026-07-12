@@ -56,6 +56,7 @@ describe('api.ts', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    sessionStorage.clear()
   })
 
   describe('authedFetch token attachment (via apiGetProfile)', () => {
@@ -94,6 +95,22 @@ describe('api.ts', () => {
       expect(replaceMock).toHaveBeenCalledWith('/login')
     })
 
+    it('clears sessionStorage handoff keys on a 401 (deepsec-revalidation Task 80)', async () => {
+      // The implicit-signout path (any 401) bypasses AuthProvider.logout()
+      // entirely — it must clear the same sessionStorage keys itself rather
+      // than leaving a stale account's skin-analysis/chat-handoff data
+      // readable by whoever signs in next in this tab.
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('stale-tok') } })
+      fetchMock.mockResolvedValue(jsonResponse({ detail: 'Unauthorized' }, 401))
+      sessionStorage.setItem('derma6:skin-analysis', JSON.stringify({ result: {}, imageDataUrl: 'x' }))
+      sessionStorage.setItem('derma6:initial-message', 'draft message')
+
+      await expect(apiGetProfile()).rejects.toThrow('Session expired')
+
+      expect(sessionStorage.getItem('derma6:skin-analysis')).toBeNull()
+      expect(sessionStorage.getItem('derma6:initial-message')).toBeNull()
+    })
+
     it('throws the server-provided detail message on other non-ok responses', async () => {
       mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok') } })
       fetchMock.mockResolvedValue(jsonResponse({ detail: 'boom' }, 500))
@@ -103,36 +120,29 @@ describe('api.ts', () => {
   })
 
   describe('apiCompleteSignup', () => {
-    it('POSTs the supabase_user_id/email/username and returns the provisioned user', async () => {
+    it('POSTs with no body and attaches the bearer token (security-remediation Req 21.1)', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
       fetchMock.mockResolvedValue(jsonResponse({ user_id: 'uuid-1', username: 'bob' }, 201))
 
-      const result = await apiCompleteSignup('uuid-1', 'bob@example.com', 'bob')
+      const result = await apiCompleteSignup()
 
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/auth/complete-signup',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ supabase_user_id: 'uuid-1', email: 'bob@example.com', username: 'bob' }),
+          headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }),
         }),
       )
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+      expect(init.body).toBeUndefined()
       expect(result).toEqual({ user_id: 'uuid-1', username: 'bob' })
     })
 
-    it('does not attach a bearer token (public endpoint)', async () => {
-      fetchMock.mockResolvedValue(jsonResponse({ user_id: 'uuid-1', username: 'bob' }, 201))
-
-      await apiCompleteSignup('uuid-1', 'bob@example.com', 'bob')
-
-      expect(mocks.getSession).not.toHaveBeenCalled()
-    })
-
     it('surfaces a 409 "email already registered" error from the backend', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
       fetchMock.mockResolvedValue(jsonResponse({ detail: 'email already registered' }, 409))
 
-      await expect(apiCompleteSignup('uuid-1', 'bob@example.com', 'bob')).rejects.toThrow(
-        'email already registered',
-      )
+      await expect(apiCompleteSignup()).rejects.toThrow('email already registered')
     })
   })
 })

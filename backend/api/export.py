@@ -1,6 +1,9 @@
 """Export routes: GET /api/me/export?format=html|pdf"""
 
 import html as html_lib
+import re
+import unicodedata
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, Response
@@ -66,6 +69,39 @@ def _desc(ingredient: str) -> str:
 
 def _e(text: str) -> str:
     return html_lib.escape(str(text))
+
+
+def _content_disposition(username: str, ext: str) -> str:
+    """Build a `Content-Disposition` header value that survives non-Latin-1
+    usernames (Req 26.3).
+
+    Starlette/httpx encode header values as latin-1 — interpolating a raw
+    `username` containing e.g. emoji or CJK characters directly into
+    `filename="..."` raises `UnicodeEncodeError` before the response can even
+    be sent. This provides both:
+      - `filename*=UTF-8''<percent-encoded>` (RFC 5987), carrying the full,
+        unmangled username for clients that understand the extended form, and
+      - a sanitized ASCII-only `filename=` fallback for clients that don't,
+        falling back to a generic name if nothing ASCII-safe survives.
+    """
+    base = f"{username}_skincare_plan.{ext}"
+    encoded = quote(base, safe="")
+
+    # Best-effort transliteration (e.g. "café" -> "cafe") followed by dropping
+    # anything left that still isn't printable ASCII.
+    normalized = unicodedata.normalize("NFKD", base)
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    # Quoted-string values must not contain a bare backslash, double quote, or
+    # line break.
+    ascii_only = re.sub(r'[\\"\r\n]', "_", ascii_only).strip()
+    if not ascii_only or not re.search(r"[A-Za-z0-9]", ascii_only):
+        # Sanitise `ext` too — it's always an internal literal ("html"/"pdf")
+        # in practice, but guard against a non-ASCII value ending up unescaped
+        # in the fallback name regardless.
+        ascii_ext = re.sub(r"[^A-Za-z0-9]", "", ext) or "bin"
+        ascii_only = f"skincare_plan.{ascii_ext}"
+
+    return f"attachment; filename=\"{ascii_only}\"; filename*=UTF-8''{encoded}"
 
 
 # ── HTML generation ───────────────────────────────────────────────────────────
@@ -445,10 +481,10 @@ def export(
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.pdf"'},
+            headers={"Content-Disposition": _content_disposition(username, "pdf")},
         )
     html_content = generate_export_html(user_id, store, session_store)
     return HTMLResponse(
         content=html_content,
-        headers={"Content-Disposition": f'attachment; filename="{username}_skincare_plan.html"'},
+        headers={"Content-Disposition": _content_disposition(username, "html")},
     )

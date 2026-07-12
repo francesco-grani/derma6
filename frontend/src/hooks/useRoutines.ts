@@ -3,9 +3,12 @@ import { apiDeleteRoutine, apiGetRoutines, apiRenameRoutine } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
 export function useRoutines() {
-  const { token } = useAuth()
+  const { token, userId } = useAuth()
+  // security-remediation Req 20.1: keyed by userId so a cached routine list
+  // can never be served to a different account. invalidateQueries({queryKey:
+  // ['routines']}) below still matches this via React Query's prefix rule.
   return useQuery({
-    queryKey: ['routines'],
+    queryKey: ['routines', userId],
     queryFn: apiGetRoutines,
     enabled: !!token,
   })

@@ -9,8 +9,6 @@ from backend.schemas import ProfilePatch, UserProfile
 
 router = APIRouter(prefix="/api/me", tags=["profile"])
 
-VALID_BEARD_STYLES = {"shave", "trim", "grow"}
-
 
 @router.get("/profile", response_model=UserProfile)
 def get_profile(
@@ -29,19 +27,12 @@ def patch_profile(
     user_id: str = Depends(get_current_user),
     store: ProfileStore = Depends(get_profile_store),
 ):
+    # security-remediation Req 23.1, 23.2: a single atomic call — see
+    # ProfileStore.apply_patch's docstring for why this replaced a sequence
+    # of independent per-field update_* calls.
     try:
-        if patch.skin_type is not None:
-            store.update_skin_type(user_id, patch.skin_type.strip())
-        if patch.beard_style is not None:
-            if patch.beard_style not in VALID_BEARD_STYLES:
-                raise HTTPException(status_code=422, detail=f"beard_style must be one of {VALID_BEARD_STYLES}")
-            store.update_beard_style(user_id, patch.beard_style)
-        if patch.location is not None:
-            store.update_location(user_id, patch.location.strip())
-        if patch.skin_concerns is not None:
-            store.update_skin_concerns(user_id, [c.strip() for c in patch.skin_concerns if c.strip()])
-        return store.get_profile(user_id)
-    except HTTPException:
-        raise
+        return store.apply_patch(user_id, patch)
     except ProfileStoreError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        detail = str(exc)
+        status_code = 422 if "beard_style" in detail else 500
+        raise HTTPException(status_code=status_code, detail=detail) from exc

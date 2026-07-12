@@ -22,12 +22,7 @@ vi.mock('@tanstack/react-router', async () => {
 // inside the factories without a TDZ error — same pattern as
 // `lib/auth.test.tsx` / `lib/api.test.ts`.
 const mocks = vi.hoisted(() => ({
-  apiCompleteSignup: vi.fn(),
   signUp: vi.fn(),
-}))
-
-vi.mock('@/lib/api', () => ({
-  apiCompleteSignup: mocks.apiCompleteSignup,
 }))
 
 vi.mock('@/lib/supabaseClient', () => ({
@@ -60,9 +55,12 @@ describe('SignUpPage', () => {
     expect(mocks.signUp).not.toHaveBeenCalled()
   })
 
-  it('completes a full sign-up: signUp() → completeSignup() → check-email screen', async () => {
+  it('signs up with the display name carried as Supabase user_metadata, then shows the check-email screen', async () => {
+    // security-remediation Req 21.1 / Task 61 spike finding: no session
+    // exists yet at this point, so provisioning can't happen here — this
+    // page's only job is to call signUp() with the chosen name threaded
+    // through as user_metadata for later use at first authenticated login.
     mocks.signUp.mockResolvedValue({ data: { user: { id: 'uuid-123' }, session: null }, error: null })
-    mocks.apiCompleteSignup.mockResolvedValue({ user_id: 'uuid-123', username: 'newuser' })
 
     render(<SignUpPage />)
     fillForm({ email: 'newuser@example.com', firstName: 'newuser', password: 'MyPass1!' })
@@ -78,10 +76,12 @@ describe('SignUpPage', () => {
       expect(mocks.signUp).toHaveBeenCalledWith({
         email: 'newuser@example.com',
         password: 'MyPass1!',
-        options: { emailRedirectTo: `${window.location.origin}/verify-email-callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/verify-email-callback`,
+          data: { username: 'newuser' },
+        },
       })
     })
-    expect(mocks.apiCompleteSignup).toHaveBeenCalledWith('uuid-123', 'newuser@example.com', 'newuser')
 
     await waitFor(() => {
       expect(screen.getByText('Check your email to verify your account')).toBeInTheDocument()
