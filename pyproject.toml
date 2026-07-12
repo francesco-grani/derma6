@@ -18,6 +18,7 @@ dependencies = [
     "psycopg[binary,pool]>=3.1",
     "rank-bm25>=0.2.2",
     "sentence-transformers>=3.0",
+    "torch>=2.2",
     "transformers>=4.40,<5.0",
     "openai>=2.42.0",
     "pgvector>=0.3",
@@ -66,6 +67,19 @@ dev = [
 required-environments = [
     "sys_platform == 'darwin' and platform_machine == 'x86_64'",
 ]
+
+# sentence-transformers pulls in torch transitively. Deployment is CPU-only
+# (no GPU on the Hetzner host), but PyPI's default Linux wheel bundles the
+# full CUDA/nvidia-cu13-* stack (~8GB+) regardless — pin to PyTorch's
+# CPU-only index instead so the built image (and the disk it lives on)
+# doesn't pay for hardware it never uses.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.coverage.run]
 source = ["backend"]
