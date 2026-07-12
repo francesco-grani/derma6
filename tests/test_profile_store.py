@@ -1,6 +1,9 @@
 """Unit tests for backend.db.profile_store.ProfileStore (in-memory SQLite)."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from backend.db.profile_store import ProfileStore, ProfileStoreError
 from backend.schemas import (
@@ -149,6 +152,10 @@ class TestUpdateSkinConcerns:
         profile_store.update_skin_concerns("uid-ivan", [])
         assert profile_store.get_profile("uid-ivan").skin_concerns == []
 
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.update_skin_concerns("uid-ghost", ["acne"])
+
 
 class TestUpdateHasShavingRoutine:
     def test_sets_true(self, profile_store):
@@ -160,6 +167,10 @@ class TestUpdateHasShavingRoutine:
         _make_user(profile_store, "kim")
         profile_store.update_has_shaving_routine("uid-kim", False)
         assert profile_store.get_profile("uid-kim").has_shaving_routine is False
+
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.update_has_shaving_routine("uid-ghost", True)
 
 
 class TestUpdateBeardStyle:
@@ -177,12 +188,20 @@ class TestUpdateBeardStyle:
         assert profile.beard_style == "grow"
         assert profile.has_shaving_routine is False
 
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.update_beard_style("uid-ghost", "trim")
+
 
 class TestUpdateLocation:
     def test_sets_location(self, profile_store):
         _make_user(profile_store, "oscar")
         profile_store.update_location("uid-oscar", "Germany")
         assert profile_store.get_profile("uid-oscar").location == "Germany"
+
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.update_location("uid-ghost", "Germany")
 
 
 class TestApplyPatch:
@@ -257,6 +276,10 @@ class TestAddMedicalFlag:
         assert "eczema" in flags
         assert "rosacea" in flags
 
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.add_medical_flag("uid-ghost", "eczema")
+
 
 # ── Routine CRUD ──────────────────────────────────────────────────────────────
 
@@ -322,6 +345,20 @@ class TestGetAllRoutines:
     def test_empty_for_new_user(self, profile_store):
         _make_user(profile_store, "sam")
         assert profile_store.get_all_routines("uid-sam") == []
+
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.get_all_routines("uid-ghost")
+
+
+class TestGetRoutine:
+    def test_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.get_routine("uid-ghost", "Morning")
+
+    def test_nonexistent_routine_returns_none(self, profile_store):
+        _make_user(profile_store, "gwen")
+        assert profile_store.get_routine("uid-gwen", "Ghost Routine") is None
 
 
 class TestRenameRoutine:
@@ -403,6 +440,14 @@ class TestIntroductionPlan:
         _make_user(profile_store, "zach")
         assert profile_store.get_introduction_plan("uid-zach") is None
 
+    def test_save_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.save_introduction_plan("uid-ghost", _make_plan(["retinol"]))
+
+    def test_get_nonexistent_user_raises(self, profile_store):
+        with pytest.raises(ProfileStoreError):
+            profile_store.get_introduction_plan("uid-ghost")
+
 
 # ── Complete onboarding ───────────────────────────────────────────────────────
 
@@ -416,3 +461,63 @@ class TestCompleteOnboarding:
     def test_nonexistent_user_raises(self, profile_store):
         with pytest.raises(ProfileStoreError):
             profile_store.complete_onboarding("uid-ghost")
+
+
+# ── SQLAlchemyError wrapping ──────────────────────────────────────────────────
+#
+# Every public method wraps an unexpected SQLAlchemyError as ProfileStoreError.
+# Almost all of them reach the database first via `_get_user_or_raise`'s
+# `session.get(User, user_id)` call, so a single raising mock exercises each
+# method's own `except SQLAlchemyError` branch.
+
+
+def _mock_session_cm(session_mock: MagicMock) -> MagicMock:
+    cm = MagicMock()
+    cm.__enter__.return_value = session_mock
+    cm.__exit__.return_value = False
+    return cm
+
+
+class TestSQLAlchemyErrorWrapping:
+    @pytest.mark.parametrize(
+        "method_name,args",
+        [
+            ("get_or_create_user_by_id", ("uid", "e@x.com", "name")),
+            ("get_profile", ("uid",)),
+            ("update_skin_type", ("uid", "oily")),
+            ("update_skin_concerns", ("uid", ["acne"])),
+            ("update_has_shaving_routine", ("uid", True)),
+            ("update_beard_style", ("uid", "shave")),
+            ("update_location", ("uid", "US")),
+            ("apply_patch", ("uid", ProfilePatch())),
+            ("add_medical_flag", ("uid", "eczema")),
+            ("save_routine", ("uid", _make_routine("R", ["Cleanser"]))),
+            ("rename_routine", ("uid", "old", "new")),
+            ("delete_routine", ("uid", "R")),
+            ("get_all_routines", ("uid",)),
+            ("get_routine", ("uid", "R")),
+            ("save_introduction_plan", ("uid", _make_plan(["Retinol"]))),
+            ("get_introduction_plan", ("uid",)),
+            ("complete_onboarding", ("uid",)),
+        ],
+    )
+    def test_sqlalchemy_error_wrapped_as_profile_store_error(self, method_name, args):
+        store = ProfileStore(engine=MagicMock())
+        session_mock = MagicMock()
+        session_mock.get.side_effect = SQLAlchemyError("db exploded")
+
+        with patch("backend.db.profile_store.Session", return_value=_mock_session_cm(session_mock)):
+            with pytest.raises(ProfileStoreError, match="db exploded"):
+                getattr(store, method_name)(*args)
+
+    def test_get_or_create_user_generic_integrity_error_wrapped(self):
+        store = ProfileStore(engine=MagicMock())
+        session_mock = MagicMock()
+        session_mock.get.return_value = None  # no existing user
+        session_mock.commit.side_effect = IntegrityError(
+            "insert", {}, Exception("UNIQUE constraint failed: users.username")
+        )
+
+        with patch("backend.db.profile_store.Session", return_value=_mock_session_cm(session_mock)):
+            with pytest.raises(ProfileStoreError, match="UNIQUE constraint failed"):
+                store.get_or_create_user_by_id("uid", "e@x.com", "name")

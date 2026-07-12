@@ -90,3 +90,113 @@ async def test_llm_exception_falls_back():
 
     assert result["sub_queries"] == ["some skincare question"]
     assert result["decompose_error"] is True
+
+
+# ── _get_llm ──────────────────────────────────────────────────────────────────
+
+
+def test_get_llm_is_a_singleton():
+    import backend.rag.pipeline.nodes.decompose as decompose_module
+
+    decompose_module._llm = None
+    first = decompose_module._get_llm()
+    second = decompose_module._get_llm()
+
+    assert first is second
+    decompose_module._llm = None
+
+
+# ── Response content shape / edge cases ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_content_as_list_of_typed_blocks_is_joined():
+    mock_resp = MagicMock()
+    mock_resp.content = [{"type": "text", "text": '["What is niacinamide?"]'}]
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await query_decompose(_state("What is niacinamide?"))
+
+    assert result["sub_queries"] == ["What is niacinamide?"]
+    assert result["decompose_error"] is False
+
+
+@pytest.mark.asyncio
+async def test_empty_content_falls_back():
+    mock_resp = MagicMock()
+    mock_resp.content = "   "
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await query_decompose(_state("test query"))
+
+    assert result["sub_queries"] == ["test query"]
+    assert result["decompose_error"] is True
+
+
+@pytest.mark.asyncio
+async def test_markdown_fenced_json_is_stripped():
+    mock_resp = MagicMock()
+    mock_resp.content = '```json\n["retinol basics"]\n```'
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await query_decompose(_state("retinol basics"))
+
+    assert result["sub_queries"] == ["retinol basics"]
+    assert result["decompose_error"] is False
+
+
+@pytest.mark.asyncio
+async def test_non_list_json_falls_back():
+    mock_resp = MagicMock()
+    mock_resp.content = '{"not": "a list"}'
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await query_decompose(_state("test query"))
+
+    assert result["sub_queries"] == ["test query"]
+    assert result["decompose_error"] is True
+
+
+@pytest.mark.asyncio
+async def test_empty_list_json_falls_back():
+    mock_resp = MagicMock()
+    mock_resp.content = "[]"
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        result = await query_decompose(_state("test query"))
+
+    assert result["sub_queries"] == ["test query"]
+    assert result["decompose_error"] is True
+
+
+@pytest.mark.asyncio
+async def test_debug_mode_logs_without_error():
+    mock_resp = MagicMock()
+    mock_resp.content = '["a", "b"]'
+    with patch("backend.rag.pipeline.nodes.decompose._get_llm") as mock_llm_fn:
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_resp)
+        mock_llm_fn.return_value = mock_llm
+
+        with patch("backend.rag.pipeline.nodes.decompose.settings") as ms:
+            ms.decompose_timeout_seconds = 10
+            ms.rag_debug_mode = True
+            result = await query_decompose(_state("a and b"))
+
+    assert result["sub_queries"] == ["a", "b"]
+    assert result["decompose_error"] is False
