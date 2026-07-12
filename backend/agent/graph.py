@@ -189,10 +189,10 @@ _FOLLOWUP_DECLINE_RULE = (
 # ── Sanitisation ─────────────────────────────────────────────────────────────
 
 _INJECTION_PATTERNS = re.compile(
-    r"ignore\s+(previous|all|above|prior|your|these)\s+(instructions?|prompts?|rules?|constraints?)"
+    r"ignore\s+(?:(?:previous|all|above|prior|your|these)\s+)+(instructions?|prompts?|rules?|constraints?)"
     r"|you\s+are\s+now"
     r"|system\s*:"
-    r"|(forget|disregard|override|bypass)\s+(your|all|the|previous|any)\s+(instructions?|rules?|training|constraints?|guidelines?)"
+    r"|(?:forget|disregard|override|bypass)\s+(?:(?:your|all|the|previous|any)\s+)+(instructions?|rules?|training|constraints?|guidelines?)"
     r"|act\s+as\s+if\s+you\s+(are|were)"
     r"|\bjailbreak\b|\bdan\s+mode\b"
     r"|<\s*/?system\s*>"

@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import { AuthProvider, useAuth } from './auth'
-import { SessionProvider, useSession } from './sessionContext'
+import { useAuth } from './auth'
+import { AuthProvider } from './AuthProvider'
+import { useSession } from './sessionContext'
+import { SessionProvider } from './SessionProvider'
 import { ApiError } from './api'
 
 // `vi.hoisted()` runs before the `vi.mock()` factories below (which are

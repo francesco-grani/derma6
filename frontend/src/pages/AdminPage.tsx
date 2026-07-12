@@ -307,6 +307,7 @@ function EvalTab() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<string>('All')
   const [cachedEval, setCachedEval] = useState<CachedEval | null>(() => loadCachedEval())
+  const [syncedResults, setSyncedResults] = useState<EvalResult[] | null>(null)
   const loggedUpTo = useRef(0)
   const progressEndRef = useRef<HTMLDivElement>(null)
 
@@ -317,14 +318,17 @@ function EvalTab() {
       query.state.data?.status === 'running' ? 2000 : false,
   })
 
-  // Persist results to localStorage whenever a run completes
+  // Adjust the in-memory cache when a run completes (render-time state sync,
+  // guarded on the results reference so it only fires once per completed run)
+  if (evalStatus?.status === 'completed' && evalStatus.results && evalStatus.results !== syncedResults) {
+    setSyncedResults(evalStatus.results)
+    setCachedEval({ results: evalStatus.results, completed_at: evalStatus.completed_at ?? new Date().toISOString() })
+  }
+
+  // Persist the cache to localStorage whenever it changes
   useEffect(() => {
-    if (evalStatus?.status === 'completed' && evalStatus.results) {
-      const ts = evalStatus.completed_at ?? new Date().toISOString()
-      saveCachedEval(evalStatus.results, ts)
-      setCachedEval({ results: evalStatus.results, completed_at: ts })
-    }
-  }, [evalStatus?.status, evalStatus?.results, evalStatus?.completed_at])
+    if (cachedEval) saveCachedEval(cachedEval.results, cachedEval.completed_at)
+  }, [cachedEval])
 
   // Log new progress lines to the browser console as they arrive
   useEffect(() => {

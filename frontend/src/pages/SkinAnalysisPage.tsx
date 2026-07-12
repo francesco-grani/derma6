@@ -27,23 +27,15 @@ function clearSession() {
 
 export default function SkinAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<string | null>(null)
+  // Restore last result when navigating back to this page
+  const [preview, setPreview] = useState<string | null>(() => readSession()?.imageDataUrl ?? null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [result, setResult] = useState<SkinAnalysisResult | null>(null)
+  const [result, setResult] = useState<SkinAnalysisResult | null>(() => readSession()?.result ?? null)
   const [cameraOpen, setCameraOpen] = useState(false)
 
   const analyze = useAnalyzeSkin()
   const navigate = useNavigate()
   const { startNewSession } = useSession()
-
-  // Restore last result when navigating back to this page
-  useEffect(() => {
-    const saved = readSession()
-    if (saved) {
-      setResult(saved.result)
-      setPreview(saved.imageDataUrl)
-    }
-  }, [])
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

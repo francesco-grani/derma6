@@ -36,6 +36,17 @@ export function useStreamChat(sessionId: string | null) {
   const streamingRef = useRef(false)
   const qc = useQueryClient()
 
+  // Reset the pending interrupt and displayed messages whenever sessionId
+  // changes (render-time state adjustment, guarded on sessionId so it only
+  // fires on an actual change) — the effect below then only needs to load
+  // the new session's history, not clear the old one's.
+  const [prevSessionId, setPrevSessionId] = useState(sessionId)
+  if (sessionId !== prevSessionId) {
+    setPrevSessionId(sessionId)
+    setPendingInterrupt(null)
+    setMessages([])
+  }
+
   // Abort any in-flight stream and reset streaming state whenever the session
   // changes, so a still-running response from the *previous* session can't
   // block (or get mistaken for) the newly-selected session's history load.
@@ -49,8 +60,7 @@ export function useStreamChat(sessionId: string | null) {
 
   // Load history whenever sessionId changes
   useEffect(() => {
-    setPendingInterrupt(null)
-    if (!sessionId) { setMessages([]); return }
+    if (!sessionId) return
     let cancelled = false
     getAccessToken().then(token => {
       if (!token || cancelled) return
