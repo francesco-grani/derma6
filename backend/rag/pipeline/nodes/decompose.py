@@ -71,7 +71,28 @@ async def query_decompose(state: dict) -> dict:
                 raise ValueError("Empty or non-list response from decomposition LLM")
             return [str(q).strip() for q in parsed if str(q).strip()]
 
-        sub_queries = await asyncio.wait_for(_call(), timeout=settings.decompose_timeout_seconds)
+        # Retry transient failures (e.g. OpenRouter connection blips) with a
+        # short backoff before giving up — a single flake here silently degrades
+        # retrieval by skipping decomposition for the whole query.
+        attempts = max(1, settings.decompose_max_attempts)
+        last_exc: Exception | None = None
+        sub_queries: list[str] | None = None
+        for attempt in range(attempts):
+            try:
+                sub_queries = await asyncio.wait_for(
+                    _call(), timeout=settings.decompose_timeout_seconds
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 — retry any transient failure
+                last_exc = exc
+                if attempt < attempts - 1:
+                    logger.warning(
+                        "query_decompose attempt %d/%d failed (%s) — retrying",
+                        attempt + 1, attempts, exc,
+                    )
+                    await asyncio.sleep(0.4 * (attempt + 1))
+        if sub_queries is None:
+            raise last_exc if last_exc else ValueError("decomposition failed")
 
         if settings.rag_debug_mode:
             for i, q in enumerate(sub_queries):

@@ -274,13 +274,13 @@
     "id": "kb-02",
     "tool": "kb_search",
     "input": "How does SPF protect from UV damage?",
-    "actual_output": "SPF protects from UV damage by forming a filter film on the skin surface that prevents UV exposure from triggering photoaging, hyperpigmentation, and skin cancer. UV rays activate tyrosinase and cause cumulative skin damage, which SPF blocks—making it essential for preserving the skin barrier and ensuring that other skincare actives can work effectively without being undermined by ongoing UV damage.",
+    "actual_output": "SPF protects skin by forming a filter layer that intercepts UV radiation before it reaches living cells. Mineral filters reflect and scatter UV away, while chemical filters absorb UV photons and convert them to harmless heat. By blocking both UVB (which causes sunburn and direct DNA damage) and UVA (which penetrates deeper to break down collagen and drive photoageing), SPF prevents the DNA damage and free-radical cascade that leads to mutations, collagen loss, and dark spots.",
     "expected_output": "Explanation of UVB/UVA protection mechanisms and SPF 50+ filter rate.",
     "retrieval_context": [
-      "### Step 3: SPF 50+ (AM only — the final step)\n\n**Purpose:** prevents photoageing, hyperpigmentation, and skin cancer. Protects the skin barrier from UV-induced damage. Makes every other skincare investment worthwhile.",
-      "### Essential Rule for All Hyperpigmentation\n**SPF is non-negotiable.** UV exposure triggers tyrosinase and worsens all forms of hyperpigmentation. Without SPF, any brightening active is working against active UV damage simultaneously.",
-      "## Overview\n\nSunscreen (SPF) is the single most evidence-backed skincare product for preventing photoageing, hyperpigmentation, and skin cancer. Daily application is not optional — it is the foundation of any skincare routine. Without SPF, the benefits of actives like vitamin C, retinol, and AHAs are partially undermined because UV exposure re-damages the skin these actives are working to repair.",
-      "## SPF Placement\n\nSPF is always the **last step** in the AM routine. SPF filters form a film on the skin surface. Applying other products on top of SPF:\n1. Physically disrupts the filter film.\n2. Can alter the pH, stability, or distribution of both the SPF filter and the active.\n\nIf additional coverage (tinted moisturiser, foundation) is needed, apply on top of SPF but be aware that this does not add meaningful UV protection."
+      "SPF protects the skin by forming a filter layer that stops UV radiation from reaching living skin cells. Mineral filters **reflect and scatter** UV away from the skin, while chemical filters **absorb** UV photons and convert them into harmless heat. By intercepting UV before it penetrates, SPF blocks both damage pathways: **UVB** causes sunburn and direct DNA damage in the epidermis, and **UVA** penetrates deeper to break down collagen and drive photoageing, pigmentation, and melanoma risk.",
+      "## How SPF Protects the Skin from UV",
+      "to break down collagen and drive photoageing, pigmentation, and melanoma risk. Blocking this UV energy prevents the DNA-damage and free-radical cascade that would otherwise cause mutations, collagen loss, and dark spots. This is why broad-spectrum SPF 50+ is applied daily — it filters both UVA and UVB, blocking 98–99% of UVB.",
+      "### Essential Rule for All Hyperpigmentation\n**SPF is non-negotiable.** UV exposure triggers tyrosinase and worsens all forms of hyperpigmentation. Without SPF, any brightening active is working against active UV damage simultaneously."
     ],
     "tags": [
       "kb-search",
@@ -309,12 +309,13 @@
     "id": "kb-04",
     "tool": "kb_search",
     "input": "What is the difference between physical and chemical sunscreen?",
-    "actual_output": "Physical sunscreens use inorganic minerals like zinc oxide and titanium dioxide that reflect and scatter UV radiation, while chemical sunscreens contain carbon-based molecules that absorb UV photons and convert them to heat. Physical filters provide immediate protection upon application, whereas chemical filters require about 15 minutes to absorb into the skin and become effective. Physical sunscreens typically leave a white cast on skin, while chemical sunscreens are generally more transparent.",
+    "actual_output": "Physical sunscreens (like titanium dioxide and zinc oxide) work by reflecting UV rays away from the skin, while chemical sunscreens contain carbon-based molecules that absorb UV photons and convert them to heat. Chemical filters offer broader spectrum protection and don't leave a white cast, but some (like avobenzone) can degrade in sunlight unless stabilized. Physical sunscreens are less irritating but tend to leave a more visible white residue on skin.",
     "expected_output": "Clear distinction between physical (mineral, reflects UV) and chemical (absorbs UV) sunscreens, with SPF 50+ recommendation for both.",
     "retrieval_context": [
-      "### Titanium Dioxide (SPF active)\n*INCI Decoder classification: sunscreen, colorant / goodie*\n\nProvides UVB and UVA II coverage (narrower than zinc oxide). Zero irritancy. Also leaves a white cast, though slightly more pronounced than zinc oxide. Often combined with zinc oxide for full-spectrum coverage.\n\n---",
+      "- **Titanium dioxide (TiO2):** primarily UVB protection; often combined with zinc oxide for complete coverage; more prone to white cast. Titanium dioxide provides good protection primarily in the UVB and UVA II range but is less effective at UVA I (INCI Decoder).",
       "### Chemical (Organic) Filters\nCarbon-containing molecules that **absorb** UV photons and convert them to heat:\n- **Avobenzone (Butyl Methoxydibenzoylmethane):** UVA filter; inherently photounstable — degrades in sunlight unless stabilised with octocrylene or bemotrizinol. Common in US formulations.\n- **Tinosorb S (Bis-Ethylhexyloxyphenol Methoxyphenyl Triazine):** broad-spectrum UVA + UVB; highly photostable; widely used in EU, Australia. Not yet approved by FDA.",
-      "### Mineral (Physical) Filters\nInorganic compounds that primarily **reflect and scatter** UV radiation (though they also absorb UV):"
+      "### Titanium Dioxide (SPF active)\n*INCI Decoder classification: sunscreen, colorant / goodie*\n\nProvides UVB and UVA II coverage (narrower than zinc oxide). Zero irritancy. Also leaves a white cast, though slightly more pronounced than zinc oxide. Often combined with zinc oxide for full-spectrum coverage.\n\n---",
+      "European and Asian sunscreen formulations generally provide superior UVA protection compared to US-market formulations due to access to newer, photostable chemical filters not yet FDA-approved."
     ],
     "tags": [
       "kb-search",

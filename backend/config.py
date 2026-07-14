@@ -151,6 +151,9 @@ class Settings(BaseSettings):
     # to "llm-only" automatically if the search yields nothing / errors.
     crag_fallback_strategy: str = Field(default="web-search", alias="CRAG_FALLBACK_STRATEGY")
     decompose_timeout_seconds: int = Field(default=10, alias="DECOMPOSE_TIMEOUT_SECONDS")
+    # Retry attempts for the decomposition LLM call; a transient blip here would
+    # otherwise skip decomposition and degrade retrieval for the whole query.
+    decompose_max_attempts: int = Field(default=3, alias="DECOMPOSE_MAX_ATTEMPTS")
     hyde_timeout_seconds: int = Field(default=10, alias="HYDE_TIMEOUT_SECONDS")
     crag_grade_timeout_seconds: int = Field(default=10, alias="CRAG_GRADE_TIMEOUT_SECONDS")
     rerank_timeout_seconds: int = Field(default=15, alias="RERANK_TIMEOUT_SECONDS")

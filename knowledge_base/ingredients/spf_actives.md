@@ -17,6 +17,10 @@ Sunscreen (SPF) is the single most evidence-backed skincare product for preventi
 
 **UVA ages; UVB burns.** Broad-spectrum protection against both is required.
 
+## How SPF Protects the Skin from UV
+
+SPF protects the skin by forming a filter layer that stops UV radiation from reaching living skin cells. Mineral filters **reflect and scatter** UV away from the skin, while chemical filters **absorb** UV photons and convert them into harmless heat. By intercepting UV before it penetrates, SPF blocks both damage pathways: **UVB** causes sunburn and direct DNA damage in the epidermis, and **UVA** penetrates deeper to break down collagen and drive photoageing, pigmentation, and melanoma risk. Blocking this UV energy prevents the DNA-damage and free-radical cascade that would otherwise cause mutations, collagen loss, and dark spots. This is why broad-spectrum SPF 50+ is applied daily — it filters both UVA and UVB, blocking 98–99% of UVB.
+
 ## Filter Types
 
 ### Mineral (Physical) Filters
