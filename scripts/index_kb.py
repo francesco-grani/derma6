@@ -42,9 +42,11 @@ logger = logging.getLogger(__name__)
 KB_DIR = _REPO_ROOT / "knowledge_base"
 COLLECTION_NAME = "skincare_kb"
 
-# ~250 tokens at ~4 chars/token; overlap retains cross-boundary context
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
+# ~125 tokens at ~4 chars/token. Tighter chunks keep retrieved context on-topic
+# (a 1000-char chunk drags in tangential detail that tanks contextual relevancy);
+# the overlap retains cross-boundary context.
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 80
 
 
 def _extract_source_name(content: str) -> str:

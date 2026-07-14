@@ -135,8 +135,21 @@ class Settings(BaseSettings):
         alias="RERANKER_MODEL",
     )
     rerank_top_k: int = Field(default=5, alias="RERANK_TOP_K")
-    crag_relevance_threshold: float = Field(default=0.5, alias="CRAG_RELEVANCE_THRESHOLD")
-    crag_fallback_strategy: str = Field(default="llm-only", alias="CRAG_FALLBACK_STRATEGY")
+    # Cross-encoder relevance floor (ms-marco MiniLM logit scale, ~-11..+11).
+    # Candidates whose raw reranker score falls below this are dropped before
+    # grading, pruning egregiously off-topic chunks (e.g. a Ceramides passage
+    # retrieved for a sunscreen query). The single best candidate is always kept
+    # so retrieval never returns empty. Set very low to effectively disable.
+    rerank_min_score: float = Field(default=-6.0, alias="RERANK_MIN_SCORE")
+    # A reranked doc need only clear this fraction of "relevant" CRAG grades to
+    # answer from the local KB. Kept low because the grader is lenient and the
+    # generate node additionally drops the individually non-relevant chunks —
+    # one solidly relevant chunk is enough to prefer the KB over a fallback.
+    crag_relevance_threshold: float = Field(default=0.25, alias="CRAG_RELEVANCE_THRESHOLD")
+    # Genuine KB gaps fall back to a live web search (Tavily if TAVILY_API_KEY is
+    # set, else DuckDuckGo) rather than answering from the model alone; degrades
+    # to "llm-only" automatically if the search yields nothing / errors.
+    crag_fallback_strategy: str = Field(default="web-search", alias="CRAG_FALLBACK_STRATEGY")
     decompose_timeout_seconds: int = Field(default=10, alias="DECOMPOSE_TIMEOUT_SECONDS")
     hyde_timeout_seconds: int = Field(default=10, alias="HYDE_TIMEOUT_SECONDS")
     crag_grade_timeout_seconds: int = Field(default=10, alias="CRAG_GRADE_TIMEOUT_SECONDS")

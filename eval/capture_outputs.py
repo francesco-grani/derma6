@@ -80,6 +80,53 @@ from backend.tools.introduction_scheduler import introduction_scheduler  # noqa:
 from backend.tools.kb_search import _rag_pipeline  # noqa: E402
 from backend.rag.pipeline.state import initial_state  # noqa: E402
 from backend.config import settings  # noqa: E402
+from langchain_openai import ChatOpenAI  # noqa: E402
+
+# ── KB answer synthesis ───────────────────────────────────────────────────────
+# The RAG pipeline returns retrieved chunks as tool context; in production the
+# chat agent synthesises the user-facing answer from them. The eval mirrors that
+# so answer-quality metrics (AnswerRelevancy, Domain Relevance) grade a real
+# answer rather than a raw chunk dump.
+
+_SYNTH_PROMPT = (
+    "You are a knowledgeable skincare assistant. Using ONLY the knowledge base excerpts "
+    "below, answer the user's question directly and concisely (2-5 sentences). Stay strictly "
+    "on the question — no tangential detail, headings, or disclaimers. If the excerpts do not "
+    "cover the question, say so briefly.\n\n"
+    "Question: {query}\n\n"
+    "Knowledge base excerpts:\n{context}\n\n"
+    "Answer:"
+)
+
+_synth_llm: ChatOpenAI | None = None
+
+
+def _get_synth_llm() -> ChatOpenAI:
+    global _synth_llm
+    if _synth_llm is None:
+        _synth_llm = ChatOpenAI(
+            model=settings.llm_model,
+            openai_api_key=settings.openrouter_api_key,
+            openai_api_base=settings.openrouter_base_url,
+            temperature=0.2,
+        )
+    return _synth_llm
+
+
+async def _synthesize_answer(query: str, chunks: list[str]) -> str:
+    """Generate a concise, grounded answer from retrieved chunks (mirrors the agent)."""
+    context = "\n\n---\n\n".join(chunks)
+    resp = await _get_synth_llm().ainvoke(_SYNTH_PROMPT.format(query=query, context=context))
+    return (resp.content if hasattr(resp, "content") else str(resp)).strip()
+
+
+def _strip_rag_markers(text: str) -> str:
+    """Remove the __RAG_CONTEXT_JSON__ / __RAG_PIPELINE_META__ observability markers."""
+    for marker in ("__RAG_CONTEXT_JSON__", "__RAG_PIPELINE_META__"):
+        idx = text.find(marker)
+        if idx != -1:
+            text = text[:idx]
+    return text.strip()
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
@@ -123,16 +170,28 @@ def _call_intro(case: dict) -> tuple[str, list[str]]:
 # ── Async KB caller (captures retrieval context from pipeline state) ──────────
 
 async def _call_kb_async(case: dict) -> tuple[str, list[str]]:
-    """Run the agentic RAG pipeline and return (result_string, retrieved_chunks)."""
+    """Run the agentic RAG pipeline, synthesise an answer, return (answer, context).
+
+    retrieval_context is the pipeline's *final* docs (post grade-filter) — the
+    same chunks the answer is grounded in — so contextual metrics reflect what
+    actually reached the answer. actual_output is a synthesised answer rather
+    than the raw chunk dump, matching how the chat agent uses the tool.
+    """
     query = case["input"]
     state = initial_state(query, fallback_strategy=settings.crag_fallback_strategy)
     final_state = await _rag_pipeline._graph.ainvoke(state)
 
-    result_string: str = final_state.get("result_string", "")
-    reranked_docs = final_state.get("reranked_docs", [])
-    retrieval_context = [doc.content for doc in reranked_docs[:4] if doc.content.strip()]
+    final_docs = final_state.get("final_docs", [])
+    retrieval_context = [doc.content for doc in final_docs[:4] if doc.content.strip()]
 
-    return result_string, retrieval_context
+    if retrieval_context:
+        answer = await _synthesize_answer(query, retrieval_context)
+    else:
+        # Truly no local context (pure llm-only disclaimer) — keep the pipeline's
+        # own string, markers stripped, so the eval still sees a clean answer.
+        answer = _strip_rag_markers(final_state.get("result_string", ""))
+
+    return answer, retrieval_context
 
 
 def _call_kb(case: dict) -> tuple[str, list[str]]:

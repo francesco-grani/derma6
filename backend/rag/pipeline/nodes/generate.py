@@ -18,6 +18,19 @@ _DISCLAIMER = (
 )
 
 
+def _keep_relevant(docs: list, grades: list) -> list:
+    """Drop the docs the CRAG grader marked non-relevant.
+
+    When grades are missing/misaligned, or none of the docs cleared the grader,
+    the docs are returned unchanged — this prunes noise (e.g. a Ceramides chunk
+    retrieved for a sunscreen query) without ever emptying a non-empty set.
+    """
+    if not docs or not grades or len(grades) != len(docs):
+        return docs
+    kept = [d for d, g in zip(docs, grades) if g]
+    return kept or docs
+
+
 def generate(state: dict) -> dict:
     """LangGraph node. Formats the context string and emits the observability log."""
     t0 = time.monotonic()
@@ -29,22 +42,33 @@ def generate(state: dict) -> dict:
     fallback_docs: list[RankedDoc] = state.get("fallback_docs", [])
     reranked_docs: list[RankedDoc] = state.get("reranked_docs", [])
     retry_docs: list[RankedDoc] = state.get("retry_docs", [])
+    doc_grades: list[bool] = state.get("doc_grades", [])
+    retry_grades: list[bool] = state.get("retry_grades", [])
     first_pass_score: float = state.get("first_pass_score", 0.0)
     fallback_strategy_used: str = state.get("fallback_strategy_used", "")
 
-    # Determine source docs and routing label
-    if llm_only:
-        docs: list[RankedDoc] = []
-        final_routing = "llm-only"
-    elif fallback_docs:
-        docs = fallback_docs
+    # Determine source docs and routing label. Each KB path drops the chunks the
+    # grader flagged as non-relevant so only on-topic context reaches the answer.
+    if fallback_docs:
+        docs: list[RankedDoc] = fallback_docs
         final_routing = "web-search"
     elif retry_triggered and retry_score >= settings.crag_relevance_threshold:
-        docs = retry_docs
+        docs = _keep_relevant(retry_docs, retry_grades)
         final_routing = "local-retry-succeeded"
-    else:
-        docs = reranked_docs
+    elif not llm_only:
+        docs = _keep_relevant(reranked_docs, doc_grades)
         final_routing = "generate"
+    else:
+        # Web search yielded nothing and the KB grades stayed below threshold.
+        # Prefer the closest local chunks we did retrieve over a bare "we don't
+        # know"; only emit the pure disclaimer when retrieval was truly empty.
+        salvaged = _keep_relevant(reranked_docs, doc_grades)
+        if salvaged:
+            docs = salvaged
+            final_routing = "llm-only-salvaged"
+        else:
+            docs = []
+            final_routing = "llm-only"
 
     # Format result string matching existing kb_search output format
     parts: list[str] = []
@@ -55,7 +79,7 @@ def generate(state: dict) -> dict:
         if doc.source_name.strip() and doc.source_name not in sources:
             sources.append(doc.source_name)
 
-    if llm_only or not parts:
+    if not parts:
         result = _DISCLAIMER
     else:
         result = "\n\n---\n\n".join(parts)
@@ -108,5 +132,6 @@ def generate(state: dict) -> dict:
     return {
         "final_routing": final_routing,
         "result_string": result,
+        "final_docs": docs,
         "node_latencies": latencies,
     }

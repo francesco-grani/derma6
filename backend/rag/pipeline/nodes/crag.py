@@ -14,10 +14,14 @@ from backend.rag.pipeline.state import RankedDoc
 logger = logging.getLogger("derma6.rag.crag")
 
 _GRADE_PROMPT = (
-    'You are a relevance grader. Answer only "yes" or "no", no other text.\n\n'
+    "You are a relevance grader for a skincare knowledge base. A document is RELEVANT if it "
+    "contains any information that helps answer the question — even partially, as supporting "
+    "detail, or as one piece of a fuller answer. It does NOT need to fully or directly answer "
+    "the question by itself. Grade 'no' only when the document is about a clearly different "
+    "topic and offers nothing useful.\n\n"
     "Human question: {query}\n"
     "Document: {snippet}\n\n"
-    "Is this document relevant to answering the question? Answer yes or no."
+    'Answer with only "yes" or "no", no other text.'
 )
 
 _REWRITE_PROMPT = (
@@ -174,6 +178,7 @@ async def local_retry(state: dict) -> dict:
         "retry_query": retry_query,
         "retry_docs": retry_docs,
         "retry_score": retry_score,
+        "retry_grades": list(retry_grades),
         "node_latencies": latencies,
     }
 

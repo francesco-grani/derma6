@@ -79,16 +79,23 @@ def rerank(state: dict) -> dict:
 
         # Fold in the actives boost before sorting so the ingredient signal
         # actually influences the final top-k selection (the cross-encoder
-        # otherwise discards the RRF ordering entirely).
+        # otherwise discards the RRF ordering entirely). Keep the raw score too
+        # so the relevance floor is applied to genuine relevance, not the boost.
         scored = []
         for doc, score in zip(candidates, scores):
-            effective = float(score) + _actives_boost(doc, query_actives)
-            scored.append((doc, effective))
+            raw = float(score)
+            effective = raw + _actives_boost(doc, query_actives)
+            scored.append((doc, effective, raw))
         scored.sort(key=lambda x: x[1], reverse=True)
+
+        # Drop candidates whose raw reranker score is below the relevance floor,
+        # but always keep at least the single best so retrieval never empties out.
+        floor = settings.rerank_min_score
+        kept = [t for t in scored if t[2] >= floor] or scored[:1]
 
         top_k = settings.rerank_top_k
         reranked = []
-        for doc, effective in scored[:top_k]:
+        for doc, effective, _raw in kept[:top_k]:
             doc.rerank_score = effective
             reranked.append(doc)
 

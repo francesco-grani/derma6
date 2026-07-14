@@ -50,6 +50,7 @@ class RagState(TypedDict):
     retry_query: Optional[str]
     retry_docs: list[RankedDoc]
     retry_score: float
+    retry_grades: list[bool]
 
     # ── External fallback ────────────────────────────────────────────
     fallback_strategy: str          # configured value: "web-search" | "llm-only"
@@ -60,6 +61,7 @@ class RagState(TypedDict):
     # ── Output ───────────────────────────────────────────────────────
     final_routing: str  # "generate" | "local-retry-succeeded" | "web-search" | "llm-only"
     result_string: str
+    final_docs: list[RankedDoc]  # docs actually used for the answer (post grade-filter)
 
     # ── Observability ────────────────────────────────────────────────
     node_latencies: dict[str, float]
@@ -86,11 +88,13 @@ def initial_state(query: str, fallback_strategy: str = "llm-only") -> RagState:
         retry_query=None,
         retry_docs=[],
         retry_score=0.0,
+        retry_grades=[],
         fallback_strategy=fallback_strategy,
         fallback_strategy_used="",
         fallback_docs=[],
         llm_only_fallback=False,
         final_routing="",
         result_string="",
+        final_docs=[],
         node_latencies={},
     )
