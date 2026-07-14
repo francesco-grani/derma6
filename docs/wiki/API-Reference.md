@@ -173,6 +173,49 @@ Generate a skincare-plan export (profile + routines + latest session). Returns `
 
 ---
 
+## Product Finder
+
+### `GET /api/products/find`
+
+On-demand lookup of real retail (**new**) and secondhand (**used**) listings for a recommended product. A standalone route, **not** an agent tool — the frontend calls it directly. Auth-gated; uses the caller's profile `location` (via LLM-driven, cached [source discovery](Product-Finder.md)) to pick location-appropriate retailers and marketplaces.
+
+**Query params:**
+
+| Param | Type | Notes |
+|---|---|---|
+| `name` | string, **required** | Product name to search for |
+| `brand` | string, optional | Refines the query and the relevance/ranking |
+| `source` | `retail \| vinted \| kleinanzeigen`, optional | Restrict to a single source; omit for all attempted sources. The frontend fires one request per source in parallel |
+| `stream` | bool, default `false` | `true` → `text/event-stream` with stage events; `false` → plain JSON body |
+
+**Response `200`** (`ProductFindResponse`, when `stream=false`):
+```json
+{
+  "listings": [
+    { "type": "new", "title": "Balea Vitamin C Serum, 30 ml", "price": 3.95, "currency": "EUR",
+      "source": "dm.de", "thumbnail_url": "https://…", "listing_url": "https://www.dm.de/…" },
+    { "type": "used", "title": "…", "price": null, "currency": null,
+      "source": "Vinted", "thumbnail_url": "…", "listing_url": "…" }
+  ],
+  "retail_ok": true,
+  "secondhand_ok": true
+}
+```
+
+`price`/`currency`/`thumbnail_url` are nullable — a listing with no clean price is returned link-only, never dropped. `retail_ok`/`secondhand_ok` are `False` only on source *failure/timeout*, not on a legitimate zero-result search. Any single source failing never fails the request — the others still return.
+
+**When `stream=true`**, emits `data: {json}` SSE frames — zero or more `ProductFindStageEvent`s, then one terminal `ProductFindResultEvent`, then `data: [DONE]`:
+
+| Frame | Shape |
+|---|---|
+| stage | `{"stage":"domain_check","message":"Checking dm.de…"}` — `stage` ∈ `discovery \| domain_check \| relevance_filter \| thumbnail_enrichment \| price_enrichment` |
+| result | `{"result": { …ProductFindResponse… }}` |
+| _(terminal)_ | `data: [DONE]` |
+
+A cache hit (10-min TTL) emits **no** stage events. An unexpected error mid-stream ends with `[DONE]` and no `result` frame, rather than an HTTP error, since the response has already begun streaming. **`500`** only if the profile lookup fails before streaming starts.
+
+---
+
 ## Admin
 
 All routes below require `role`-equivalent `is_admin = true` on the caller's `users` row (`403` otherwise).

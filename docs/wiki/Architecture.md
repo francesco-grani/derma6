@@ -357,6 +357,37 @@ The vision call is intentionally separate from the LangGraph graph — it is a o
 
 ---
 
+## Product finder
+
+**TL;DR** — `GET /api/products/find` (`backend/tools/product_finder.py`) is a standalone auth-gated route, mounted alongside the agent, **not** an agent tool — so the LangGraph graph, chat contract, and RAG pipeline are untouched. It surfaces real retail + secondhand listings for a recommended product, from LLM-discovered, location-appropriate sources, and can stream its progress as SSE. Full reference: [Product Finder](Product-Finder.md).
+
+```mermaid
+sequenceDiagram
+    participant U as ProductFinderPopover (React)
+    participant F as FastAPI /api/products/find (per source, stream=true)
+    participant PC as ProductCacheStore (sqlite, 10-min TTL)
+    participant D as Source discovery (LLM + verify)
+    participant SD as SourceDiscoveryStore (sqlite, 7-day TTL)
+    participant S as Vinted / retail / secondhand / Kleinanzeigen
+
+    U->>F: GET ?name&brand&source&stream=true
+    F->>PC: get(name+brand+location+source)
+    PC-->>F: hit → stream result event, [DONE] (no stage events)
+    Note over F,PC: on miss ↓
+    F->>SD: get(normalized location)
+    SD-->>D: miss → discover (structured LLM) → validate → web-search-verify → cap 10/category
+    D->>SD: cache DiscoveredSources
+    F-->>U: SSE stage events (discovery, domain_check, relevance_filter, *_enrichment)
+    F->>S: concurrent lookups (asyncio.gather, each never raises)
+    S-->>F: per-source listings + ok flag
+    F->>F: relevance filter (batched LLM, ≤2/category) → rank
+    F-->>U: SSE result event {listings, retail_ok, secondhand_ok} → [DONE]
+```
+
+Stage emission is a synchronous, non-blocking `asyncio.Queue.put_nowait` (`QueuedStageEmitter`), so it never serializes the concurrent source lookups. Two SQLite caches (`product_cache.db`, `source_discovery.db`) are built directly on stdlib `sqlite3` — disposable lookup caches with lazy TTL-at-read-time, deliberately not the SQLAlchemy/Postgres app database. A total failure (every attempted source down) is not cached, so a transient outage isn't frozen in for the full TTL.
+
+---
+
 ## Token accounting
 
 Every `stream_agent_response()` call accumulates `input_tokens` and `output_tokens` from `usage_metadata` on the final streaming chunk. Cost is taken from the OpenRouter `token_usage.cost` field when present; otherwise calculated from the pricing table in `backend/pricing.py`. Totals are written to `chat_sessions` via `add_token_usage()`.
@@ -392,9 +423,12 @@ frontend/src/
 │   └── AdminPage.tsx         admin user management + eval dashboard
 ├── components/
 │   ├── layout/Sidebar.tsx    nav + session list (logo links to new chat)
-│   └── ui/                   shadcn/ui primitives
+│   ├── products/             product finder — FindProductButton, ProductFinderPopover,
+│   │                         ProductListingCard, ProductFinderProvider, stagePhrases
+│   └── ui/                   shadcn/ui primitives (+ popover.tsx over @base-ui/react)
 ├── hooks/
 │   ├── useStreamChat.ts      SSE streaming + interrupt state
+│   ├── useProductFinder.ts   per-source product-find streaming + rotating stage phrase
 │   └── useSessions.ts        session CRUD via TanStack Query
 └── lib/
     ├── api.ts                axios instance + auth interceptor

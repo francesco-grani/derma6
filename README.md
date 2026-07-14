@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>Derma6 v3</strong> — AI skincare assistant for male beginners.
-  Diagnose your skin type · Build a personalised routine · Catch ingredient conflicts · Schedule active introductions.
+  Diagnose your skin type · Build a personalised routine · Catch ingredient conflicts · Schedule active introductions · Find where to buy.
 </p>
 
 <p align="center">
@@ -68,6 +68,7 @@ Same skincare domain, same 10 core behaviours — production-grade stack:
 | 💬 | **Chat** | Streaming conversation with the skincare agent, organised into named sessions |
 | 🔬 | **Skin analysis** | Upload a photo — a vision LLM analyses your skin and feeds findings into the agent |
 | 🧴 | **Routine builder** | Generates AM/PM routines sequenced by application order, conflict-aware |
+| 🛒 | **Product finder** | One-click lookup next to a routine step — real retail *and* secondhand listings (price, source, link-out), from location-aware LLM-discovered sources |
 | ⚠️ | **Ingredient conflict checker** | Cross-references products against a compatibility matrix (e.g. Retinol + Salicylic Acid) |
 | 📅 | **Active scheduling** | Gradual introduction plan for strong actives to minimise irritation |
 | 👤 | **Skin profile** | Persistent profile — skin type, concerns, medical flags, shaving routine |
@@ -91,6 +92,8 @@ Same skincare domain, same 10 core behaviours — production-grade stack:
 | **LLM** | OpenRouter — `anthropic/claude-haiku-4.5` (agent), `google/gemini-2.5-flash` (vision) |
 | **Structured output** | Pydantic v2 → OpenAI strict-mode JSON schema (`backend/llm/structured.py`), prompt-based fallback |
 | **Embeddings** | OpenRouter — `qwen/qwen3-embedding-8b` |
+| **Web search** | Tavily (preferred) → DuckDuckGo (fallback) — RAG external fallback + product-finder domain-scoped search |
+| **Product sourcing** | `vinted-api-wrapper` (secondhand), BeautifulSoup/lxml (retail page + Kleinanzeigen scraping) |
 | **Vector store** | ChromaDB (KB), `pgvector` (cross-session memory facts) |
 | **Relational store** | Postgres (Supabase-managed) + SQLAlchemy 2.x + Alembic migrations |
 | **HITL persistence** | LangGraph `AsyncPostgresSaver` — interrupted runs survive restarts |
@@ -115,6 +118,8 @@ FastAPI  ──►  JWTAuthMiddleware (verifies against Supabase JWKS)
     ├── GET  /api/me/sessions · POST · DELETE
     ├── POST /api/me/analyze-skin
     ├── GET  /api/me/export
+    ├── GET  /api/products/find          ──►  product finder (standalone, not an agent tool)
+    │        └── source discovery (LLM) → Vinted · retail · secondhand · Kleinanzeigen (SSE stages)
     └── GET  /api/admin/*                ──►  admin-only (users, eval dashboard)
     │
     ▼
@@ -254,6 +259,34 @@ See [docs/wiki/Memory.md](docs/wiki/Memory.md) for the storage schema, dedup log
 
 ---
 
+## Product Finder
+
+A manually-triggered lookup that surfaces real, buyable listings — retail (**new**) and secondhand (**used**) — next to a product the assistant recommends. Clicking **Find this product** on a routine step opens an anchored popover that shows a staged search animation, then fills in place with a mixed grid: price (when found), source, thumbnail, and a link out. It is **not** an agent tool — it's a standalone, auth-gated route (`GET /api/products/find`) the frontend calls directly, so the LangGraph agent, chat contract, and RAG pipeline are untouched.
+
+Because *where to buy* depends on *where you are*, an LLM-driven **source-discovery** step runs first — it discovers the right retailers, Vinted locale, and secondhand marketplaces for the user's location, validates and web-search-verifies each candidate domain, and caches the result (7-day TTL). The lookup then fans out across those sources concurrently:
+
+```
+GET /api/products/find?name&brand&source&stream=true
+    │
+    ├─ product_cache hit (10-min TTL) ───────────────────────► result
+    └─ miss → source discovery (LLM + verify, per location) → fan out concurrently:
+              ├─ Vinted                (vinted-api-wrapper)
+              ├─ retail / new          (domain-scoped Tavily/DDG search + price & thumbnail enrichment)
+              ├─ secondhand marketplaces (domain-scoped search)
+              └─ Kleinanzeigen         (HTML scrape — Germany only)
+                  │
+                  └─ relevance filter (batched LLM, ≤2 calls/category) → rank → SSE result
+```
+
+- **Never-fail sources** — any source that times out or errors degrades to empty for *that* source; the others still return. `retail_ok` / `secondhand_ok` in the response are `False` only on failure, never on a legitimate zero-result search.
+- **Domain-scoped search** — one query per discovered domain (Tavily `include_domains` / DuckDuckGo `site:`), interleaved round-robin so no single retailer dominates.
+- **Best-effort enrichment** — retail listings without a snippet price/thumbnail get an independently-timed-out page fetch (og:image / schema.org JSON-LD / Amazon-specific), guarded so a slow page never fails the lookup.
+- **Streaming** — `stream=true` emits SSE stage events (`discovery`, `domain_check`, `relevance_filter`, `thumbnail_enrichment`, `price_enrichment`) that drive the rotating loading phrase; the frontend fires one request per source in parallel so each card populates as its source finishes.
+
+See [docs/wiki/Product-Finder.md](docs/wiki/Product-Finder.md) for the full reference — discovery algorithm, per-source mechanics, enrichment tiers, caching, and every config knob.
+
+---
+
 ## Evaluation
 
 [deepeval](https://github.com/confident-ai/deepeval) suite — 28 tests across 7 categories covering all six agent tools and the agentic RAG pipeline. Results are visible in Admin → Eval Dashboard (grouped by category, with per-metric kind tagging).
@@ -297,6 +330,8 @@ cp .env.example .env
 # Edit .env — fill in OPENROUTER_API_KEY, DATABASE_URL, and SUPABASE_URL
 # (create a Supabase project first; SUPABASE_JWT_SECRET is only needed as an
 #  HS256 fallback — the live JWKS/ES256 path needs no extra config beyond the URL)
+# Optional: TAVILY_API_KEY improves web search (RAG fallback + product finder);
+#  both degrade to DuckDuckGo when it's unset.
 
 # 3. Apply database migrations (Postgres via Supabase)
 uv run alembic upgrade head
@@ -388,6 +423,7 @@ Use `[skip ci]` in the commit message to bypass both workflows.
 
 - [Architecture deep-dive](docs/wiki/Architecture.md)
 - [Agentic RAG Pipeline](docs/wiki/Agentic-RAG.md)
+- [Product Finder](docs/wiki/Product-Finder.md)
 - [Cross-Session Memory](docs/wiki/Memory.md)
 - [Security](docs/wiki/Security.md)
 - [Knowledge Base Maintenance](docs/wiki/Knowledge-Base-Maintenance.md)
