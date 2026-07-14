@@ -142,6 +142,11 @@ class Settings(BaseSettings):
     crag_grade_timeout_seconds: int = Field(default=10, alias="CRAG_GRADE_TIMEOUT_SECONDS")
     rerank_timeout_seconds: int = Field(default=15, alias="RERANK_TIMEOUT_SECONDS")
     rrf_k: int = Field(default=60, alias="RRF_K")
+    # Added to a candidate's cross-encoder score per canonical active it shares
+    # with the query, applied just before top-k selection so the actives signal
+    # survives reranking. On the ms-marco MiniLM logit scale (~-11..+11); set to
+    # 0.0 to disable actives-aware boosting.
+    actives_rerank_boost: float = Field(default=1.5, alias="ACTIVES_RERANK_BOOST")
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     rag_debug_mode: bool = Field(default=False, alias="RAG_DEBUG_MODE")
 

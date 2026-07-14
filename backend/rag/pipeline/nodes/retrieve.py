@@ -9,6 +9,7 @@ import time
 from langchain_openai import ChatOpenAI
 
 from backend.config import settings
+from backend.rag.actives import parse_actives
 from backend.rag.pipeline.nodes._rrf import merge_sub_query_results, rrf_merge
 from backend.rag.pipeline.state import RankedDoc
 
@@ -93,6 +94,7 @@ async def _dense_retrieve(sub_query: str, collection, embeddings) -> tuple[list[
                     rrf_score=score,
                     rerank_score=0.0,
                     retrieval_path="dense",
+                    actives=parse_actives(meta.get("actives", "")),
                 )
             )
         return out

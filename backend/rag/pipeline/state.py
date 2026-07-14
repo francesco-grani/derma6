@@ -17,6 +17,7 @@ class RankedDoc:
     rrf_score: float = 0.0
     rerank_score: float = 0.0
     retrieval_path: str = "dense"  # "dense" | "sparse" | "both"
+    actives: set[str] = field(default_factory=set)  # canonical actives in the chunk
 
 
 class RagState(TypedDict):

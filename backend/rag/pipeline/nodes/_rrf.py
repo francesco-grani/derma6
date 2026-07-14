@@ -41,6 +41,7 @@ def rrf_merge(lists: list[list[RankedDoc]], k: int = 60) -> list[RankedDoc]:
             rrf_score=score,
             rerank_score=doc.rerank_score,
             retrieval_path=retrieval_path,
+            actives=doc.actives,
         )
         result.append(merged)
 
@@ -80,6 +81,7 @@ def merge_sub_query_results(per_sub_query_lists: list[list[RankedDoc]], k: int =
             rrf_score=score,
             rerank_score=doc.rerank_score,
             retrieval_path=retrieval_path,
+            actives=doc.actives,
         )
         result.append(merged)
 

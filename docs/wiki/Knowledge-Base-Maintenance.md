@@ -26,7 +26,7 @@ Run after adding or editing any document in `knowledge_base/`:
 uv run python scripts/index_kb.py
 ```
 
-This drops and rebuilds the ChromaDB collection from scratch. It uses the OpenRouter embeddings model configured in `.env` (`EMBEDDING_MODEL`, default: `qwen/qwen3-embedding-8b`).
+This drops and rebuilds the ChromaDB collection from scratch. It uses the OpenRouter embeddings model configured in `.env` (`EMBEDDING_MODEL`, default: `qwen/qwen3-embedding-8b`). Each chunk is also tagged with the canonical actives it mentions (`backend/rag/actives.py`) and that list is stored in the chunk's metadata, so the RAG pipeline can boost ingredient-specific matches at rerank time — see [Agentic RAG](Agentic-RAG.md#rerank). Re-run this script after editing the actives vocabulary so existing chunks pick up the new tags.
 
 ---
 

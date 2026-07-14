@@ -34,6 +34,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from backend.config import settings  # noqa: E402  (after sys.path adjustment)
+from backend.rag.actives import extract_actives, serialize_actives  # noqa: E402
 from backend.rag.embeddings import OpenRouterEmbeddings  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,10 @@ def _load_documents() -> list[Document]:
             relative_path, len(chunks), topic_category, source_name,
         )
         for i, chunk in enumerate(chunks):
+            # Tag each chunk with the canonical actives it mentions so retrieval
+            # can softly boost chunks whose actives overlap the query's. Stored
+            # as a comma-joined scalar because ChromaDB metadata cannot hold lists.
+            actives = serialize_actives(extract_actives(chunk))
             docs.append(
                 Document(
                     page_content=chunk,
@@ -89,6 +94,7 @@ def _load_documents() -> list[Document]:
                         "topic_category": topic_category,
                         "source_file": str(relative_path),
                         "chunk_index": i,
+                        "actives": actives,
                     },
                 )
             )

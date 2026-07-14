@@ -8,9 +8,10 @@ from backend.rag.pipeline.nodes.rerank import rerank
 from backend.rag.pipeline.state import RankedDoc
 
 
-def _doc(doc_id: str, content: str = "content") -> RankedDoc:
+def _doc(doc_id: str, content: str = "content", actives: set[str] | None = None) -> RankedDoc:
     return RankedDoc(doc_id=doc_id, content=content, source_name="src",
-                     source_file="f.md", rrf_score=0.5, rerank_score=0.0, retrieval_path="dense")
+                     source_file="f.md", rrf_score=0.5, rerank_score=0.0,
+                     retrieval_path="dense", actives=actives or set())
 
 
 def _state(candidates: list[RankedDoc]) -> dict:
@@ -78,3 +79,76 @@ def test_rerank_score_attached():
 
     assert result["reranked_docs"][0].rerank_score == pytest.approx(0.8)
     assert result["reranked_docs"][1].rerank_score == pytest.approx(0.3)
+
+
+def _actives_state(candidates: list[RankedDoc], query: str) -> dict:
+    return {"original_query": query, "candidate_docs": candidates, "node_latencies": {}}
+
+
+def test_actives_boost_promotes_matching_chunk():
+    # Generic chunk scores higher on the cross-encoder, but the retinol chunk
+    # shares the query's active and should win after the boost.
+    generic = _doc("generic", actives=set())
+    retinol = _doc("retinol", actives={"retinol"})
+    mock_encoder = MagicMock()
+    mock_encoder.predict.return_value = [0.9, 0.5]  # generic=0.9, retinol=0.5
+
+    with patch("backend.rag.pipeline.nodes.rerank.get_cross_encoder", return_value=mock_encoder):
+        with patch("backend.rag.pipeline.nodes.rerank.settings") as ms:
+            ms.rerank_top_k = 2
+            ms.actives_rerank_boost = 1.5
+            result = rerank(_actives_state([generic, retinol], "how do I use retinol?"))
+
+    reranked = result["reranked_docs"]
+    assert [r.doc_id for r in reranked] == ["retinol", "generic"]
+    # 0.5 + 1.5 (one overlapping active) = 2.0
+    assert reranked[0].rerank_score == pytest.approx(2.0)
+
+
+def test_actives_boost_disabled_when_weight_zero():
+    generic = _doc("generic", actives=set())
+    retinol = _doc("retinol", actives={"retinol"})
+    mock_encoder = MagicMock()
+    mock_encoder.predict.return_value = [0.9, 0.5]
+
+    with patch("backend.rag.pipeline.nodes.rerank.get_cross_encoder", return_value=mock_encoder):
+        with patch("backend.rag.pipeline.nodes.rerank.settings") as ms:
+            ms.rerank_top_k = 2
+            ms.actives_rerank_boost = 0.0
+            result = rerank(_actives_state([generic, retinol], "how do I use retinol?"))
+
+    # No boost → pure cross-encoder order.
+    assert [r.doc_id for r in result["reranked_docs"]] == ["generic", "retinol"]
+
+
+def test_actives_boost_no_query_actives_is_noop():
+    generic = _doc("generic", actives=set())
+    retinol = _doc("retinol", actives={"retinol"})
+    mock_encoder = MagicMock()
+    mock_encoder.predict.return_value = [0.9, 0.5]
+
+    with patch("backend.rag.pipeline.nodes.rerank.get_cross_encoder", return_value=mock_encoder):
+        with patch("backend.rag.pipeline.nodes.rerank.settings") as ms:
+            ms.rerank_top_k = 2
+            ms.actives_rerank_boost = 1.5
+            # Query mentions no known active → nothing to boost.
+            result = rerank(_actives_state([generic, retinol], "what is a good moisturiser?"))
+
+    assert [r.doc_id for r in result["reranked_docs"]] == ["generic", "retinol"]
+
+
+def test_actives_boost_orders_fallback_on_encoder_failure():
+    generic = _doc("generic", actives=set())
+    retinol = _doc("retinol", actives={"retinol"})
+    mock_encoder = MagicMock()
+    mock_encoder.predict.side_effect = RuntimeError("model error")
+
+    with patch("backend.rag.pipeline.nodes.rerank.get_cross_encoder", return_value=mock_encoder):
+        with patch("backend.rag.pipeline.nodes.rerank.settings") as ms:
+            ms.rerank_top_k = 5
+            ms.actives_rerank_boost = 1.5
+            result = rerank(_actives_state([generic, retinol], "how do I use retinol?"))
+
+    assert result["rerank_error"] is True
+    # Fallback still surfaces the active-matching chunk first.
+    assert [r.doc_id for r in result["reranked_docs"]] == ["retinol", "generic"]

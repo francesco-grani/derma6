@@ -47,6 +47,7 @@ class BM25Index:
 
     def query(self, text: str, k: int = 4) -> list:
         """Return top-k RankedDoc objects from sparse BM25 retrieval."""
+        from backend.rag.actives import parse_actives
         from backend.rag.pipeline.state import RankedDoc
 
         tokens = text.lower().split()
@@ -71,6 +72,7 @@ class BM25Index:
                     rrf_score=normalised,
                     rerank_score=0.0,
                     retrieval_path="sparse",
+                    actives=parse_actives(meta.get("actives", "")),
                 )
             )
         return results

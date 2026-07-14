@@ -91,11 +91,14 @@ Scores the RRF-merged candidate set using a cross-encoder model loaded at startu
 
 - Model: `RERANKER_MODEL` (default: `cross-encoder/ms-marco-MiniLM-L-6-v2`, ~22 MB CPU)
 - Scores each `(original_query, chunk_content)` pair.
+- Adds an **actives boost** before sorting (see below).
 - Sorts descending; truncates to `RERANK_TOP_K` (default: 5).
-- On failure: original RRF order is preserved; `rerank_error = True`.
+- On failure: candidates are ordered by actives overlap (falling back to RRF order); `rerank_error = True`.
 - **Timeout:** `RERANK_TIMEOUT_SECONDS` (default: 15 s)
 
 The cross-encoder sees the **original** query (before decomposition), ensuring final ranking reflects what the user actually asked.
+
+**Actives boost.** Each chunk is tagged at index time with the canonical actives it mentions (`backend/rag/actives.py`, a curated alias map over ~14 ingredients — retinol, niacinamide, the AHAs/BHA, etc.), stored in ChromaDB metadata. At query time the same matcher extracts the actives named in the question, and `ACTIVES_RERANK_BOOST` is added to a candidate's cross-encoder score per shared active. This surfaces the chunk that actually discusses the queried ingredient when the cross-encoder rates a generic passage marginally higher. The boost is applied here, on the cross-encoder score, precisely because the reranker re-scores every candidate and discards the upstream RRF ordering — a boost earlier in the pipeline would be washed out. Set the weight to `0.0` to disable.
 
 ---
 
@@ -171,6 +174,7 @@ All parameters load from environment variables with safe defaults. No new requir
 |---|---|---|---|
 | `RERANKER_MODEL` | str | `cross-encoder/ms-marco-MiniLM-L-6-v2` | HuggingFace model ID for the cross-encoder |
 | `RERANK_TOP_K` | int | `5` | Chunks kept after reranking |
+| `ACTIVES_RERANK_BOOST` | float | `1.5` | Added to a chunk's cross-encoder score per canonical active it shares with the query (`0.0` disables) |
 | `CRAG_RELEVANCE_THRESHOLD` | float | `0.5` | Minimum fraction of relevant docs to proceed to generation |
 | `CRAG_FALLBACK_STRATEGY` | str | `llm-only` | `"llm-only"` or `"web-search"` |
 | `DECOMPOSE_TIMEOUT_SECONDS` | int | `10` | Max seconds for query decomposition |

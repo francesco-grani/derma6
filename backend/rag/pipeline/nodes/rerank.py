@@ -9,8 +9,25 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from backend.config import settings
+from backend.rag.actives import extract_actives
 
 logger = logging.getLogger("derma6.rag.rerank")
+
+
+def _actives_boost(doc, query_actives: set[str]) -> float:
+    """Return the score bonus for *doc* given the query's actives.
+
+    Adds settings.actives_rerank_boost per canonical active the chunk shares
+    with the query, so an ingredient-specific question surfaces the chunks that
+    actually discuss that ingredient even when the cross-encoder rates a generic
+    passage slightly higher. Returns 0.0 when boosting is disabled or there is
+    no overlap.
+    """
+    weight = settings.actives_rerank_boost
+    if not weight or not query_actives:
+        return 0.0
+    overlap = query_actives & doc.actives
+    return weight * len(overlap)
 
 # ── CrossEncoder singleton ────────────────────────────────────────────────────
 
@@ -52,20 +69,27 @@ def rerank(state: dict) -> dict:
         latencies["rerank"] = (time.monotonic() - t0) * 1000
         return {"reranked_docs": [], "rerank_error": False, "node_latencies": latencies}
 
+    query_actives = extract_actives(original_query)
+
     try:
         encoder = get_cross_encoder()
         pairs = [(original_query, doc.content) for doc in candidates]
 
         scores = encoder.predict(pairs)
 
-        scored = list(zip(candidates, scores))
-        scored.sort(key=lambda x: float(x[1]), reverse=True)
+        # Fold in the actives boost before sorting so the ingredient signal
+        # actually influences the final top-k selection (the cross-encoder
+        # otherwise discards the RRF ordering entirely).
+        scored = []
+        for doc, score in zip(candidates, scores):
+            effective = float(score) + _actives_boost(doc, query_actives)
+            scored.append((doc, effective))
+        scored.sort(key=lambda x: x[1], reverse=True)
 
         top_k = settings.rerank_top_k
         reranked = []
-        for doc, score in scored[:top_k]:
-            from dataclasses import replace as dc_replace
-            doc.rerank_score = float(score)
+        for doc, effective in scored[:top_k]:
+            doc.rerank_score = effective
             reranked.append(doc)
 
         latencies["rerank"] = (time.monotonic() - t0) * 1000
@@ -73,6 +97,13 @@ def rerank(state: dict) -> dict:
 
     except Exception as exc:
         logger.error("CrossEncoder reranking failed: %s — falling back to RRF order", exc)
-        fallback = list(candidates[: settings.rerank_top_k])
+        # Even without the cross-encoder, honour the actives signal by ordering
+        # the RRF candidates by their overlap with the query's actives (stable
+        # sort preserves RRF order within each overlap tier).
+        fallback = sorted(
+            candidates,
+            key=lambda d: _actives_boost(d, query_actives),
+            reverse=True,
+        )[: settings.rerank_top_k]
         latencies["rerank"] = (time.monotonic() - t0) * 1000
         return {"reranked_docs": fallback, "rerank_error": True, "node_latencies": latencies}
