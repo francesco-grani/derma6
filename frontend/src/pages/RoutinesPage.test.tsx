@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import RoutinesPage from './RoutinesPage'
 import type { Routine } from '@/lib/api'
+import { ProductFinderProvider } from '@/components/products/ProductFinderProvider'
 
 // `Link`/`useNavigate` require a live `RouterProvider` context, which isn't
 // set up in these component-level tests — same pattern as SignUpPage.test.tsx.
@@ -46,7 +47,11 @@ const MORNING_ROUTINE: Routine = {
 
 function renderWithProviders(ui: ReactNode) {
   const queryClient = new QueryClient()
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <ProductFinderProvider>{ui}</ProductFinderProvider>
+    </QueryClientProvider>
+  )
 }
 
 beforeEach(() => {
@@ -99,5 +104,66 @@ describe('RoutinesPage rename collision handling (security-remediation Req 25.3,
 
     await waitFor(() => expect(screen.queryByDisplayValue('AM Routine')).not.toBeInTheDocument())
     expect(mocks.apiRenameRoutine).toHaveBeenCalledWith('Morning', 'AM Routine')
+  })
+})
+
+describe('RoutinesPage "Find this product" triggers (product-finder Req 1)', () => {
+  it('renders a trigger button when a step has product_name set', async () => {
+    mocks.apiGetRoutines.mockResolvedValue([
+      {
+        name: 'Morning',
+        steps: [{ position: 1, ingredient: 'cleanser', product_name: 'Foo Cleanser', budget_product: null }],
+      },
+    ])
+
+    renderWithProviders(<RoutinesPage />)
+
+    await waitFor(() => expect(screen.getByText('Foo Cleanser')).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Find this product' })).toHaveLength(1)
+  })
+
+  it('renders a trigger button when a step has budget_product set', async () => {
+    mocks.apiGetRoutines.mockResolvedValue([
+      {
+        name: 'Morning',
+        steps: [{ position: 1, ingredient: 'cleanser', product_name: null, budget_product: 'Bar Cleanser' }],
+      },
+    ])
+
+    renderWithProviders(<RoutinesPage />)
+
+    await waitFor(() => expect(screen.getByText('Bar Cleanser')).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Find this product' })).toHaveLength(1)
+  })
+
+  it('renders no trigger button when a step has neither product_name nor budget_product set', async () => {
+    mocks.apiGetRoutines.mockResolvedValue([
+      {
+        name: 'Morning',
+        steps: [{ position: 1, ingredient: 'cleanser', product_name: null, budget_product: null }],
+      },
+    ])
+
+    renderWithProviders(<RoutinesPage />)
+
+    await waitFor(() => expect(screen.getByText('Morning')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Find this product' })).not.toBeInTheDocument()
+  })
+
+  it('renders two independent trigger buttons when a step has both product_name and budget_product set', async () => {
+    mocks.apiGetRoutines.mockResolvedValue([
+      {
+        name: 'Morning',
+        steps: [
+          { position: 1, ingredient: 'cleanser', product_name: 'Foo Cleanser', budget_product: 'Bar Cleanser' },
+        ],
+      },
+    ])
+
+    renderWithProviders(<RoutinesPage />)
+
+    await waitFor(() => expect(screen.getByText('Foo Cleanser')).toBeInTheDocument())
+    expect(screen.getByText('Bar Cleanser')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Find this product' })).toHaveLength(2)
   })
 })

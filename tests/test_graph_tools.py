@@ -390,3 +390,69 @@ class TestIntroductionSchedulerToolBehavior:
         )[0]
         assert "actives: {actives} | username:" not in scheduler_section
         assert "introduction_scheduler.invoke" not in scheduler_section
+
+
+# ── update_location_tool: country-only, no interactive card ─────────────────────
+
+
+class TestUpdateLocationTool:
+    """The location step now collects the user's COUNTRY conversationally: the tool
+    takes the resolved country string and saves it directly (no `location_input`
+    card / interrupt). City disambiguation happens in the agent's dialogue upstream."""
+
+    def test_args_schema_takes_country_string(self):
+        tool = _get_tool(MagicMock(), "update_location_tool")
+        schema = tool.args_schema.model_json_schema()
+        assert set(schema["properties"].keys()) == {"country"}
+
+    def test_saves_country_without_interrupt(self):
+        mock_store = MagicMock()
+        tool = _get_tool(mock_store, "update_location_tool")
+
+        with patch("backend.agent.graph.interrupt") as mock_interrupt:
+            result = tool.invoke({"country": "Germany"})
+
+        mock_interrupt.assert_not_called()
+        mock_store.update_location.assert_called_once_with("alice", "Germany")
+        assert "Germany" in result
+        assert "saved" in result.lower()
+
+    def test_strips_whitespace_before_saving(self):
+        mock_store = MagicMock()
+        tool = _get_tool(mock_store, "update_location_tool")
+
+        tool.invoke({"country": "  Germany  "})
+
+        mock_store.update_location.assert_called_once_with("alice", "Germany")
+
+    def test_empty_or_ask_sentinel_rejected_without_persisting(self):
+        for value in ("", "   ", "ask", "ASK"):
+            mock_store = MagicMock()
+            tool = _get_tool(mock_store, "update_location_tool")
+
+            result = tool.invoke({"country": value})
+
+            mock_store.update_location.assert_not_called()
+            assert "error" in result.lower()
+
+    def test_persist_failure_returns_graceful_message(self):
+        mock_store = MagicMock()
+        mock_store.update_location.side_effect = Exception("DB error")
+        tool = _get_tool(mock_store, "update_location_tool")
+
+        result = tool.invoke({"country": "Germany"})
+
+        assert "sorry" in result.lower() or "could not" in result.lower()
+
+    def test_no_location_input_card_remains_in_source(self):
+        import inspect
+
+        import backend.agent.graph as graph_module
+
+        source = inspect.getsource(graph_module._make_tools)
+        location_section = source.split("def update_location_tool")[1].split(
+            "def add_medical_flag_tool"
+        )[0]
+        # The free-text capture card is gone; the country arrives already resolved.
+        assert "location_input" not in location_section
+        assert "interrupt(" not in location_section

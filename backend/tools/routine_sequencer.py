@@ -4,7 +4,7 @@ import logging
 
 from langchain_core.tools import tool
 
-from backend.tools.kb_search import retriever
+from backend.rag.retriever import retriever
 
 logger = logging.getLogger(__name__)
 

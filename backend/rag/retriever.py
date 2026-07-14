@@ -102,3 +102,11 @@ class Retriever:
             )
 
         return retrieved
+
+
+# Shared singleton — ChromaDB's PersistentClient must not be opened more than once
+# per process, so every consumer that needs retrieval (the kb_search tool, the
+# agentic RAG pipeline's retrieve node, and the profile-tool helpers) imports THIS
+# instance rather than constructing its own. It lives here, in the RAG layer, so no
+# lower layer has to reach up into `backend.tools` to get it.
+retriever = Retriever()

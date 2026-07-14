@@ -81,6 +81,20 @@ def _tighten(node: Any) -> None:
         if node.get("type") == "object" and "properties" in node:
             node["additionalProperties"] = False
             node["required"] = list(node["properties"].keys())
+        if node.get("type") == "array":
+            # `maxItems`/`minItems` (from a Pydantic `Field(max_length=...)`
+            # on a list) is rejected outright by several OpenRouter-routed
+            # providers' structured-output schema validation (observed live:
+            # Anthropic, Amazon Bedrock, and Azure all rejected
+            # `DiscoveredSourcesLLM`'s schema with "property 'maxItems' is
+            # not supported", which silently degraded discovery to its
+            # fallback path every single call). Stripping it here keeps the
+            # Pydantic-level `max_length` validation intact for Python-side
+            # construction (`DiscoveredSourcesLLM(...)` still raises
+            # `ValidationError` past 6 items) — only the JSON schema sent to
+            # the provider drops the constraint.
+            node.pop("maxItems", None)
+            node.pop("minItems", None)
         for value in node.values():
             _tighten(value)
     elif isinstance(node, list):

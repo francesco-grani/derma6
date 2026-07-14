@@ -46,6 +46,10 @@ from backend.schemas import (
     ToolResult,
     UserProfile,
 )
+from backend.security_patterns import (
+    INJECTION_PATTERNS as _INJECTION_PATTERNS,
+    sanitise_retrieved as _sanitise_retrieved,  # noqa: F401 (re-exported; used by kb_search & tests)
+)
 from backend.tools.conflict_checker import conflict_checker
 from backend.tools.introduction_scheduler import build_introduction_plan
 from backend.tools.kb_search import kb_search
@@ -187,18 +191,9 @@ _FOLLOWUP_DECLINE_RULE = (
 )
 
 # ── Sanitisation ─────────────────────────────────────────────────────────────
-
-_INJECTION_PATTERNS = re.compile(
-    r"ignore\s+(?:(?:previous|all|above|prior|your|these)\s+)+(instructions?|prompts?|rules?|constraints?)"
-    r"|you\s+are\s+now"
-    r"|system\s*:"
-    r"|(?:forget|disregard|override|bypass)\s+(?:(?:your|all|the|previous|any)\s+)+(instructions?|rules?|training|constraints?|guidelines?)"
-    r"|act\s+as\s+if\s+you\s+(are|were)"
-    r"|\bjailbreak\b|\bdan\s+mode\b"
-    r"|<\s*/?system\s*>"
-    r"|(disable|bypass)\s+(your\s+)?(safety|filters?|restrictions?)",
-    re.IGNORECASE,
-)
+# _INJECTION_PATTERNS and _sanitise_retrieved now live in backend.security_patterns
+# (Foundation layer, imported above) so the kb_search tool can share them without
+# importing this module — see the two former layer violations they resolved.
 
 _HTML_CTRL = re.compile(r"[<>]")
 
@@ -233,11 +228,6 @@ def _sanitise(text: str, max_len: int = 200) -> str:
     text = _QUOTE_CTRL.sub("", text)
     text = text[:max_len]
     return text.strip()
-
-
-def _sanitise_retrieved(text: str) -> str:
-    """Strip instruction-like patterns from KB chunks before injecting into prompt."""
-    return _INJECTION_PATTERNS.sub("[FILTERED]", text)
 
 
 # ── Tool instructions ────────────────────────────────────────────────────────
@@ -289,9 +279,10 @@ def _tool_instructions(username: str) -> str:
         "- update_beard_style_tool: Show an interactive card for the user to select their facial hair style "
         "and save the result. Call with the literal string 'ask' — the tool shows the card itself. "
         "NEVER ask a text question before calling this tool.\n"
-        "- update_location_tool: Show an interactive card for the user to enter their country or region "
-        "and save the result. Call with the literal string 'ask' — the card shows a text field. "
-        "NEVER ask a text question before calling this tool.\n"
+        "- update_location_tool: Save the user's COUNTRY (we only store the country). "
+        "Input: the resolved country name as a string, e.g. update_location_tool('Germany'). "
+        "Ask the user which country they live in first; if they name only a city, confirm the "
+        "country ('Do you mean Berlin in Germany?') before calling. Never store a bare city or region.\n"
         "- add_medical_flag_tool: Save a diagnosed skin condition. Call ONLY when the user "
         "explicitly states they have a NEW condition not already listed in their profile. "
         "NEVER call for conditions already in the user's medical flags. Input: condition name\n"
@@ -481,26 +472,24 @@ def _make_tools(user_id: str, store: ProfileStore) -> list:
             return "Sorry, I could not save your facial hair preference. Please try again."
 
     @lc_tool
-    def update_location_tool(trigger: str) -> str:
-        """Show the user an interactive card to enter their country or region.
-        Always call with the literal string 'ask' — the card handles the input."""
-        _audit(user_id, "update_location_tool", "show_card")
-
-        decision: dict = interrupt({
-            "kind": "location_input",
-            "title": "Where are you based?",
-            "preview": {"type": "text", "content": "This helps me recommend products that are easy to find near you."},
-            "options": [
-                {"value": "confirm", "label": "Confirm", "subtitle": "Type your country or region in the field below"},
-            ],
-        })
-
-        loc = decision.get("note", "").strip()
-        if not loc:
-            return "Location not provided — skipped."
+    def update_location_tool(country: str) -> str:
+        """Save the user's COUNTRY (we only store the country, never a city or region).
+        Pass the resolved country name as a plain string, e.g. update_location_tool('Germany').
+        Only call once you actually have a specific country: if the user gave only a city
+        (e.g. 'Berlin'), confirm the country with them first ('Do you mean Berlin in Germany?')
+        and pass the confirmed country here; if they gave 'City, Country' (e.g. 'Berlin, Germany'),
+        pass only the country."""
+        loc = country.strip()
+        if not loc or loc.lower() == "ask":
+            return (
+                "Error: update_location_tool now takes the user's COUNTRY as a string "
+                "(e.g. update_location_tool('Germany')). Ask the user which country they live "
+                "in — if they name only a city, confirm the country first — then call again."
+            )
+        _audit(user_id, "update_location_tool", loc[:50])
         try:
             store.update_location(user_id, loc)
-            return f"Location saved: {loc}. I'll prioritise products available in your region."
+            return f"Location saved: {loc}. I'll prioritise products available in {loc}."
         except Exception as exc:
             logger.error("update_location_tool failed: %s", exc)
             return "Sorry, I could not save your location. Please try again."
@@ -800,8 +789,16 @@ def build_system_prompt(
             "2. Skin concerns (e.g. acne, dryness, dark spots) → call update_skin_concerns_tool.\n"
             "3. Facial hair → call update_beard_style_tool('ask') immediately — "
             "the tool shows the user an interactive selection card, no text question needed.\n"
-            "4. Location → call update_location_tool('ask') immediately — "
-            "the tool shows the user an interactive card with a text field for their country or region.\n"
+            "4. Location → we only need the user's COUNTRY (not a city or region). Ask which "
+            "country they live in, and be explicit that the country is all we need.\n"
+            "   - If they give a country (e.g. 'Germany') or 'City, Country' (e.g. 'Berlin, "
+            "Germany'), take the COUNTRY only and call update_location_tool('Germany').\n"
+            "   - If they give only a city or region (e.g. 'Berlin'), ask ONE confirming "
+            "question — 'Do you mean Berlin in Germany?' — and once they confirm, call "
+            "update_location_tool with the country ('Germany').\n"
+            "   - Keep this to at most 3 turns; if still unresolved, ask them plainly to name "
+            "their country. This is the ONE onboarding step where a short clarifying question "
+            "before the tool call is allowed.\n"
             "5. Medical skin conditions: ask 'Do you have any diagnosed skin conditions such as "
             "eczema, rosacea, or psoriasis?' → if yes, call add_medical_flag_tool once per "
             "condition mentioned; if no, skip the tool and proceed.\n"

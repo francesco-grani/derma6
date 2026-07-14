@@ -5,13 +5,10 @@ import logging
 from langchain_core.tools import tool
 
 from backend.rag.pipeline.graph import RagPipelineGraph
-from backend.rag.retriever import Retriever
+from backend.rag.retriever import retriever  # noqa: F401 (re-exported for callers that patch this name)
+from backend.security_patterns import sanitise_retrieved
 
 logger = logging.getLogger(__name__)
-
-# Shared singleton — ChromaDB PersistentClient must not be opened more than once
-# per process. All tools that need retrieval should import this object.
-retriever = Retriever()
 
 # Agentic RAG pipeline singleton — triggers BM25 index build and CrossEncoder load on import.
 _rag_pipeline = RagPipelineGraph()
@@ -31,10 +28,7 @@ async def kb_search(query: str) -> str:
     try:
         result = await _rag_pipeline.ainvoke(query)
         logger.info("kb_search: agentic RAG pipeline returned result for query=%r", query[:60])
-        # Deferred import: backend.agent.graph imports this module at load time,
-        # so a top-level import here would be circular.
-        from backend.agent.graph import _sanitise_retrieved
-        return _sanitise_retrieved(result)
+        return sanitise_retrieved(result)
     except Exception as exc:
         logger.error("kb_search failed: %s", exc)
         return "Sorry, I could not search the knowledge base right now."

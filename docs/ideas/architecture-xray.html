@@ -1,0 +1,373 @@
+<title>Derma6 Backend — Architecture X-Ray</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0a0e15;
+    --bg-grid:rgba(90,120,160,.05);
+    --panel:#0f151f;
+    --panel-2:#121a26;
+    --line:rgba(140,165,200,.10);
+    --line-strong:rgba(140,165,200,.18);
+    --ink:#d3dcea;
+    --ink-dim:#8794a8;
+    --ink-faint:#5b6879;
+    --accent:#38e1d6;      /* interaction cyan */
+    --good:#46cf7d;        /* healthy / clean */
+    --good-soft:rgba(70,207,125,.14);
+    --warn:#ffb454;
+    /* layer ramp: neutral base -> violet -> lime, depth encoded in hue */
+    --l0:#6b7a8f; --l1:#8b7cf6; --l2:#6d7bf0; --l3:#4f8ef7;
+    --l4:#2ea8e6; --l5:#22c1cf; --l6:#2bd4a8; --l7:#46cf7d; --l8:#8fd24a;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 78% -8%, rgba(43,212,168,.06), transparent 60%),
+      radial-gradient(1000px 500px at 12% 0%, rgba(79,142,247,.06), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:34px 26px 90px}
+
+  header{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:24px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 10px}
+  h1{font-size:clamp(26px,3.6vw,42px);line-height:1.04;margin:0;font-weight:650;letter-spacing:-.02em;
+    text-wrap:balance;background:linear-gradient(92deg,#eaf1fb,#9fb2cc);-webkit-background-clip:text;
+    background-clip:text;color:transparent}
+  .sub{color:var(--ink-dim);max-width:62ch;margin:12px 0 0;font-size:14.5px}
+  .sub code{font-family:var(--mono);color:var(--ink);background:var(--panel-2);
+    padding:1px 6px;border-radius:5px;font-size:12.5px}
+  .sub b{color:var(--ink)}
+
+  .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:26px}
+  .stat{background:linear-gradient(180deg,var(--panel),#0b1119);border:1px solid var(--line);
+    border-radius:12px;padding:14px 15px;position:relative;overflow:hidden}
+  .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--sc,var(--l4))}
+  .stat .n{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums;line-height:1;display:flex;align-items:baseline;gap:7px}
+  .stat .k{font-size:11px;color:var(--ink-dim);margin-top:7px;text-transform:uppercase;letter-spacing:.06em}
+  .stat.good .n{color:var(--good)} .stat.good{--sc:var(--good);
+    background:linear-gradient(180deg,rgba(70,207,125,.08),#0b1119)}
+  .stat.good .tag{font-family:var(--sans);font-size:11px;font-weight:600;color:var(--good);
+    letter-spacing:.02em;text-transform:none}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between;
+    margin:30px 0 12px}
+  .filters{display:flex;flex-wrap:wrap;gap:7px}
+  .btn{font-family:var(--mono);font-size:12px;color:var(--ink-dim);background:var(--panel);
+    border:1px solid var(--line-strong);border-radius:8px;padding:7px 13px;cursor:pointer;
+    transition:.16s;letter-spacing:.01em}
+  .btn:hover{color:var(--ink);border-color:rgba(140,165,200,.34)}
+  .btn.on{color:#04121a;background:var(--accent);border-color:var(--accent);font-weight:600}
+  .legend{display:flex;flex-wrap:wrap;gap:12px 15px;font-family:var(--mono);font-size:11px;color:var(--ink-dim)}
+  .legend .lg{display:flex;align-items:center;gap:6px}
+  .legend .sw{width:11px;height:11px;border-radius:3px}
+  .legend .ln{width:20px;height:0;border-top:2px solid}
+
+  .stage{background:
+      linear-gradient(var(--bg-grid) 1px,transparent 1px) 0 0/100% 44px,
+      linear-gradient(90deg,var(--bg-grid) 1px,transparent 1px) 0 0/44px 100%,
+      linear-gradient(180deg,#0b1017,#090d13);
+    border:1px solid var(--line);border-radius:16px;overflow:hidden;position:relative}
+  svg{display:block;width:100%;height:auto}
+  .bandsep{stroke:var(--line);stroke-width:1;stroke-dasharray:2 6}
+  .bandName{font-family:var(--mono);font-size:12.5px;fill:var(--ink);letter-spacing:.02em;font-weight:600}
+  .bandCount{font-family:var(--mono);font-size:10px;fill:var(--ink-faint)}
+  .arrow{fill:none;stroke:var(--ink-faint);stroke-width:1;opacity:.5}
+
+  .edge{fill:none;stroke:var(--line-strong);stroke-width:1;transition:opacity .18s,stroke .18s}
+  .edge.lateral{stroke:rgba(80,150,190,.16)}
+
+  .node{cursor:pointer}
+  .node rect{stroke-width:1.3;transition:opacity .18s}
+  .node text{font-family:var(--mono);font-size:9px;fill:#e6edf7;pointer-events:none;
+    dominant-baseline:middle;text-anchor:middle;font-weight:500}
+  .node .dot{stroke:none}
+
+  svg.focus .edge:not(.hl){opacity:.045}
+  svg.focus .node:not(.hl):not(.focus){opacity:.14}
+  .edge.hl{stroke:var(--accent);stroke-width:1.8;opacity:.95}
+  .edge.into.hl{stroke:#7d8bf7}
+  .node.focus rect{stroke:#fff;stroke-width:1.9}
+
+  .tip{position:absolute;pointer-events:none;z-index:20;background:rgba(10,14,21,.96);
+    border:1px solid rgba(140,165,200,.28);border-radius:9px;padding:9px 11px;font-family:var(--mono);
+    font-size:11px;color:var(--ink);opacity:0;transition:opacity .12s;max-width:280px;
+    box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .tip .tid{color:#fff;font-weight:600;margin-bottom:5px;font-size:11.5px}
+  .tip .row{display:flex;justify-content:space-between;gap:16px;color:var(--ink-dim)}
+  .tip .row b{color:var(--ink);font-weight:600}
+
+  .analysis{margin-top:46px}
+  .h2{font-size:12px;font-family:var(--mono);letter-spacing:.24em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 6px}
+  .lead{font-size:20px;font-weight:600;letter-spacing:-.01em;margin:0 0 24px;color:#eef3fb;text-wrap:balance}
+  .lead b{color:var(--good);font-weight:600}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .card{background:linear-gradient(180deg,var(--panel),#0b1119);border:1px solid var(--line);
+    border-radius:14px;padding:20px 21px}
+  .card h3{margin:0 0 10px;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .card h3 .ic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;font-size:12px;
+    background:var(--good-soft);color:var(--good)}
+  .card p{color:var(--ink-dim);font-size:13.5px;margin:0}
+  .card p b{color:var(--ink)}
+  .card code{font-family:var(--mono);color:var(--ink);font-size:12px}
+
+  .tables{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+  .tcard{background:linear-gradient(180deg,var(--panel),#0b1119);border:1px solid var(--line);
+    border-radius:14px;padding:18px 20px}
+  .tcard h4{margin:0 0 3px;font-size:14px;letter-spacing:-.01em}
+  .tcard .hint{color:var(--ink-faint);font-size:12px;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+  td{padding:6px 0;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:none}
+  .mn{color:var(--ink)} .mn .lay{color:var(--ink-faint);font-size:10.5px}
+  td.v{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:600}
+  .bar{height:5px;border-radius:3px;background:var(--accent);opacity:.55;margin-top:5px}
+
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;color:var(--ink-faint);display:flex;
+    justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  @media (max-width:880px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .grid,.tables{grid-template-columns:1fr}
+    .toolbar{flex-direction:column;align-items:flex-start}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Derma6 · Backend Import Graph</p>
+      <h1>Architecture X-Ray</h1>
+      <p class="sub">Every internal <code>import</code> in the FastAPI + LangGraph backend, resolved with Python's
+        AST and placed into a nine-layer stack. Read top-to-bottom: a module may depend only on
+        <b>lower</b> layers (downward edges) or on peers in its own layer (lateral). The graph is a clean
+        <b>directed acyclic graph</b> — no import climbs the stack, and nothing imports in a circle.</p>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat" style="--sc:var(--l3)"><div class="n">56</div><div class="k">Modules</div></div>
+    <div class="stat" style="--sc:var(--l5)"><div class="n">178</div><div class="k">Import edges</div></div>
+    <div class="stat" style="--sc:var(--l8)"><div class="n">9</div><div class="k">Layers</div></div>
+    <div class="stat good"><div class="n">0 <span class="tag">✓ clean</span></div><div class="k">Layer violations</div></div>
+    <div class="stat good"><div class="n">0 <span class="tag">✓ acyclic</span></div><div class="k">Import cycles</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="filters" id="filters">
+      <button class="btn on" data-mode="over">Overview</button>
+      <button class="btn" data-mode="hubs">Load-bearing hubs</button>
+      <button class="btn" data-mode="big">Largest files</button>
+    </div>
+    <div class="legend">
+      <span class="lg"><span class="ln" style="border-color:var(--line-strong)"></span>downward dependency</span>
+      <span class="lg"><span class="ln" style="border-color:rgba(80,150,190,.5)"></span>lateral (same layer)</span>
+      <span class="lg"><span class="sw" style="background:var(--accent)"></span>hover to trace</span>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="tip" id="tip"></div>
+  </div>
+
+  <section class="analysis">
+    <p class="h2">What the graph shows</p>
+    <p class="lead">All <b>178 imports flow downward or laterally</b> — zero upward edges, zero cycles.
+      The backend is a strict nine-layer DAG that can be built, loaded, and tested layer by layer.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ic">↓</span> One-way dependency flow</h3>
+        <p>Every edge points down the stack or sideways within a layer — never up. Transport
+          (<code>main</code>, <code>api/*</code>) depends on the Agent and Tools; those depend on the RAG
+          pipeline, Platform, and Data layers; everything bottoms out at Foundation. Because no arrow climbs,
+          the import graph has <b>no strongly-connected component larger than one</b> — it is acyclic.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">▤</span> Stable foundation</h3>
+        <p><code>config</code> (31 dependents) and <code>schemas</code> (21) sit at the very bottom and import
+          almost nothing back. The most depended-upon code is also the most stable — the textbook
+          <b>stable-dependencies</b> shape. Change ripples travel down into these modules, not out of them.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">⇲</span> A single data seam</h3>
+        <p><code>db/deps</code> is imported by 15 modules yet is only 52 lines: a deliberate dependency-injection
+          aggregator that hands out every store behind one import. High fan-in by design — a <b>load-bearing wall,
+          not a hotspot</b>.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ic">◈</span> Cohesive RAG subsystem</h3>
+        <p>The <code>rag/pipeline/*</code> subtree (11 modules) is held together by lateral edges into a shared
+          <code>state</code> and <code>graph</code>, with only downward links leaving it. High internal cohesion,
+          low outward coupling — it reads and refactors as <b>one self-contained unit</b>.</p>
+      </div>
+    </div>
+
+    <p class="h2" style="margin-top:40px">Know the structure</p>
+    <div class="tables">
+      <div class="tcard">
+        <h4>Load-bearing modules · by fan-in</h4>
+        <p class="hint">How many modules import each — your architectural pressure points.</p>
+        <table id="tHubs"></table>
+      </div>
+      <div class="tcard">
+        <h4>Largest modules · by lines of code</h4>
+        <p class="hint">Where the logic concentrates — the files worth knowing before you change anything.</p>
+        <table id="tBig"></table>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Static analysis · Python AST import resolution · 56 modules / 178 edges</span>
+    <span>Layers assigned by role · acyclic · 0 upward edges</span>
+  </footer>
+</div>
+
+<script id="data" type="application/json">{"layerNames": ["Foundation", "Schemas", "Data / Stores", "Platform", "RAG Pipeline", "Tools", "Agent", "API", "Entrypoint"], "layerH": 132, "top": 70, "W": 1600, "NL": 9, "nodes": [{"id": "backend.agent.graph", "label": "agent/graph", "layer": 6, "loc": 1337, "fanin": 4, "fanout": 17, "x": 1510.0, "y": 334, "inCycle": false}, {"id": "backend.agent.memory_extraction", "label": "agent/memory_extraction", "layer": 6, "loc": 161, "fanin": 1, "fanout": 5, "x": 90.0, "y": 334, "inCycle": false}, {"id": "backend.agent.studio", "label": "agent/studio", "layer": 8, "loc": 51, "fanin": 0, "fanout": 4, "x": 90.0, "y": 70, "inCycle": false}, {"id": "backend.api.admin", "label": "api/admin", "layer": 7, "loc": 278, "fanin": 0, "fanout": 5, "x": 90.0, "y": 202, "inCycle": false}, {"id": "backend.api.analysis", "label": "api/analysis", "layer": 7, "loc": 253, "fanin": 0, "fanout": 8, "x": 267.5, "y": 202, "inCycle": false}, {"id": "backend.api.auth", "label": "api/auth", "layer": 7, "loc": 56, "fanin": 0, "fanout": 2, "x": 800.0, "y": 202, "inCycle": false}, {"id": "backend.api.chat", "label": "api/chat", "layer": 7, "loc": 62, "fanin": 0, "fanout": 7, "x": 445.0, "y": 202, "inCycle": false}, {"id": "backend.api.export", "label": "api/export", "layer": 7, "loc": 490, "fanin": 0, "fanout": 6, "x": 977.5, "y": 202, "inCycle": false}, {"id": "backend.api.hitl", "label": "api/hitl", "layer": 7, "loc": 48, "fanin": 0, "fanout": 6, "x": 622.5, "y": 202, "inCycle": false}, {"id": "backend.api.profile", "label": "api/profile", "layer": 7, "loc": 38, "fanin": 0, "fanout": 4, "x": 1155.0, "y": 202, "inCycle": false}, {"id": "backend.api.routines", "label": "api/routines", "layer": 7, "loc": 55, "fanin": 0, "fanout": 4, "x": 1332.5, "y": 202, "inCycle": false}, {"id": "backend.api.sessions", "label": "api/sessions", "layer": 7, "loc": 54, "fanin": 0, "fanout": 4, "x": 1510.0, "y": 202, "inCycle": false}, {"id": "backend.auth", "label": "auth", "layer": 3, "loc": 200, "fanin": 10, "fanout": 2, "x": 1510.0, "y": 730, "inCycle": false}, {"id": "backend.config", "label": "config", "layer": 0, "loc": 263, "fanin": 31, "fanout": 0, "x": 90.0, "y": 1126, "inCycle": false}, {"id": "backend.db.chat_history", "label": "db/chat_history", "layer": 2, "loc": 40, "fanin": 3, "fanout": 1, "x": 90.0, "y": 862, "inCycle": false}, {"id": "backend.db.deps", "label": "db/deps", "layer": 2, "loc": 52, "fanin": 15, "fanout": 7, "x": 1307.1, "y": 862, "inCycle": false}, {"id": "backend.db.memory_store", "label": "db/memory_store", "layer": 2, "loc": 155, "fanin": 1, "fanout": 3, "x": 292.9, "y": 862, "inCycle": false}, {"id": "backend.db.models", "label": "db/models", "layer": 2, "loc": 236, "fanin": 8, "fanout": 1, "x": 1104.3, "y": 862, "inCycle": false}, {"id": "backend.db.product_cache_store", "label": "db/product_cache_store", "layer": 2, "loc": 128, "fanin": 3, "fanout": 2, "x": 495.7, "y": 862, "inCycle": false}, {"id": "backend.db.profile_store", "label": "db/profile_store", "layer": 2, "loc": 534, "fanin": 8, "fanout": 3, "x": 698.6, "y": 862, "inCycle": false}, {"id": "backend.db.session_store", "label": "db/session_store", "layer": 2, "loc": 226, "fanin": 5, "fanout": 2, "x": 1510.0, "y": 862, "inCycle": false}, {"id": "backend.db.source_discovery_store", "label": "db/source_discovery_store", "layer": 2, "loc": 98, "fanin": 3, "fanout": 2, "x": 901.4, "y": 862, "inCycle": false}, {"id": "backend.llm.structured", "label": "llm/structured", "layer": 3, "loc": 249, "fanin": 4, "fanout": 0, "x": 90.0, "y": 730, "inCycle": false}, {"id": "backend.logging_config", "label": "logging_config", "layer": 0, "loc": 180, "fanin": 1, "fanout": 1, "x": 800.0, "y": 1126, "inCycle": false}, {"id": "backend.main", "label": "main", "layer": 8, "loc": 64, "fanin": 0, "fanout": 6, "x": 563.3, "y": 70, "inCycle": false}, {"id": "backend.middleware.auth", "label": "mw/auth", "layer": 8, "loc": 43, "fanin": 1, "fanout": 1, "x": 1036.7, "y": 70, "inCycle": false}, {"id": "backend.middleware.content_filter", "label": "mw/content_filter", "layer": 3, "loc": 129, "fanin": 3, "fanout": 2, "x": 445.0, "y": 730, "inCycle": false}, {"id": "backend.pricing", "label": "pricing", "layer": 0, "loc": 33, "fanin": 1, "fanout": 0, "x": 1155.0, "y": 1126, "inCycle": false}, {"id": "backend.rag.embeddings", "label": "rag/embeddings", "layer": 3, "loc": 42, "fanin": 4, "fanout": 1, "x": 800.0, "y": 730, "inCycle": false}, {"id": "backend.rag.pipeline", "label": "rag/pipeline", "layer": 4, "loc": 4, "fanin": 0, "fanout": 2, "x": 90.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.bm25_index", "label": "pipeline/bm25_index", "layer": 4, "loc": 98, "fanin": 1, "fanout": 1, "x": 232.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.graph", "label": "pipeline/graph", "layer": 4, "loc": 76, "fanin": 3, "fanout": 8, "x": 800.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes._rrf", "label": "nodes/_rrf", "layer": 4, "loc": 87, "fanin": 1, "fanout": 1, "x": 516.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.crag", "label": "nodes/crag", "layer": 4, "loc": 186, "fanin": 1, "fanout": 4, "x": 658.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.decompose", "label": "nodes/decompose", "layer": 4, "loc": 94, "fanin": 1, "fanout": 1, "x": 942.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.fallback", "label": "nodes/fallback", "layer": 4, "loc": 113, "fanin": 1, "fanout": 2, "x": 1084.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.generate", "label": "nodes/generate", "layer": 4, "loc": 112, "fanin": 1, "fanout": 2, "x": 1226.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.rerank", "label": "nodes/rerank", "layer": 4, "loc": 78, "fanin": 2, "fanout": 2, "x": 1368.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.nodes.retrieve", "label": "nodes/retrieve", "layer": 4, "loc": 171, "fanin": 2, "fanout": 6, "x": 374.0, "y": 598, "inCycle": false}, {"id": "backend.rag.pipeline.state", "label": "pipeline/state", "layer": 4, "loc": 95, "fanin": 9, "fanout": 0, "x": 1510.0, "y": 598, "inCycle": false}, {"id": "backend.rag.retriever", "label": "rag/retriever", "layer": 3, "loc": 112, "fanin": 6, "fanout": 2, "x": 1155.0, "y": 730, "inCycle": false}, {"id": "backend.rate_limiter", "label": "rate_limiter", "layer": 0, "loc": 82, "fanin": 2, "fanout": 1, "x": 1510.0, "y": 1126, "inCycle": false}, {"id": "backend.schemas", "label": "schemas", "layer": 1, "loc": 435, "fanin": 21, "fanout": 2, "x": 800.0, "y": 994, "inCycle": false}, {"id": "backend.security_patterns", "label": "security_patterns", "layer": 0, "loc": 50, "fanin": 4, "fanout": 0, "x": 445.0, "y": 1126, "inCycle": false}, {"id": "backend.tools.conflict_checker", "label": "tools/conflict_checker", "layer": 5, "loc": 84, "fanin": 2, "fanout": 0, "x": 90.0, "y": 466, "inCycle": false}, {"id": "backend.tools.domain_search", "label": "tools/domain_search", "layer": 5, "loc": 99, "fanin": 2, "fanout": 1, "x": 942.0, "y": 466, "inCycle": false}, {"id": "backend.tools.introduction_scheduler", "label": "tools/introduction_scheduler", "layer": 5, "loc": 295, "fanin": 1, "fanout": 4, "x": 232.0, "y": 466, "inCycle": false}, {"id": "backend.tools.kb_search", "label": "tools/kb_search", "layer": 5, "loc": 34, "fanin": 1, "fanout": 3, "x": 800.0, "y": 466, "inCycle": false}, {"id": "backend.tools.product_finder", "label": "tools/product_finder", "layer": 5, "loc": 1274, "fanin": 2, "fanout": 11, "x": 1084.0, "y": 466, "inCycle": false}, {"id": "backend.tools.product_finder_studio", "label": "tools/product_finder_studio", "layer": 8, "loc": 335, "fanin": 0, "fanout": 5, "x": 1510.0, "y": 70, "inCycle": false}, {"id": "backend.tools.product_source_discovery", "label": "tools/product_source_discovery", "layer": 5, "loc": 375, "fanin": 2, "fanout": 6, "x": 1226.0, "y": 466, "inCycle": false}, {"id": "backend.tools.relevance_filter", "label": "tools/relevance_filter", "layer": 5, "loc": 235, "fanin": 1, "fanout": 4, "x": 1368.0, "y": 466, "inCycle": false}, {"id": "backend.tools.routine_sequencer", "label": "tools/routine_sequencer", "layer": 5, "loc": 106, "fanin": 1, "fanout": 1, "x": 374.0, "y": 466, "inCycle": false}, {"id": "backend.tools.skin_type_advisor", "label": "tools/skin_type_advisor", "layer": 5, "loc": 156, "fanin": 1, "fanout": 2, "x": 516.0, "y": 466, "inCycle": false}, {"id": "backend.tools.spf_recommender", "label": "tools/spf_recommender", "layer": 5, "loc": 110, "fanin": 1, "fanout": 1, "x": 658.0, "y": 466, "inCycle": false}, {"id": "backend.tools.stage_events", "label": "tools/stage_events", "layer": 5, "loc": 24, "fanin": 3, "fanout": 0, "x": 1510.0, "y": 466, "inCycle": false}], "edges": [{"s": "backend.agent.graph", "t": "backend.agent.memory_extraction", "kind": "lateral"}, {"s": "backend.agent.graph", "t": "backend.config", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.db.chat_history", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.middleware.content_filter", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.pricing", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.rag.embeddings", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.rate_limiter", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.schemas", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.security_patterns", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.conflict_checker", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.introduction_scheduler", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.kb_search", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.routine_sequencer", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.skin_type_advisor", "kind": "down"}, {"s": "backend.agent.graph", "t": "backend.tools.spf_recommender", "kind": "down"}, {"s": "backend.agent.memory_extraction", "t": "backend.config", "kind": "down"}, {"s": "backend.agent.memory_extraction", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.agent.memory_extraction", "t": "backend.llm.structured", "kind": "down"}, {"s": "backend.agent.memory_extraction", "t": "backend.rag.embeddings", "kind": "down"}, {"s": "backend.agent.memory_extraction", "t": "backend.schemas", "kind": "down"}, {"s": "backend.agent.studio", "t": "backend.agent.graph", "kind": "down"}, {"s": "backend.agent.studio", "t": "backend.config", "kind": "down"}, {"s": "backend.agent.studio", "t": "backend.rag.pipeline.graph", "kind": "down"}, {"s": "backend.agent.studio", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.admin", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.admin", "t": "backend.config", "kind": "down"}, {"s": "backend.api.admin", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.admin", "t": "backend.db.models", "kind": "down"}, {"s": "backend.api.admin", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.config", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.db.models", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.llm.structured", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.rate_limiter", "kind": "down"}, {"s": "backend.api.analysis", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.auth", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.auth", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.agent.graph", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.db.chat_history", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.db.session_store", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.middleware.content_filter", "kind": "down"}, {"s": "backend.api.chat", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.export", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.export", "t": "backend.db.chat_history", "kind": "down"}, {"s": "backend.api.export", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.export", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.api.export", "t": "backend.db.session_store", "kind": "down"}, {"s": "backend.api.export", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.agent.graph", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.db.session_store", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.middleware.content_filter", "kind": "down"}, {"s": "backend.api.hitl", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.profile", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.profile", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.profile", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.api.profile", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.routines", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.routines", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.routines", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.api.routines", "t": "backend.schemas", "kind": "down"}, {"s": "backend.api.sessions", "t": "backend.auth", "kind": "down"}, {"s": "backend.api.sessions", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.api.sessions", "t": "backend.db.session_store", "kind": "down"}, {"s": "backend.api.sessions", "t": "backend.schemas", "kind": "down"}, {"s": "backend.auth", "t": "backend.config", "kind": "down"}, {"s": "backend.auth", "t": "backend.db.models", "kind": "down"}, {"s": "backend.db.chat_history", "t": "backend.config", "kind": "down"}, {"s": "backend.db.deps", "t": "backend.config", "kind": "down"}, {"s": "backend.db.deps", "t": "backend.db.memory_store", "kind": "lateral"}, {"s": "backend.db.deps", "t": "backend.db.models", "kind": "lateral"}, {"s": "backend.db.deps", "t": "backend.db.product_cache_store", "kind": "lateral"}, {"s": "backend.db.deps", "t": "backend.db.profile_store", "kind": "lateral"}, {"s": "backend.db.deps", "t": "backend.db.session_store", "kind": "lateral"}, {"s": "backend.db.deps", "t": "backend.db.source_discovery_store", "kind": "lateral"}, {"s": "backend.db.memory_store", "t": "backend.config", "kind": "down"}, {"s": "backend.db.memory_store", "t": "backend.db.models", "kind": "lateral"}, {"s": "backend.db.memory_store", "t": "backend.schemas", "kind": "down"}, {"s": "backend.db.models", "t": "backend.config", "kind": "down"}, {"s": "backend.db.product_cache_store", "t": "backend.config", "kind": "down"}, {"s": "backend.db.product_cache_store", "t": "backend.schemas", "kind": "down"}, {"s": "backend.db.profile_store", "t": "backend.config", "kind": "down"}, {"s": "backend.db.profile_store", "t": "backend.db.models", "kind": "lateral"}, {"s": "backend.db.profile_store", "t": "backend.schemas", "kind": "down"}, {"s": "backend.db.session_store", "t": "backend.config", "kind": "down"}, {"s": "backend.db.session_store", "t": "backend.db.models", "kind": "lateral"}, {"s": "backend.db.source_discovery_store", "t": "backend.config", "kind": "down"}, {"s": "backend.db.source_discovery_store", "t": "backend.schemas", "kind": "down"}, {"s": "backend.logging_config", "t": "backend.config", "kind": "lateral"}, {"s": "backend.main", "t": "backend.agent.graph", "kind": "down"}, {"s": "backend.main", "t": "backend.config", "kind": "down"}, {"s": "backend.main", "t": "backend.db.models", "kind": "down"}, {"s": "backend.main", "t": "backend.logging_config", "kind": "down"}, {"s": "backend.main", "t": "backend.middleware.auth", "kind": "lateral"}, {"s": "backend.main", "t": "backend.tools.product_finder", "kind": "down"}, {"s": "backend.middleware.auth", "t": "backend.auth", "kind": "down"}, {"s": "backend.middleware.content_filter", "t": "backend.schemas", "kind": "down"}, {"s": "backend.middleware.content_filter", "t": "backend.security_patterns", "kind": "down"}, {"s": "backend.rag.embeddings", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline", "t": "backend.rag.pipeline.graph", "kind": "lateral"}, {"s": "backend.rag.pipeline", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.bm25_index", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.crag", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.decompose", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.fallback", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.generate", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.rerank", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.nodes.retrieve", "kind": "lateral"}, {"s": "backend.rag.pipeline.graph", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes._rrf", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.crag", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.crag", "t": "backend.rag.pipeline.nodes.rerank", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.crag", "t": "backend.rag.pipeline.nodes.retrieve", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.crag", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.decompose", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.fallback", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.fallback", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.generate", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.generate", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.rerank", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.rerank", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.rag.embeddings", "kind": "down"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.rag.pipeline.bm25_index", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.rag.pipeline.nodes._rrf", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.rag.pipeline.state", "kind": "lateral"}, {"s": "backend.rag.pipeline.nodes.retrieve", "t": "backend.rag.retriever", "kind": "down"}, {"s": "backend.rag.retriever", "t": "backend.config", "kind": "down"}, {"s": "backend.rag.retriever", "t": "backend.rag.embeddings", "kind": "lateral"}, {"s": "backend.rate_limiter", "t": "backend.config", "kind": "lateral"}, {"s": "backend.schemas", "t": "backend.config", "kind": "down"}, {"s": "backend.schemas", "t": "backend.security_patterns", "kind": "down"}, {"s": "backend.tools.domain_search", "t": "backend.config", "kind": "down"}, {"s": "backend.tools.introduction_scheduler", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.tools.introduction_scheduler", "t": "backend.rag.retriever", "kind": "down"}, {"s": "backend.tools.introduction_scheduler", "t": "backend.schemas", "kind": "down"}, {"s": "backend.tools.introduction_scheduler", "t": "backend.tools.conflict_checker", "kind": "lateral"}, {"s": "backend.tools.kb_search", "t": "backend.rag.pipeline.graph", "kind": "down"}, {"s": "backend.tools.kb_search", "t": "backend.rag.retriever", "kind": "down"}, {"s": "backend.tools.kb_search", "t": "backend.security_patterns", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.auth", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.config", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.db.product_cache_store", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.db.profile_store", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.db.source_discovery_store", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.schemas", "kind": "down"}, {"s": "backend.tools.product_finder", "t": "backend.tools.domain_search", "kind": "lateral"}, {"s": "backend.tools.product_finder", "t": "backend.tools.product_source_discovery", "kind": "lateral"}, {"s": "backend.tools.product_finder", "t": "backend.tools.relevance_filter", "kind": "lateral"}, {"s": "backend.tools.product_finder", "t": "backend.tools.stage_events", "kind": "lateral"}, {"s": "backend.tools.product_finder_studio", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.tools.product_finder_studio", "t": "backend.db.product_cache_store", "kind": "down"}, {"s": "backend.tools.product_finder_studio", "t": "backend.schemas", "kind": "down"}, {"s": "backend.tools.product_finder_studio", "t": "backend.tools.product_finder", "kind": "down"}, {"s": "backend.tools.product_finder_studio", "t": "backend.tools.product_source_discovery", "kind": "down"}, {"s": "backend.tools.product_source_discovery", "t": "backend.config", "kind": "down"}, {"s": "backend.tools.product_source_discovery", "t": "backend.db.source_discovery_store", "kind": "down"}, {"s": "backend.tools.product_source_discovery", "t": "backend.llm.structured", "kind": "down"}, {"s": "backend.tools.product_source_discovery", "t": "backend.schemas", "kind": "down"}, {"s": "backend.tools.product_source_discovery", "t": "backend.tools.domain_search", "kind": "lateral"}, {"s": "backend.tools.product_source_discovery", "t": "backend.tools.stage_events", "kind": "lateral"}, {"s": "backend.tools.relevance_filter", "t": "backend.config", "kind": "down"}, {"s": "backend.tools.relevance_filter", "t": "backend.llm.structured", "kind": "down"}, {"s": "backend.tools.relevance_filter", "t": "backend.schemas", "kind": "down"}, {"s": "backend.tools.relevance_filter", "t": "backend.tools.stage_events", "kind": "lateral"}, {"s": "backend.tools.routine_sequencer", "t": "backend.rag.retriever", "kind": "down"}, {"s": "backend.tools.skin_type_advisor", "t": "backend.db.deps", "kind": "down"}, {"s": "backend.tools.skin_type_advisor", "t": "backend.rag.retriever", "kind": "down"}, {"s": "backend.tools.spf_recommender", "t": "backend.rag.retriever", "kind": "down"}], "cycles": [], "violations": []}</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const svg = document.getElementById('svg');
+const tip = document.getElementById('tip');
+const stage = document.getElementById('stage');
+const GUT = 172, PADR = 34;
+const W = DATA.W, NL = DATA.NL, layerH = DATA.layerH;
+const H = 40 + (NL-1)*layerH + 100;
+const VBW = W + GUT + PADR;
+svg.setAttribute('viewBox', `0 0 ${VBW} ${H}`);
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+const nodeById={}; DATA.nodes.forEach(n=>nodeById[n.id]=n);
+
+const bandY={}; DATA.nodes.forEach(n=>{ bandY[n.layer]=n.y; });
+for(let L=0; L<NL; L++){
+  const y=bandY[L]; if(y==null) continue;
+  const count=DATA.nodes.filter(n=>n.layer===L).length;
+  if(L<NL-1){ const yt=y - layerH/2; svg.appendChild(el('line',{class:'bandsep',x1:8,y1:yt,x2:VBW-8,y2:yt})); }
+  svg.appendChild(el('rect',{x:14,y:y-6,width:11,height:11,rx:3,fill:`var(--l${L})`}));
+  const t=el('text',{class:'bandName',x:32,y:y+1}); t.textContent=DATA.layerNames[L]; svg.appendChild(t);
+  const c=el('text',{class:'bandCount',x:32,y:y+15}); c.textContent=count+(count===1?' module':' modules'); svg.appendChild(c);
+}
+
+const byLayer={};
+DATA.nodes.forEach(n=>{(byLayer[n.layer]=byLayer[n.layer]||[]).push(n);});
+Object.values(byLayer).forEach(row=>{
+  row.sort((a,b)=>a.x-b.x);
+  row.forEach((n,i)=>{ n._yo = row.length>4 ? (i%2? 17 : -17) : 0; });
+});
+const px=n=>n.x+GUT, py=n=>n.y+(n._yo||0);
+
+const gE=el('g',{}); svg.appendChild(gE);
+const gN=el('g',{}); svg.appendChild(gN);
+
+const edgeEls=[]; const incident={}; DATA.nodes.forEach(n=>incident[n.id]=[]);
+DATA.edges.forEach((e,i)=>{
+  const a=nodeById[e.s], b=nodeById[e.t]; if(!a||!b) return;
+  const x1=px(a),y1=py(a),x2=px(b),y2=py(b);
+  const my=(y1+y2)/2;
+  const d=`M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
+  const pth=el('path',{class:`edge ${e.kind}`,d});
+  gE.appendChild(pth);
+  edgeEls.push({el:pth,e});
+  incident[e.s].push({i,dir:'out'}); incident[e.t].push({i,dir:'in'});
+});
+
+const nodeG={};
+DATA.nodes.forEach(n=>{
+  const label=n.label.split('/').pop();
+  const w=Math.max(38,label.length*5.5+14), h=19;
+  const g=el('g',{class:'node', 'data-id':n.id, transform:`translate(${px(n)},${py(n)})`});
+  g.appendChild(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:6,
+    fill:`color-mix(in srgb, var(--l${n.layer}) 20%, #0a0e15)`, stroke:`var(--l${n.layer})`}));
+  const dotR=Math.min(4.5,1.6+Math.sqrt(n.loc)/14);
+  g.appendChild(el('circle',{class:'dot',cx:-w/2+7,cy:0,r:dotR,fill:`var(--l${n.layer})`}));
+  const t=el('text',{x:4,y:0}); t.textContent=label; g.appendChild(t);
+  gN.appendChild(g); nodeG[n.id]=g;
+  g.addEventListener('mouseenter',ev=>{ if(!locked) focusNode(n,ev); });
+  g.addEventListener('mousemove',ev=>{ if(!locked) moveTip(ev); });
+  g.addEventListener('mouseleave',()=>{ if(!locked) clearFocus(); });
+});
+
+let locked=false;
+
+function focusNode(n,ev){
+  svg.classList.add('focus');
+  nodeG[n.id].classList.add('focus');
+  const nb=new Set([n.id]);
+  incident[n.id].forEach(({i,dir})=>{
+    edgeEls[i].el.classList.add('hl'); if(dir==='in') edgeEls[i].el.classList.add('into');
+    nb.add(dir==='out'? edgeEls[i].e.t : edgeEls[i].e.s);
+  });
+  nb.forEach(id=>nodeG[id] && nodeG[id].classList.add('hl'));
+  showTip(n,ev);
+}
+function clearFocus(){
+  svg.classList.remove('focus');
+  Object.values(nodeG).forEach(g=>g.classList.remove('focus','hl'));
+  edgeEls.forEach(x=>x.el.classList.remove('hl','into'));
+  tip.style.opacity=0;
+}
+function spotlight(pred){
+  clearFocus(); svg.classList.add('focus');
+  const primary=DATA.nodes.filter(pred).map(n=>n.id);
+  const vis=new Set(primary);
+  primary.forEach(id=>incident[id].forEach(({i,dir})=>{
+    edgeEls[i].el.classList.add('hl'); if(dir==='in') edgeEls[i].el.classList.add('into');
+    vis.add(edgeEls[i].e.s); vis.add(edgeEls[i].e.t);
+  }));
+  vis.forEach(id=>nodeG[id] && nodeG[id].classList.add('hl'));
+  primary.forEach(id=>nodeG[id] && nodeG[id].classList.add('focus'));
+}
+function showTip(n,ev){
+  tip.innerHTML=`<div class="tid">${n.id.replace('backend.','')}</div>`+
+    `<div class="row"><span>layer</span><b>${DATA.layerNames[n.layer]}</b></div>`+
+    `<div class="row"><span>lines of code</span><b>${n.loc}</b></div>`+
+    `<div class="row"><span>imported by (fan-in)</span><b>${n.fanin}</b></div>`+
+    `<div class="row"><span>imports (fan-out)</span><b>${n.fanout}</b></div>`;
+  tip.style.opacity=1; moveTip(ev);
+}
+function moveTip(ev){
+  const r=stage.getBoundingClientRect();
+  let x=ev.clientX-r.left+14, y=ev.clientY-r.top+14;
+  if(x+250>r.width) x=ev.clientX-r.left-250;
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+
+document.getElementById('filters').addEventListener('click',e=>{
+  const b=e.target.closest('.btn'); if(!b) return;
+  [...e.currentTarget.children].forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  clearFocus(); locked=false;
+  if(b.dataset.mode==='hubs'){ locked=true; spotlight(n=>n.fanin>=8); }
+  if(b.dataset.mode==='big'){ locked=true; spotlight(n=>n.loc>=400); }
+});
+
+// side tables
+function fillTable(id, rows, valOf, max){
+  const t=document.getElementById(id);
+  rows.forEach(n=>{
+    const tr=document.createElement('tr');
+    const c1=document.createElement('td'); c1.className='mn';
+    c1.innerHTML=`${n.id.replace('backend.','')} <span class="lay">· ${DATA.layerNames[n.layer]}</span>`+
+      `<div class="bar" style="width:${Math.round(valOf(n)/max*100)}%"></div>`;
+    const c2=document.createElement('td'); c2.className='v'; c2.textContent=valOf(n);
+    tr.appendChild(c1); tr.appendChild(c2); t.appendChild(tr);
+  });
+}
+const byFanin=[...DATA.nodes].sort((a,b)=>b.fanin-a.fanin).slice(0,6);
+const byLoc=[...DATA.nodes].sort((a,b)=>b.loc-a.loc).slice(0,6);
+fillTable('tHubs', byFanin, n=>n.fanin, byFanin[0].fanin);
+fillTable('tBig', byLoc, n=>n.loc, byLoc[0].loc);
+</script>

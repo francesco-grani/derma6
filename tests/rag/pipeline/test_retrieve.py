@@ -56,7 +56,7 @@ def test_get_llm_is_a_singleton():
 def test_get_retriever_collection_returns_underlying_collection():
     mock_retriever = MagicMock()
     mock_retriever._collection = "the-collection-sentinel"
-    with patch("backend.tools.kb_search.retriever", mock_retriever):
+    with patch("backend.rag.retriever.retriever", mock_retriever):
         assert _get_retriever_collection() == "the-collection-sentinel"
 
 

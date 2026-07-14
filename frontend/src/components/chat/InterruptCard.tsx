@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { FindProductButton } from '@/components/products/FindProductButton'
+
 // ── Payload types ─────────────────────────────────────────────────────────────
 
 export interface InterruptOption {
@@ -34,14 +36,20 @@ function Preview({ preview }: { preview: InterruptPreview }) {
               {i + 1}. {item.ingredient}
             </span>
             {item.suggested && (
-              <span className="text-xs pl-3" style={{ color: '#A0742A' }}>
-                ⭐ {item.suggested}
-              </span>
+              <div className="flex items-center gap-1.5 pl-3">
+                <span className="text-xs" style={{ color: '#A0742A' }}>
+                  ⭐ {item.suggested}
+                </span>
+                <FindProductButton query={item.suggested} />
+              </div>
             )}
             {item.budget && (
-              <span className="text-xs pl-3" style={{ color: '#3A6B3D' }}>
-                💚 {item.budget}
-              </span>
+              <div className="flex items-center gap-1.5 pl-3">
+                <span className="text-xs" style={{ color: '#3A6B3D' }}>
+                  💚 {item.budget}
+                </span>
+                <FindProductButton query={item.budget} />
+              </div>
             )}
           </div>
         ))}

@@ -183,7 +183,7 @@ class ProfileStore:
             raise ProfileStoreError(str(exc)) from exc
 
     def update_location(self, user_id: str, location: str) -> None:
-        """Set the user's country or region for product availability filtering."""
+        """Set the user's country for product availability filtering."""
         try:
             with Session(self._engine) as session:
                 user = self._get_user_or_raise(session, user_id)

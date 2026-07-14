@@ -5,14 +5,22 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
+from backend.llm.structured import to_strict_json_schema
 from backend.schemas import (
     BackendRequest,
     BackendResponse,
     ChatSessionInfo,
+    DiscoveredSources,
+    DiscoveredSourcesLLM,
     IntroductionPlanSchema,
     IntroductionWeek,
+    ListingRelevanceLLM,
     MemoryExtractionResult,
     MemoryFactSchema,
+    ProductFindResponse,
+    ProductFindResultEvent,
+    ProductFindStageEvent,
+    ProductListing,
     ProfilePatch,
     RoutineSchema,
     RoutineStepInput,
@@ -239,3 +247,252 @@ class TestMemoryExtractionResult:
     def test_with_facts(self):
         result = MemoryExtractionResult(facts=["Uses well water", "Vegan"])
         assert result.facts == ["Uses well water", "Vegan"]
+
+
+class TestDiscoveredSourcesLLM:
+    """Req 2.1, 2.2, 3.1, 3.3, 3.4: raw structured-output shape requested
+    from the discovery LLM call — deliberately over-fetches (cap of 15)
+    relative to the validated-domain target (_MAX_DOMAINS_PER_CATEGORY=10)."""
+
+    def test_defaults(self):
+        result = DiscoveredSourcesLLM(location_recognized=True)
+        assert result.location_recognized is True
+        assert result.retailer_domains == []
+        assert result.vinted_locale_domain is None
+        assert result.secondhand_marketplace_domains == []
+
+    def test_retailer_domains_over_max_length_rejected(self):
+        with pytest.raises(ValidationError):
+            DiscoveredSourcesLLM(
+                location_recognized=True,
+                retailer_domains=[f"retailer{i}.de" for i in range(16)],
+            )
+
+    def test_secondhand_marketplace_domains_over_max_length_rejected(self):
+        with pytest.raises(ValidationError):
+            DiscoveredSourcesLLM(
+                location_recognized=True,
+                secondhand_marketplace_domains=[f"market{i}.de" for i in range(16)],
+            )
+
+
+class TestDiscoveredSources:
+    """Req 2.2, 2.4, 3.4, 11.3: validated, verified, count-capped discovery
+    result persisted by SourceDiscoveryStore as model_dump_json()."""
+
+    def test_defaults(self):
+        sources = DiscoveredSources()
+        assert sources.retailer_domains == ()
+        assert sources.vinted_domain is None
+        assert sources.secondhand_domains == ()
+
+    def test_round_trips_through_json(self):
+        sources = DiscoveredSources(
+            retailer_domains=("dm.de", "douglas.de"),
+            vinted_domain="vinted.de",
+            secondhand_domains=("kleinanzeigen.de",),
+        )
+        restored = DiscoveredSources.model_validate_json(sources.model_dump_json())
+        assert restored == sources
+        assert restored.retailer_domains == ("dm.de", "douglas.de")
+        assert restored.vinted_domain == "vinted.de"
+        assert restored.secondhand_domains == ("kleinanzeigen.de",)
+
+
+class TestProductListing:
+    """Req 9.4, 9.7, 9.9: wire-contract field types/nullability for a single
+    retail (new) or secondhand (used) listing."""
+
+    def test_with_price(self):
+        listing = ProductListing(
+            type="new",
+            title="CeraVe Foaming Cleanser",
+            price=12.99,
+            currency="EUR",
+            source="dm.de",
+            thumbnail_url="https://example.com/thumb.jpg",
+            listing_url="https://example.com/listing",
+        )
+        assert listing.type == "new"
+        assert listing.price == 12.99
+        assert isinstance(listing.price, float)
+        assert listing.currency == "EUR"
+        assert listing.thumbnail_url == "https://example.com/thumb.jpg"
+        assert listing.listing_url == "https://example.com/listing"
+
+    def test_without_price(self):
+        # Req 11.6: a listing whose price couldn't be cleanly extracted is
+        # still included, with price/currency/thumbnail_url nullable.
+        listing = ProductListing(
+            type="used",
+            title="CeraVe Foaming Cleanser (used)",
+            source="Vinted",
+            listing_url="https://vinted.de/items/123",
+        )
+        assert listing.type == "used"
+        assert listing.price is None
+        assert listing.currency is None
+        assert listing.thumbnail_url is None
+        assert listing.source == "Vinted"
+
+    def test_invalid_type_rejected(self):
+        with pytest.raises(ValidationError, match="type"):
+            ProductListing(
+                type="refurbished",
+                title="Something",
+                source="dm.de",
+                listing_url="https://example.com/listing",
+            )
+
+    def test_missing_required_fields_raise(self):
+        with pytest.raises(ValidationError):
+            ProductListing(type="new", title="Something")
+
+
+class TestProductFindResponse:
+    """Req 9.9, 10.8: retail_ok/secondhand_ok are independent booleans,
+    exercised in each of the four true/false combinations."""
+
+    def test_both_ok_with_listings(self):
+        resp = ProductFindResponse(
+            listings=[
+                ProductListing(
+                    type="new",
+                    title="Product A",
+                    price=9.99,
+                    currency="EUR",
+                    source="dm.de",
+                    listing_url="https://example.com/a",
+                ),
+                ProductListing(
+                    type="used",
+                    title="Product B",
+                    source="Vinted",
+                    listing_url="https://vinted.de/b",
+                ),
+            ],
+            retail_ok=True,
+            secondhand_ok=True,
+        )
+        assert resp.retail_ok is True
+        assert resp.secondhand_ok is True
+        assert len(resp.listings) == 2
+
+    def test_retail_ok_secondhand_not_ok(self):
+        resp = ProductFindResponse(listings=[], retail_ok=True, secondhand_ok=False)
+        assert resp.retail_ok is True
+        assert resp.secondhand_ok is False
+
+    def test_retail_not_ok_secondhand_ok(self):
+        resp = ProductFindResponse(listings=[], retail_ok=False, secondhand_ok=True)
+        assert resp.retail_ok is False
+        assert resp.secondhand_ok is True
+
+    def test_both_not_ok_empty_listings(self):
+        # Req 14.5: total-failure shape — both flags false, empty listings,
+        # still a valid 200-OK-worthy response object (not an error).
+        resp = ProductFindResponse(listings=[], retail_ok=False, secondhand_ok=False)
+        assert resp.retail_ok is False
+        assert resp.secondhand_ok is False
+        assert resp.listings == []
+
+    def test_missing_ok_flags_raise(self):
+        with pytest.raises(ValidationError):
+            ProductFindResponse(listings=[])
+
+
+class TestListingRelevanceLLM:
+    """Req 1.1, 1.2: structured-output shape for one batched relevance-
+    classification call — a bounded list of genuine-candidate indices, not a
+    per-item echo (sidesteps to_strict_json_schema()'s maxItems/minItems-
+    stripping behavior, same lesson already documented for
+    DiscoveredSourcesLLM)."""
+
+    def test_defaults(self):
+        result = ListingRelevanceLLM()
+        assert result.genuine_indices == []
+
+    def test_genuine_indices_over_max_length_rejected(self):
+        with pytest.raises(ValidationError):
+            ListingRelevanceLLM(genuine_indices=list(range(13)))
+
+    def test_genuine_indices_at_max_length_accepted(self):
+        result = ListingRelevanceLLM(genuine_indices=list(range(12)))
+        assert result.genuine_indices == list(range(12))
+
+    def test_strict_json_schema_strips_maxitems_minitems(self):
+        # Regression check mirroring test_llm_structured.py's generic
+        # bounded-list case, run here against the real model this bound
+        # protects: several OpenRouter-routed providers reject a schema
+        # carrying maxItems/minItems outright, so to_strict_json_schema()
+        # must strip both before the schema reaches the provider, even
+        # though ListingRelevanceLLM(...) itself still enforces max_length
+        # at Pydantic construction time in Python (see the two tests above).
+        schema = to_strict_json_schema(ListingRelevanceLLM)
+        assert "maxItems" not in schema["properties"]["genuine_indices"]
+        assert "minItems" not in schema["properties"]["genuine_indices"]
+
+
+class TestProductFindStageEvent:
+    """Req 7.5: one SSE 'stage' frame — literal type discriminator, plain
+    machine-identifier `stage` string plus a human-readable `message`."""
+
+    def test_defaults_and_discriminator(self):
+        event = ProductFindStageEvent(stage="domain_check", message="Checking dm.de...")
+        assert event.type == "stage"
+        assert event.stage == "domain_check"
+        assert event.message == "Checking dm.de..."
+
+    def test_round_trips_through_json(self):
+        event = ProductFindStageEvent(stage="relevance_filter", message="Filtering results")
+        restored = ProductFindStageEvent.model_validate_json(event.model_dump_json())
+        assert restored == event
+        assert restored.type == "stage"
+
+    def test_missing_required_fields_raise(self):
+        with pytest.raises(ValidationError):
+            ProductFindStageEvent(stage="discovery")
+
+
+class TestProductFindResultEvent:
+    """Req 6.4, 8.1: the SSE stream's terminal frame — wraps the exact same
+    ProductFindResponse payload the non-streaming endpoint returns."""
+
+    def test_defaults_and_discriminator(self):
+        response = ProductFindResponse(listings=[], retail_ok=True, secondhand_ok=True)
+        event = ProductFindResultEvent(result=response)
+        assert event.type == "result"
+        assert event.result == response
+
+    def test_round_trips_through_json_with_full_response(self):
+        response = ProductFindResponse(
+            listings=[
+                ProductListing(
+                    type="new",
+                    title="Product A",
+                    price=9.99,
+                    currency="EUR",
+                    source="dm.de",
+                    thumbnail_url="https://example.com/thumb.jpg",
+                    listing_url="https://example.com/a",
+                ),
+                ProductListing(
+                    type="used",
+                    title="Product B",
+                    source="Vinted",
+                    listing_url="https://vinted.de/b",
+                ),
+            ],
+            retail_ok=True,
+            secondhand_ok=False,
+        )
+        event = ProductFindResultEvent(result=response)
+        restored = ProductFindResultEvent.model_validate_json(event.model_dump_json())
+        assert restored == event
+        assert restored.type == "result"
+        assert restored.result == response
+        assert len(restored.result.listings) == 2
+
+    def test_missing_required_fields_raise(self):
+        with pytest.raises(ValidationError):
+            ProductFindResultEvent()

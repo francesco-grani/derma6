@@ -1,7 +1,8 @@
 {
   "graphs": {
     "derma6_agent": "./backend/agent/studio.py:graph",
-    "rag_pipeline": "./backend/agent/studio.py:rag_graph"
+    "rag_pipeline": "./backend/agent/studio.py:rag_graph",
+    "product_finder": "./backend/tools/product_finder_studio.py:graph"
   },
   "dependencies": ["."],
   "env": ".env"

@@ -38,7 +38,7 @@ def _get_llm() -> ChatOpenAI:
 
 def _get_retriever_collection():
     """Access the ChromaDB collection via the existing Retriever singleton."""
-    from backend.tools.kb_search import retriever
+    from backend.rag.retriever import retriever
     return retriever._collection
 
 

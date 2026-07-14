@@ -18,7 +18,7 @@ vi.mock('./supabaseClient', () => ({
 }))
 
 // Imported after the mock so `api.ts` picks up the mocked `./supabaseClient`.
-import { apiCompleteSignup, apiGetProfile } from './api'
+import { apiCompleteSignup, apiFindProduct, apiGetProfile, buildProductFindStreamRequest } from './api'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -143,6 +143,127 @@ describe('api.ts', () => {
       fetchMock.mockResolvedValue(jsonResponse({ detail: 'email already registered' }, 409))
 
       await expect(apiCompleteSignup()).rejects.toThrow('email already registered')
+    })
+  })
+
+  describe('apiFindProduct', () => {
+    it('GETs with only the "name" query param when brand is omitted', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      fetchMock.mockResolvedValue(jsonResponse({ listings: [], retail_ok: true, secondhand_ok: true }))
+
+      const result = await apiFindProduct('Foo Cleanser')
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/products/find?name=Foo+Cleanser',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer tok-abc' }),
+        }),
+      )
+      expect(result).toEqual({ listings: [], retail_ok: true, secondhand_ok: true })
+    })
+
+    it('includes the "brand" query param when brand is a non-empty string', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      fetchMock.mockResolvedValue(jsonResponse({ listings: [], retail_ok: true, secondhand_ok: true }))
+
+      await apiFindProduct('Foo Cleanser', 'Acme')
+
+      const [url] = fetchMock.mock.calls[0] as [string]
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser&brand=Acme')
+    })
+
+    it('omits the "brand" query param when brand is an empty string', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      fetchMock.mockResolvedValue(jsonResponse({ listings: [], retail_ok: true, secondhand_ok: true }))
+
+      await apiFindProduct('Foo Cleanser', '')
+
+      const [url] = fetchMock.mock.calls[0] as [string]
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser')
+    })
+
+    it('includes the "source" query param when given, for per-source progressive requests', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      fetchMock.mockResolvedValue(jsonResponse({ listings: [], retail_ok: true, secondhand_ok: true }))
+
+      await apiFindProduct('Foo Cleanser', undefined, 'retail')
+
+      const [url] = fetchMock.mock.calls[0] as [string]
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser&source=retail')
+    })
+
+    it('returns the full ProductFindResponse shape, including populated listings', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      const body = {
+        listings: [
+          {
+            type: 'new',
+            title: 'Foo Cleanser 200ml',
+            price: 12.99,
+            currency: 'EUR',
+            source: 'dm.de',
+            thumbnail_url: 'https://example.com/thumb.jpg',
+            listing_url: 'https://example.com/listing/123',
+          },
+        ],
+        retail_ok: true,
+        secondhand_ok: false,
+      }
+      fetchMock.mockResolvedValue(jsonResponse(body))
+
+      const result = await apiFindProduct('Foo Cleanser')
+
+      expect(result).toEqual(body)
+    })
+
+    it('propagates a non-ok response as an ApiError', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+      fetchMock.mockResolvedValue(jsonResponse({ detail: 'upstream lookup failed' }, 502))
+
+      await expect(apiFindProduct('Foo Cleanser')).rejects.toThrow('upstream lookup failed')
+    })
+  })
+
+  describe('buildProductFindStreamRequest', () => {
+    it('builds a stream=true URL with only "name" and "stream" when brand/source are omitted', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+
+      const { url } = await buildProductFindStreamRequest('Foo Cleanser')
+
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser&stream=true')
+    })
+
+    it('includes "brand" and "source" query params when given', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+
+      const { url } = await buildProductFindStreamRequest('Foo Cleanser', 'Acme', 'retail')
+
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser&brand=Acme&source=retail&stream=true')
+    })
+
+    it('omits "brand" when null/empty', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-abc') } })
+
+      const { url } = await buildProductFindStreamRequest('Foo Cleanser', null, 'vinted')
+
+      expect(url).toBe('/api/products/find?name=Foo+Cleanser&source=vinted&stream=true')
+    })
+
+    it("attaches the Authorization header from getAccessToken()'s resolved token", async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: fakeSession('tok-xyz') } })
+
+      const { init } = await buildProductFindStreamRequest('Foo Cleanser')
+
+      expect(mocks.getSession).toHaveBeenCalledTimes(1)
+      expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-xyz')
+    })
+
+    it('omits the Authorization header when there is no active session', async () => {
+      mocks.getSession.mockResolvedValue({ data: { session: null } })
+
+      const { init } = await buildProductFindStreamRequest('Foo Cleanser')
+
+      expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
     })
   })
 })

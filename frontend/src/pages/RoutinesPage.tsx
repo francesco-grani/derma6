@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { useRoutines, useDeleteRoutine, useRenameRoutine } from '@/hooks/useRoutines'
 import { useSession } from '@/lib/sessionContext'
 import type { Routine } from '@/lib/api'
+import { FindProductButton } from '@/components/products/FindProductButton'
 
 function buildRoutineDescription(routine: Routine): string {
   return routine.steps
@@ -184,6 +185,7 @@ export default function RoutinesPage() {
                             <span style={{ color: '#3A2A0A', fontSize: 12 }} className="truncate">
                               {step.product_name}
                             </span>
+                            <FindProductButton query={step.product_name} />
                           </div>
                         )}
                         {step.budget_product && (
@@ -195,6 +197,7 @@ export default function RoutinesPage() {
                             <span style={{ color: '#1C3D1E', fontSize: 12 }} className="truncate">
                               {step.budget_product}
                             </span>
+                            <FindProductButton query={step.budget_product} />
                           </div>
                         )}
                       </div>

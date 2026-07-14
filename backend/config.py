@@ -145,6 +145,65 @@ class Settings(BaseSettings):
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     rag_debug_mode: bool = Field(default=False, alias="RAG_DEBUG_MODE")
 
+    # Product finder
+    product_cache_db_path: str = Field(
+        default="./data/product_cache.db",
+        alias="PRODUCT_CACHE_DB_PATH",
+    )
+    product_cache_ttl_seconds: int = Field(default=600, alias="PRODUCT_CACHE_TTL_SECONDS")
+    product_lookup_timeout_seconds: int = Field(
+        default=8, alias="PRODUCT_LOOKUP_TIMEOUT_SECONDS"
+    )
+    product_max_listings_per_source: int = Field(
+        default=8, alias="PRODUCT_MAX_LISTINGS_PER_SOURCE"
+    )
+    product_thumbnail_fetch_timeout_seconds: float = Field(
+        default=4.0, alias="PRODUCT_THUMBNAIL_FETCH_TIMEOUT_SECONDS"
+    )
+
+    # Product source discovery
+    source_discovery_db_path: str = Field(
+        default="./data/source_discovery.db",
+        alias="SOURCE_DISCOVERY_DB_PATH",
+    )
+    source_discovery_ttl_seconds: int = Field(
+        default=604800, alias="SOURCE_DISCOVERY_TTL_SECONDS"  # 7 days
+    )
+    source_discovery_timeout_seconds: int = Field(
+        default=20, alias="SOURCE_DISCOVERY_TIMEOUT_SECONDS"
+    )
+    source_discovery_model: str | None = Field(
+        default=None,
+        alias="SOURCE_DISCOVERY_MODEL",
+        description="Model used for source-discovery LLM calls. Falls back to llm_model "
+        "when unset (see effective_source_discovery_model).",
+    )
+
+    @property
+    def effective_source_discovery_model(self) -> str:
+        """The model actually used for source-discovery LLM calls: an explicit
+        override if configured, otherwise the same model driving the live chat
+        agent (llm_model)."""
+        return self.source_discovery_model or self.llm_model
+
+    # Relevance classification
+    relevance_classification_timeout_seconds: float = Field(
+        default=6.0, alias="RELEVANCE_CLASSIFICATION_TIMEOUT_SECONDS"
+    )
+    relevance_classification_model: str | None = Field(
+        default=None,
+        alias="RELEVANCE_CLASSIFICATION_MODEL",
+        description="Model used for relevance-classification LLM calls. Falls back to "
+        "llm_model when unset (see effective_relevance_classification_model).",
+    )
+
+    @property
+    def effective_relevance_classification_model(self) -> str:
+        """The model actually used for relevance-classification LLM calls: an
+        explicit override if configured, otherwise the same model driving the
+        live chat agent (llm_model)."""
+        return self.relevance_classification_model or self.llm_model
+
     # CORS
     allowed_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],

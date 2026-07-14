@@ -25,3 +25,26 @@ JAILBREAK_PATTERN = re.compile(
     r"|\bprompt\s+injection\b",
     re.IGNORECASE,
 )
+
+# Neutralising counterpart to JAILBREAK_PATTERN (which *rejects* input). This one
+# is *substituted out* of text that is embedded into the system prompt — user
+# profile values (`backend.agent.graph._sanitise`) and retrieved KB chunks
+# (`sanitise_retrieved` below). Kept here, in the Foundation layer, so the agent
+# graph and the kb_search tool can both share it without the tool having to
+# import the agent (which was a layer-violating circular import).
+INJECTION_PATTERNS = re.compile(
+    r"ignore\s+(?:(?:previous|all|above|prior|your|these)\s+)+(instructions?|prompts?|rules?|constraints?)"
+    r"|you\s+are\s+now"
+    r"|system\s*:"
+    r"|(?:forget|disregard|override|bypass)\s+(?:(?:your|all|the|previous|any)\s+)+(instructions?|rules?|training|constraints?|guidelines?)"
+    r"|act\s+as\s+if\s+you\s+(are|were)"
+    r"|\bjailbreak\b|\bdan\s+mode\b"
+    r"|<\s*/?system\s*>"
+    r"|(disable|bypass)\s+(your\s+)?(safety|filters?|restrictions?)",
+    re.IGNORECASE,
+)
+
+
+def sanitise_retrieved(text: str) -> str:
+    """Strip instruction-like patterns from KB chunks before injecting into prompt."""
+    return INJECTION_PATTERNS.sub("[FILTERED]", text)

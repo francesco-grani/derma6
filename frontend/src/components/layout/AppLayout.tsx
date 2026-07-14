@@ -3,6 +3,8 @@ import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import Sidebar from '@/components/layout/Sidebar'
+import { ProductFinderProvider } from '@/components/products/ProductFinderProvider'
+import { ProductFinderPopover } from '@/components/products/ProductFinderPopover'
 
 export default function AppLayout() {
   // security-remediation Req 21.4/21.5: a verified session whose local
@@ -34,11 +36,21 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden flex flex-col">
-        <Outlet />
-      </main>
-    </div>
+    // Mounted once, wrapping the whole app shell, so any descendant page can
+    // call useProductFinderTarget()/render FindProductButton (Task 16/18) and
+    // share the single global popover below (design.md's "one instance with
+    // dynamic anchor" decision — Req 3.1, 3.5).
+    <ProductFinderProvider>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main className="flex-1 overflow-hidden flex flex-col">
+          <Outlet />
+        </main>
+        {/* Sibling to page content, not nested inside it, so it's
+            portal-rendered and never clipped by a page's own overflow
+            containers (Task 19/20). */}
+        <ProductFinderPopover />
+      </div>
+    </ProductFinderProvider>
   )
 }

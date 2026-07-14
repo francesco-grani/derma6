@@ -338,3 +338,75 @@ export async function apiExportEvalHtml(results: EvalResult[], completedAt: stri
   })
   return res.blob()
 }
+
+// ── Product Finder ───────────────────────────────────────────────────────────
+
+/** Field-for-field mirror of `backend/schemas.py`'s `ProductListing` (Req 9.7). */
+export interface ProductListing {
+  type: 'new' | 'used'
+  title: string
+  price: number | null
+  currency: string | null
+  source: string
+  thumbnail_url: string | null
+  listing_url: string
+}
+
+/** Field-for-field mirror of `backend/schemas.py`'s `ProductFindResponse` (Req 9.4, 9.9). */
+export interface ProductFindResponse {
+  listings: ProductListing[]
+  retail_ok: boolean
+  secondhand_ok: boolean
+}
+
+export type ProductFindSource = 'retail' | 'vinted' | 'kleinanzeigen'
+
+export async function apiFindProduct(
+  name: string,
+  brand?: string,
+  source?: ProductFindSource
+): Promise<ProductFindResponse> {
+  const params = new URLSearchParams({
+    name,
+    ...(brand ? { brand } : {}),
+    ...(source ? { source } : {}),
+  })
+  const res = await authedFetch(`/api/products/find?${params.toString()}`)
+  return res.json()
+}
+
+/**
+ * Builds the `fetch()` `RequestInit`/URL pair for a streamed (`stream=true`)
+ * `GET /api/products/find` request (product-finder-streaming Req 9.1-9.3).
+ *
+ * Deliberately not routed through `authedFetch()`: that helper returns
+ * parsed JSON (`res.json()`), but the streaming caller (`useProductFind`,
+ * `frontend/src/hooks/useProductFinder.ts`) needs the raw `Response` so it
+ * can read `response.body.getReader()` itself — the same reason
+ * `useStreamChat.ts` builds its own `fetch()` call for `POST /api/chat`
+ * rather than going through a JSON-parsing helper. Bearer auth is still
+ * attached via `getAccessToken()`, the same token-resolution path
+ * `authedFetch()` itself uses, so `GET /api/products/find`'s existing
+ * authentication requirement is unaffected by bypassing `authedFetch()`.
+ * The native `EventSource` API is never used anywhere in this feature (Req
+ * 9.3), since it cannot carry a custom `Authorization` header.
+ */
+export async function buildProductFindStreamRequest(
+  name: string,
+  brand?: string | null,
+  source?: ProductFindSource
+): Promise<{ url: string; init: RequestInit }> {
+  const token = await getAccessToken()
+  const params = new URLSearchParams({
+    name,
+    ...(brand ? { brand } : {}),
+    ...(source ? { source } : {}),
+    stream: 'true',
+  })
+  return {
+    url: `/api/products/find?${params.toString()}`,
+    init: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    },
+  }
+}

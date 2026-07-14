@@ -44,7 +44,7 @@ class User(Base):
     skin_concerns: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     has_shaving_routine: Mapped[Optional[bool]] = mapped_column(default=None)
     beard_style: Mapped[Optional[str]] = mapped_column(default=None)  # "shave" | "trim" | "grow"
-    location: Mapped[Optional[str]] = mapped_column(default=None)  # country / region
+    location: Mapped[Optional[str]] = mapped_column(default=None)  # country (see onboarding)
     medical_flags: Mapped[Optional[str]] = mapped_column(default=None)  # JSON-serialised list[str]
     onboarding_complete: Mapped[bool] = mapped_column(default=False)
     is_admin: Mapped[bool] = mapped_column(default=False)

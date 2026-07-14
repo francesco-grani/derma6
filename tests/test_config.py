@@ -85,6 +85,60 @@ class TestMemorySettingsDefaults:
         assert settings.memory_retrieval_top_k == 3
 
 
+class TestProductFinderSettingsDefaults:
+    def test_defaults_load_correctly(self) -> None:
+        settings = _make_settings(SUPABASE_URL="https://myproj.supabase.co")
+
+        assert settings.product_cache_db_path == "./data/product_cache.db"
+        assert settings.product_cache_ttl_seconds == 600
+        assert settings.product_lookup_timeout_seconds == 8
+        assert settings.product_max_listings_per_source == 8
+
+
+class TestSourceDiscoverySettingsDefaults:
+    def test_defaults_load_correctly(self) -> None:
+        settings = _make_settings(SUPABASE_URL="https://myproj.supabase.co")
+
+        assert settings.source_discovery_db_path == "./data/source_discovery.db"
+        assert settings.source_discovery_ttl_seconds == 604800
+        assert settings.source_discovery_timeout_seconds == 20
+        assert settings.source_discovery_model is None
+
+    def test_explicit_values_are_respected(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            SOURCE_DISCOVERY_DB_PATH="./custom/source_discovery.db",
+            SOURCE_DISCOVERY_TTL_SECONDS="1209600",
+            SOURCE_DISCOVERY_TIMEOUT_SECONDS="30",
+            SOURCE_DISCOVERY_MODEL="anthropic/claude-haiku-4.5",
+        )
+
+        assert settings.source_discovery_db_path == "./custom/source_discovery.db"
+        assert settings.source_discovery_ttl_seconds == 1209600
+        assert settings.source_discovery_timeout_seconds == 30
+        assert settings.source_discovery_model == "anthropic/claude-haiku-4.5"
+
+
+class TestEffectiveSourceDiscoveryModel:
+    def test_falls_back_to_llm_model_when_unset(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+        )
+
+        assert settings.source_discovery_model is None
+        assert settings.effective_source_discovery_model == "anthropic/claude-haiku-4.5"
+
+    def test_uses_explicit_override_when_set(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+            SOURCE_DISCOVERY_MODEL="openai/gpt-4o-mini",
+        )
+
+        assert settings.effective_source_discovery_model == "openai/gpt-4o-mini"
+
+
 class TestEffectiveMemoryExtractionModel:
     def test_falls_back_to_llm_model_when_unset(self) -> None:
         settings = _make_settings(
@@ -103,3 +157,41 @@ class TestEffectiveMemoryExtractionModel:
         )
 
         assert settings.effective_memory_extraction_model == "openai/gpt-4o-mini"
+
+
+class TestRelevanceClassificationSettingsDefaults:
+    def test_defaults_load_correctly(self) -> None:
+        settings = _make_settings(SUPABASE_URL="https://myproj.supabase.co")
+
+        assert settings.relevance_classification_timeout_seconds == 6.0
+        assert settings.relevance_classification_model is None
+
+    def test_explicit_values_are_respected(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            RELEVANCE_CLASSIFICATION_TIMEOUT_SECONDS="10.5",
+            RELEVANCE_CLASSIFICATION_MODEL="anthropic/claude-haiku-4.5",
+        )
+
+        assert settings.relevance_classification_timeout_seconds == 10.5
+        assert settings.relevance_classification_model == "anthropic/claude-haiku-4.5"
+
+
+class TestEffectiveRelevanceClassificationModel:
+    def test_falls_back_to_llm_model_when_unset(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+        )
+
+        assert settings.relevance_classification_model is None
+        assert settings.effective_relevance_classification_model == "anthropic/claude-haiku-4.5"
+
+    def test_uses_explicit_override_when_set(self) -> None:
+        settings = _make_settings(
+            SUPABASE_URL="https://myproj.supabase.co",
+            LLM_MODEL="anthropic/claude-haiku-4.5",
+            RELEVANCE_CLASSIFICATION_MODEL="openai/gpt-4o-mini",
+        )
+
+        assert settings.effective_relevance_classification_model == "openai/gpt-4o-mini"

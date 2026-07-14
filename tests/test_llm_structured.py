@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 from openai import BadRequestError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from backend.llm.structured import (
     StructuredOutputError,
@@ -57,6 +57,15 @@ class _WithOptionalNested(BaseModel):
 
 class _WithLiteral(BaseModel):
     skin_type: Literal["oily", "dry", "combination"]
+
+
+class _WithBoundedList(BaseModel):
+    """A model with a `Field(max_length=...)`-bounded list — the shape that
+    triggered a real, live-observed provider rejection: several
+    OpenRouter-routed providers (Anthropic, Amazon Bedrock, Azure) reject a
+    `response_format` schema whose array type carries `maxItems`."""
+
+    tags: list[str] = Field(default_factory=list, max_length=6)
 
 
 class TestFlatModel:
@@ -129,6 +138,30 @@ class TestNestedObjectsAndArrays:
     def test_optional_nested_field_listed_in_required(self):
         schema = to_strict_json_schema(_WithOptionalNested)
         assert "primary_address" in schema["required"]
+
+
+class TestArrayLengthConstraintsStripped:
+    """Several OpenRouter-routed providers reject a `response_format` schema
+    whose array type carries `maxItems`/`minItems` (observed live: Anthropic,
+    Amazon Bedrock, and Azure all rejected `DiscoveredSourcesLLM`'s schema
+    with "property 'maxItems' is not supported", silently degrading every
+    discovery call to its fallback path). `to_strict_json_schema()` must
+    strip both keywords from the schema sent to the provider while leaving
+    Pydantic's own runtime validation (`Field(max_length=...)`) untouched."""
+
+    def test_max_items_stripped_from_generated_schema(self):
+        schema = to_strict_json_schema(_WithBoundedList)
+        assert "maxItems" not in schema["properties"]["tags"]
+
+    def test_min_items_stripped_from_generated_schema(self):
+        schema = to_strict_json_schema(_WithBoundedList)
+        assert "minItems" not in schema["properties"]["tags"]
+
+    def test_pydantic_level_validation_still_enforces_max_length(self):
+        # The schema sent to the provider no longer advertises the limit, but
+        # constructing the model in Python still raises past it.
+        with pytest.raises(ValidationError):
+            _WithBoundedList(tags=[f"tag{i}" for i in range(7)])
 
 
 class TestLiteralEnum:

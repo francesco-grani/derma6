@@ -7,7 +7,7 @@ for custom validation logic.
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from backend.config import settings
 from backend.security_patterns import JAILBREAK_PATTERN
@@ -141,6 +141,48 @@ class MemoryExtractionResult(BaseModel):
     facts: list[str] = []
 
 
+# ── Source Discovery ─────────────────────────────────────────────────────────
+
+
+class DiscoveredSourcesLLM(BaseModel):
+    """Raw structured-output shape requested from the discovery LLM call
+    (Req 2, 3) — passed as `schema_model` to `structured_completion()`
+    (backend/llm/structured.py), reusing that module's existing
+    schema-enforcement/fallback machinery rather than a new LLM-calling
+    pattern (Requirements Review Note point 2).
+
+    Deliberately over-fetches candidates relative to the cap of 10
+    (`_MAX_DOMAINS_PER_CATEGORY` in product_source_discovery.py, Req 2.2/3.4):
+    syntactic validation and web-search verification (see
+    product_source_discovery.py) will reject some fraction of raw LLM
+    candidates, so asking for up to 15 leaves enough headroom to still net a
+    healthy set of validated domains in the common case. The system prompt
+    also asks the model to order each list by prominence/reliability, since
+    only the first `_MAX_DOMAINS_PER_CATEGORY` survivors are kept.
+    """
+
+    location_recognized: bool
+    # Confidence/validity signal (Req 1.4, 7): False means the model could
+    # not confidently place `location` as a real, specific place it can
+    # name retailers/marketplaces for — treated identically to a discovery
+    # failure (Req 7.1), never as "fall back to some other location."
+    retailer_domains: list[str] = Field(default_factory=list, max_length=15)
+    vinted_locale_domain: str | None = None
+    secondhand_marketplace_domains: list[str] = Field(default_factory=list, max_length=15)
+
+
+class DiscoveredSources(BaseModel):
+    """Validated, verified, count-capped discovery result (Req 2.2, 2.4,
+    3.4) — what `get_or_discover_sources()` returns and what
+    `SourceDiscoveryStore` persists (as `.model_dump_json()`, mirroring
+    `ProductCacheStore`'s existing `ProductFindResponse` persistence
+    pattern). Never contains an unvalidated/unverified candidate."""
+
+    retailer_domains: tuple[str, ...] = ()
+    vinted_domain: str | None = None  # e.g. "vinted.it" — full domain, Req 3.1/3.2
+    secondhand_domains: tuple[str, ...] = ()  # non-Vinted marketplace domains, Req 3.3/3.4
+
+
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
 
@@ -157,6 +199,100 @@ class UserSummary(BaseModel):
     total_cost_usd: float
 
     model_config = {"from_attributes": True}
+
+
+# ── Product Finder ───────────────────────────────────────────────────────────
+
+
+class ProductListing(BaseModel):
+    """A single retail (new) or secondhand (used) product listing surfaced by
+    `GET /api/products/find` (Req 9.7)."""
+
+    type: Literal["new", "used"]
+    title: str
+    # Nullable: best-effort price extraction from a retail search snippet
+    # (Req 11.5) doesn't always yield a clean price; the listing is still
+    # included rather than discarded (Req 11.6).
+    price: float | None = None
+    currency: str | None = None
+    source: str
+    thumbnail_url: str | None = None
+    listing_url: str
+
+
+class ProductFindResponse(BaseModel):
+    """Response shape for `GET /api/products/find` (Req 9.4, 9.7, 9.9)."""
+
+    listings: list[ProductListing]
+    # False only on retail-source failure/timeout, not on a legitimate
+    # zero-result search (Req 9.9, 14.5).
+    retail_ok: bool
+    # False only if every attempted secondhand sub-source (Vinted, and
+    # Kleinanzeigen when attempted) failed/timed out — True if either
+    # succeeds (Req 9.9, 10.8), not False merely on a legitimate zero-result
+    # search.
+    secondhand_ok: bool
+
+
+# ── Relevance Filtering ──────────────────────────────────────────────────────
+
+_MAX_RELEVANCE_CANDIDATES = 12
+# Headroom above settings.product_max_listings_per_source's default (8) — the
+# category's diversified/capped candidate set is what's actually classified
+# (Req 1.1), so this bound is a defensive cap on the LLM's response shape, not
+# a value that needs to track the settings default exactly. Chosen as a plain
+# Field(max_length=...) bound rather than a schema-level maxItems constraint
+# specifically because of the lesson recorded in backend/llm/structured.py's
+# _tighten(): to_strict_json_schema() strips maxItems/minItems from array
+# fields before they reach the provider (several OpenRouter-routed providers
+# reject that keyword outright), so this bound only ever does anything at
+# Pydantic construction time in Python — which is exactly what's needed here,
+# since the classification response is a small list of ints, not a
+# provider-facing shape whose size the provider itself needs to enforce.
+
+
+class ListingRelevanceLLM(BaseModel):
+    """Structured output shape for one batched relevance-classification call
+    over a category's candidate listings (Req 1.1, 1.2), passed as
+    `schema_model` to `structured_completion()` — the same infrastructure
+    `product_source_discovery.py` already uses (Req 1.1's explicit mandate).
+
+    Candidates are supplied to the LLM as a numbered list in the user
+    message (index, title, snippet, url); the model returns only the
+    indices it judges genuine, rather than echoing every candidate back —
+    this keeps the response small and its size naturally bounded by the
+    category's already-capped candidate count, avoiding the maxItems pitfall
+    documented above.
+    """
+
+    genuine_indices: list[int] = Field(default_factory=list, max_length=_MAX_RELEVANCE_CANDIDATES)
+
+
+# ── Product Finder Streaming ─────────────────────────────────────────────────
+
+
+class ProductFindStageEvent(BaseModel):
+    """One SSE 'stage' frame (Req 7) — reuses this codebase's existing
+    `data: {json}\\n\\n` + `type`-discriminator convention
+    (`backend/agent/graph.py`'s `stream_agent_response`/`_sse`,
+    Requirements Review Note point 2), as a Pydantic model rather than a
+    plain dict (Requirements Review Note point 4)."""
+
+    type: Literal["stage"] = "stage"
+    stage: str  # stable machine identifier: "discovery" | "domain_check" |
+    # "relevance_filter" | "thumbnail_enrichment" | "price_enrichment"
+    message: str  # human-readable phrase for direct display (Req 7.5),
+    # e.g. "Checking dm.de..." — untrusted (may embed an LLM/search-derived
+    # domain name), rendered only as text (Non-Functional Consideration 3)
+
+
+class ProductFindResultEvent(BaseModel):
+    """The SSE stream's terminal frame (Req 6.4, 8.1) — carries the exact
+    same ProductFindResponse payload the non-streaming endpoint returns,
+    unchanged in shape/semantics."""
+
+    type: Literal["result"] = "result"
+    result: ProductFindResponse
 
 
 # ── Core user/session models ──────────────────────────────────────────────────

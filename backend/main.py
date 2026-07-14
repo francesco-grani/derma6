@@ -12,6 +12,7 @@ from backend.config import settings
 from backend.db.models import init_db
 from backend.logging_config import init_langsmith, setup_logging
 from backend.middleware.auth import JWTAuthMiddleware
+from backend.tools.product_finder import router as product_finder_router
 
 setup_logging()
 init_langsmith()
@@ -55,6 +56,7 @@ app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(analysis.router)
 app.include_router(sessions.router)
+app.include_router(product_finder_router)
 
 
 @app.get("/health")
