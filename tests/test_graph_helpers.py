@@ -153,7 +153,14 @@ class TestExtractCitations:
 
 class TestExtractRagContext:
     def _rag_msg(self, entries: list) -> ToolMessage:
-        content = f"Some text\n\n__RAG_CONTEXT_JSON__: {json.dumps(entries)}"
+        # Mirrors what backend/rag/pipeline/nodes/generate.py actually emits: the
+        # RAG context marker is followed by a second __RAG_PIPELINE_META__ marker.
+        # A fixture that omits the trailing marker passes against a parser that
+        # json-loads to end-of-string, which is how rag_docs=0 reached production.
+        content = (
+            f"Some text\n\n__RAG_CONTEXT_JSON__: {json.dumps(entries)}"
+            f"\n\n__RAG_PIPELINE_META__: {json.dumps({'final_routing': 'generate'})}"
+        )
         return ToolMessage(content=content, tool_call_id="tc1")
 
     def test_parses_rag_context(self):

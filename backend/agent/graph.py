@@ -980,7 +980,9 @@ def extract_rag_context(messages: list) -> list[dict]:
         if idx == -1:
             continue
         try:
-            raw = json.loads(content[idx + len(marker):].strip())
+            # First line only: generate.py appends __RAG_PIPELINE_META__ after
+            # this marker, and parsing to end-of-string swallows it -> "Extra data".
+            raw = json.loads(content[idx + len(marker):].split("\n")[0].strip())
             for entry in raw:
                 key = entry.get("source", "")
                 if key and key not in seen:

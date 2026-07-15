@@ -14,12 +14,22 @@ export interface ToolResultItem {
   summary: string
 }
 
+// Retrieval route the agentic RAG pipeline settled on, as emitted by
+// backend/rag/pipeline/nodes/generate.py.
+export type RagRouting =
+  | 'generate'
+  | 'local-retry-succeeded'
+  | 'web-search'
+  | 'llm-only-salvaged'
+  | 'llm-only'
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   citations?: string[]
   rag_context?: RagItem[]
   tool_results?: ToolResultItem[]
+  rag_routing?: RagRouting
   working?: boolean
 }
 
@@ -145,6 +155,7 @@ export function useStreamChat(sessionId: string | null) {
                 citations: event.citations ?? [],
                 rag_context: event.rag_context ?? [],
                 tool_results: event.tool_results ?? [],
+                rag_routing: event.rag_routing || undefined,
                 working: false,
               }))
             } else if (event.type === 'session_title') {
@@ -253,6 +264,7 @@ export function useStreamChat(sessionId: string | null) {
                 citations: event.citations ?? [],
                 rag_context: event.rag_context ?? [],
                 tool_results: event.tool_results ?? [],
+                rag_routing: event.rag_routing || undefined,
                 working: false,
               }))
               qc.invalidateQueries({ queryKey: ['routines'] })

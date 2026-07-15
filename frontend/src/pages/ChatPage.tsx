@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import InterruptCard from '@/components/chat/InterruptCard'
-import { useStreamChat, type ChatMessage } from '@/hooks/useStreamChat'
+import { useStreamChat, type ChatMessage, type RagRouting } from '@/hooks/useStreamChat'
 import { useAuth } from '@/lib/auth'
 import { useSession } from '@/lib/sessionContext'
 import { useQueryClient } from '@tanstack/react-query'
@@ -16,6 +16,17 @@ const STATIC_SUGGESTIONS = [
   'Recommend an SPF',
   'How to layer products?',
 ]
+
+// How each RAG route is described in the Tools panel. `fallback` routes are the
+// ones where the local knowledge base came up short, so they get the amber
+// treatment to distinguish them from a clean knowledge-base hit.
+const RAG_ROUTING_LABELS: Record<RagRouting, { icon: string; label: string; fallback: boolean }> = {
+  'generate': { icon: '📚', label: 'Knowledge base', fallback: false },
+  'local-retry-succeeded': { icon: '📚', label: 'Knowledge base (after query rewrite)', fallback: false },
+  'web-search': { icon: '🌐', label: 'Web search fallback', fallback: true },
+  'llm-only-salvaged': { icon: '⚠️', label: 'Weak knowledge base match', fallback: true },
+  'llm-only': { icon: '⚠️', label: 'General knowledge only', fallback: true },
+}
 
 export default function ChatPage() {
   const { username } = useAuth()
@@ -325,10 +336,28 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
             className="text-xs px-2 py-1 rounded"
             style={{ color: '#9EAD9E', background: 'none', border: 'none', cursor: 'pointer' }}
           >
-            🔧 Tools ({msg.tool_results.length}) {showTools ? '▲' : '▼'}
+            🔧 Tools ({msg.tool_results.length})
+            {msg.rag_routing && RAG_ROUTING_LABELS[msg.rag_routing]?.fallback && (
+              <span> {RAG_ROUTING_LABELS[msg.rag_routing].icon}</span>
+            )}
+            {' '}{showTools ? '▲' : '▼'}
           </button>
           {showTools && (
             <div className="flex flex-col gap-2 mt-1 p-3 rounded-lg" style={{ background: '#2E3D2F' }}>
+              {msg.rag_routing && RAG_ROUTING_LABELS[msg.rag_routing] && (
+                <div className="pb-2" style={{ borderBottom: '1px solid #3A4A3B' }}>
+                  <span
+                    className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{
+                      background: '#3A4A3B',
+                      color: RAG_ROUTING_LABELS[msg.rag_routing].fallback ? '#C4933F' : '#9EAD9E',
+                    }}
+                  >
+                    {RAG_ROUTING_LABELS[msg.rag_routing].icon}{' '}
+                    {RAG_ROUTING_LABELS[msg.rag_routing].label}
+                  </span>
+                </div>
+              )}
               {msg.tool_results.map((t, i) => (
                 <div key={i}>
                   <span
