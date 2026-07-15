@@ -4,12 +4,31 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 
 from backend.config import settings
 from backend.rag.pipeline.state import RankedDoc
 
 logger = logging.getLogger("derma6.rag")
+
+
+def _display_score(doc: RankedDoc) -> float | None:
+    """UI-facing relevance in 0..1, or None when the doc was never scored.
+
+    The cross-encoder emits an unbounded logit on the ms-marco scale (~-11..+11
+    — hence the -6.0 `rerank_min_score` floor), so it is squashed with a sigmoid
+    rather than passed through raw; multiplying a logit by 100 yields nonsense
+    like 361% or -388%. Sigmoid is monotonic, so the ordering is unaffected.
+
+    Web-fallback docs (nodes/fallback.py) never reach the reranker and carry
+    rerank_score=0.0, and rrf_score is a rank-fusion quantity that is not
+    comparable to a relevance probability. Both return None so the UI can omit
+    the number instead of implying a confident 0%.
+    """
+    if not doc.rerank_score:
+        return None
+    return round(1.0 / (1.0 + math.exp(-doc.rerank_score)), 3)
 
 _DISCLAIMER = (
     "Note: The local knowledge base did not contain sufficient relevant information "
@@ -90,7 +109,7 @@ def generate(state: dict) -> dict:
     rag_meta = [
         {
             "source": d.source_name,
-            "score": round(d.rerank_score if d.rerank_score else d.rrf_score, 3),
+            "score": _display_score(d),
             "snippet": d.content.strip()[:150],
         }
         for d in docs

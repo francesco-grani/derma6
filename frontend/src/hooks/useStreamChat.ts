@@ -5,7 +5,9 @@ import type { InterruptPayload } from '@/components/chat/InterruptCard'
 
 export interface RagItem {
   source: string
-  score: number
+  /** Reranker relevance in 0..1 (already sigmoid-squashed backend-side), or
+   *  null for docs that never went through the reranker (e.g. web fallback). */
+  score: number | null
   snippet: string
 }
 

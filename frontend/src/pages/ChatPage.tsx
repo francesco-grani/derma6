@@ -294,7 +294,9 @@ function MessageBubble({ msg, username }: { msg: ChatMessage; username: string }
                 <div key={i}>
                   <div className="flex justify-between items-baseline mb-1">
                     <span className="text-xs font-semibold" style={{ color: '#E0E8E0' }}>{r.source}</span>
-                    <span className="text-xs font-medium" style={{ color: '#C4933F' }}>{Math.round(r.score * 100)}%</span>
+                    <span className="text-xs font-medium" style={{ color: '#C4933F' }}>
+                      {r.score == null ? 'unscored' : `${Math.round(r.score * 100)}%`}
+                    </span>
                   </div>
                   <div
                     className="text-xs leading-relaxed"

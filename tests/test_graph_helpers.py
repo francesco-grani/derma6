@@ -185,6 +185,16 @@ class TestExtractRagContext:
         items = extract_rag_context([self._rag_msg(entries)])
         assert items[0]["source"] == "High"
 
+    def test_unscored_entries_sort_without_typeerror(self):
+        """generate.py emits score=None for docs the reranker never saw (web
+        fallback); a None must not reach the float sort key."""
+        entries = [
+            {"source": "Web", "score": None, "snippet": "web"},
+            {"source": "KB", "score": 0.97, "snippet": "kb"},
+        ]
+        items = extract_rag_context([self._rag_msg(entries)])
+        assert [i["source"] for i in items] == ["KB", "Web"]
+
     def test_no_marker_returns_empty(self):
         msg = ToolMessage(content="No marker here", tool_call_id="tc1")
         assert extract_rag_context([msg]) == []

@@ -990,7 +990,9 @@ def extract_rag_context(messages: list) -> list[dict]:
                     items.append(entry)
         except (json.JSONDecodeError, AttributeError):
             pass
-    items.sort(key=lambda x: x.get("score", 0), reverse=True)
+    # `score` is None for docs the reranker never scored (web fallback), so it
+    # cannot go straight into the sort key without a float/None comparison.
+    items.sort(key=lambda x: x.get("score") or 0, reverse=True)
     return items
 
 

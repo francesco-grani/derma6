@@ -35,6 +35,37 @@ class _UsernameFilter(logging.Filter):
         return True
 
 
+# Attributes the logging module puts on every record. Anything outside this set
+# arrived via `extra=` at the call site. Derived from a throwaway record rather
+# than hardcoded, so it tracks the stdlib across versions (e.g. `taskName` in
+# 3.12). `username` is added by _UsernameFilter and already has its own column.
+_STANDARD_RECORD_ATTRS = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__
+) | {"asctime", "message", "username", "taskName"}
+
+
+class _ExtraFieldFormatter(logging.Formatter):
+    """Renders `extra={...}` payloads, which the stdlib formatter discards.
+
+    Callers such as backend/rag/pipeline/nodes/generate.py attach structured
+    observability data (routing, per-node latencies, retry state) via `extra=`.
+    Without this, that record prints as a bare "rag_pipeline_complete" and the
+    whole payload is silently dropped.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        base = super().format(record)
+        extras = {
+            k: v for k, v in record.__dict__.items()
+            if k not in _STANDARD_RECORD_ATTRS and not k.startswith("_")
+        }
+        # `event` duplicates the message for structured-log consumers.
+        extras.pop("event", None)
+        if not extras:
+            return base
+        return base + " | " + " ".join(f"{k}={v}" for k, v in extras.items())
+
+
 def setup_logging() -> None:
     """Configure Python's standard logging module (idempotent).
 
@@ -63,7 +94,7 @@ def setup_logging() -> None:
     log_format = "%(asctime)s | %(levelname)s | %(username)s | %(name)s | %(message)s"
     date_format = "%Y-%m-%dT%H:%M:%S"
 
-    formatter = logging.Formatter(log_format, datefmt=date_format)
+    formatter = _ExtraFieldFormatter(log_format, datefmt=date_format)
     username_filter = _UsernameFilter()
 
     root_logger = logging.getLogger()
@@ -91,9 +122,22 @@ def setup_logging() -> None:
     file_handler.addFilter(username_filter)
     root_logger.addHandler(file_handler)
 
-    # Silence noisy third-party loggers
+    # Silence noisy third-party loggers.
+    #
+    # These are pinned regardless of log_level so that LOG_LEVEL=DEBUG stays
+    # readable: at DEBUG the root level otherwise propagates into every HTTP
+    # library, and a single RAG query emits ~200 lines from httpcore.http11 and
+    # ~80 from httpcore.connection, burying the ~19 derma6.rag lines that are
+    # the actual reason to turn DEBUG on.
     logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for _noisy in ("httpx", "httpcore", "openai", "urllib3", "sentence_transformers", "chromadb"):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+    # langsmith.client logs one multi-line WARNING per trace when the tenant is
+    # over its monthly quota — a condition we can neither fix from here nor act
+    # on, so it is held at ERROR to keep it out of the stream. Real client
+    # failures still surface.
+    logging.getLogger("langsmith.client").setLevel(logging.ERROR)
 
     _logging_initialised = True
 
