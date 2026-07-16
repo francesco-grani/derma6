@@ -6,6 +6,7 @@ Fails fast at import time if required variables are missing.
 
 from pydantic import Field, ValidationError, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -269,6 +270,36 @@ class Settings(BaseSettings):
         if self.database_url.startswith("postgres://"):
             return self.database_url.replace("postgres://", "postgresql+psycopg://", 1)
         return self.database_url
+
+    @property
+    def db_uses_transaction_pooler(self) -> bool:
+        """True when DATABASE_URL points at Supabase's transaction-mode pooler.
+
+        Supavisor serves session mode on 5432 and transaction mode on 6543. The
+        difference that matters to us: transaction mode hands each transaction a
+        possibly-different server connection, so it cannot support prepared
+        statements — a statement prepared on one backend is invisible to the next,
+        surfacing as "prepared statement ... does not exist"/"already exists".
+        Callers must therefore disable prepared statements when this is True; see
+        db_prepare_threshold. Session mode's tradeoff is the one that took prod
+        down on 2026-07-15: it pins a server connection per client, capping the
+        whole project at 15 clients.
+
+        Derived from the URL rather than a separate env var so the two cannot
+        disagree about which pooler we are actually talking to.
+        """
+        return make_url(self.sqlalchemy_database_url).port == 6543
+
+    @property
+    def db_prepare_threshold(self) -> int | None:
+        """psycopg's prepare_threshold for this DATABASE_URL.
+
+        None disables prepared statements entirely (required by the transaction
+        pooler). 0 — psycopg's "prepare on first execution" — is what LangGraph's
+        from_conn_string() hardcodes, and is a win everywhere else. Note that 0
+        and None are opposites here, not degrees of the same setting.
+        """
+        return None if self.db_uses_transaction_pooler else 0
 
 
 try:

@@ -195,3 +195,43 @@ class TestEffectiveRelevanceClassificationModel:
         )
 
         assert settings.effective_relevance_classification_model == "openai/gpt-4o-mini"
+
+
+class TestPoolerModeDetection:
+    """Prepared statements must be off against Supavisor's transaction pooler
+    (port 6543) and on everywhere else — see Settings.db_uses_transaction_pooler.
+    """
+
+    _POOLER = "aws-0-eu-west-1.pooler.supabase.com"
+
+    def _with_db_url(self, url: str) -> Settings:
+        # Not _make_settings(): it always supplies DATABASE_URL itself.
+        return Settings(  # type: ignore[call-arg]
+            _env_file=None,
+            OPENROUTER_API_KEY="test-key",
+            DATABASE_URL=url,
+        )
+
+    def test_detects_transaction_pooler_on_6543(self) -> None:
+        settings = self._with_db_url(f"postgresql://u:p@{self._POOLER}:6543/postgres")
+
+        assert settings.db_uses_transaction_pooler is True
+        assert settings.db_prepare_threshold is None
+
+    def test_treats_session_pooler_on_5432_as_prepared_statement_capable(self) -> None:
+        settings = self._with_db_url(f"postgresql://u:p@{self._POOLER}:5432/postgres")
+
+        assert settings.db_uses_transaction_pooler is False
+        assert settings.db_prepare_threshold == 0
+
+    def test_survives_a_password_containing_the_pooler_port(self) -> None:
+        """Guards against a naive `"6543" in url` check: the port is structural,
+        not a string that may legitimately appear elsewhere in the URL."""
+        settings = self._with_db_url(f"postgresql://u:pw6543@{self._POOLER}:5432/postgres")
+
+        assert settings.db_uses_transaction_pooler is False
+
+    def test_sqlite_is_not_a_transaction_pooler(self) -> None:
+        settings = self._with_db_url("sqlite:////tmp/x.db")
+
+        assert settings.db_uses_transaction_pooler is False

@@ -26,6 +26,8 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import StateGraph, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import interrupt, Command
+from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 
 from openai import AsyncOpenAI
 
@@ -70,12 +72,24 @@ _checkpointer_exit_stack: AsyncExitStack | None = None
 
 
 async def init_checkpointer() -> None:
-    """Open the Postgres checkpointer connection pool. Call once at app startup."""
+    """Open the Postgres checkpointer connection. Call once at app startup."""
     global _checkpointer, _checkpointer_exit_stack
     _checkpointer_exit_stack = AsyncExitStack()
-    _checkpointer = await _checkpointer_exit_stack.enter_async_context(
-        AsyncPostgresSaver.from_conn_string(settings.database_url)
+    # Deliberately not AsyncPostgresSaver.from_conn_string(): it hardcodes
+    # prepare_threshold=0, which in psycopg means "prepare on first execution"
+    # (None, not 0, is what disables prepared statements). That is unusable
+    # against the transaction-mode pooler, which cannot support them. Everything
+    # else here mirrors from_conn_string's own connection setup — autocommit and
+    # dict_row are what the saver's cursors expect, not preferences.
+    conn = await _checkpointer_exit_stack.enter_async_context(
+        await AsyncConnection.connect(
+            settings.database_url,
+            autocommit=True,
+            prepare_threshold=settings.db_prepare_threshold,
+            row_factory=dict_row,
+        )
     )
+    _checkpointer = AsyncPostgresSaver(conn=conn)
     await _checkpointer.setup()
 
 

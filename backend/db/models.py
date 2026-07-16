@@ -224,7 +224,38 @@ class UserMemoryFact(Base):
 # Call init_db() once at application startup (via FastAPI lifespan).
 from sqlalchemy import create_engine
 
-engine = create_engine(settings.sqlalchemy_database_url)
+def make_engine(url: str, prepare_threshold: int | None):
+    """Build the application engine for `url`.
+
+    Pool sizing is bounded deliberately. Supabase's pooler caps the project's
+    upstream connections at 15, and SQLAlchemy's defaults (pool_size=5,
+    max_overflow=10) let this one engine claim all 15, starving the LangGraph
+    checkpointer and anything else that needs a connection. pool_pre_ping guards
+    against the pooler having dropped a connection that sat idle in our pool;
+    pool_recycle keeps them younger than the pooler's own idle timeout.
+
+    prepare_threshold=None disables prepared statements, which the
+    transaction-mode pooler cannot support (see
+    settings.db_uses_transaction_pooler). Getting this wrong fails at query time
+    rather than connect time — the *repeat* of a query is what breaks — so a
+    smoke test that runs each statement once would not catch it.
+
+    Both settings are Postgres-only: SQLite's pool classes reject max_overflow
+    and its driver has no prepare_threshold, and the test suite runs on SQLite.
+    """
+    if not url.startswith("postgresql"):
+        return create_engine(url)
+    return create_engine(
+        url,
+        pool_size=5,
+        max_overflow=2,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        connect_args={"prepare_threshold": prepare_threshold},
+    )
+
+
+engine = make_engine(settings.sqlalchemy_database_url, settings.db_prepare_threshold)
 
 
 def init_db() -> None:
