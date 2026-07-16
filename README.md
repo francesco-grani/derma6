@@ -311,6 +311,57 @@ See [docs/wiki/Evaluation.md](docs/wiki/Evaluation.md) for the full reference �
 
 ---
 
+## Ethical Considerations
+
+Derma6 gives health-adjacent advice to beginners, analyses photographs of people's faces, and screens for conditions that include skin cancers. Each of those carries a duty that shaped the design rather than being bolted on afterwards. This section documents the safeguards that exist, and — as importantly — the limitations that remain.
+
+### The medical boundary
+
+The vision model (`backend/api/analysis.py`) screens for 12 conditions, three of which are malignant or pre-malignant: **melanoma**, **basal cell carcinoma**, and **actinic keratosis**. A consumer app has no business diagnosing these, so the boundary is enforced structurally rather than left to prompt phrasing:
+
+- **The disclaimer is a required schema field.** `disclaimer` is non-optional on `SkinAnalysisResult` (`backend/schemas.py`), so a response physically cannot validate without one. The strict-mode JSON schema path and the prompt-based fallback both carry it — there is no route through the code that returns an analysis with the disclaimer missing.
+- **Abstention is a first-class outcome.** If the image does not clearly show a skin condition, the model is instructed to return `condition: "Unclear"` with `confidence: 0.0` rather than guess.
+- **Confidence is always surfaced**, alongside up to three alternative conditions, so a single-label answer is never presented as settled.
+- **Medical flags escalate.** When a user has a diagnosed condition on their profile, the system prompt appends a verbatim, non-negotiable disclaimer template (`backend/agent/graph.py`) to any response containing a specific recommendation. Adding a flag is itself an HITL-confirmed action — the agent cannot record a medical condition about someone without their explicit click.
+
+**The limitation that matters most:** these safeguards address false *positives* — telling someone they have something they don't. They do less about false *negatives*. A screening tool that returns "Unclear" or a benign label on an actual melanoma could contribute to someone delaying care, which is the more dangerous failure direction and the harder one to detect. The disclaimer is mandatory precisely because the tool's negative predictive value is unmeasured. **Derma6 is a screening and education aid, never a reason not to see a dermatologist.**
+
+### Bias and representation
+
+- **Skin tone.** Dermatology imaging models are extensively documented to underperform on Fitzpatrick types IV–VI, largely because the datasets behind them under-represent darker skin. Derma6 delegates vision to a general-purpose model (`google/gemini-2.5-flash`) and has **not** measured per-tone accuracy — the eval suite covers tool behaviour and RAG retrieval, not vision fairness. Accuracy on darker skin should be assumed lower than on lighter skin until measured. This is a known gap, not an acceptable state.
+- **Demographic scoping.** The product is deliberately aimed at male beginners — an under-served group in skincare content — and the KB reflects that (shaving physiology, razor burn, beard care). This is a scoping decision, not a claim of universality; advice is correspondingly less well-grounded outside that audience.
+- **Commercial bias.** The product finder ranks real listings from LLM-discovered retailers. There are no affiliate relationships, paid placements, or sponsored results — but source *discovery* is model-driven, so it inherits whatever retailer prominence the model absorbed in training. Ranking is not a quality endorsement.
+
+### Privacy and data handling
+
+| Concern | How it's handled |
+|---|---|
+| **Face photographs** | Stored per-user as base64 JPEG in Postgres (`skin_analyses`), never sent anywhere but the vision model, never used for training. Users can delete any analysis via `DELETE /api/me/skin-analyses/{id}`. |
+| **PII in chat** | Emails, phone numbers, credit cards, and SSNs are blocked on input; the assembled answer is scrubbed before it is persisted to chat history (`backend/middleware/content_filter.py`). Both `/api/chat` and the HITL `resume` note field are filtered — the resume path is a second user-controlled channel into the agent and is treated as one. |
+| **Cross-user isolation** | Every query filters by `user_id` first; `session_id`/`run_id` are resolved against their owning user before any read, write, or HITL resume. React Query caches are keyed by user id and cleared synchronously on logout. |
+| **Prompt injection** | All profile data reaching the system prompt is wrapped in a `json.dumps`-escaped `PROFILE_DATA` block, so no phrasing a user types into a free-text field can be read back as an instruction. |
+| **Memory consent** | Cross-session memory stores only freeform facts the user volunteered in conversation, deduped and denylisted against fields the structured profile already tracks. It fails open — never blocking a response — and never retrieves across users. |
+
+**Known gap — right to erasure.** Individual analyses and routines can be deleted, but there is currently **no account-level deletion endpoint**, so a user cannot yet erase their full footprint (including stored photographs) in one action. `SkinAnalysis.user_id` also lacks the `ondelete="CASCADE"` that `UserMemoryFact` carries. Full GDPR-style erasure is tracked in the [Roadmap](#roadmap).
+
+### Data provenance
+
+The 20-document KB is not uniform in authority, and the system does not currently distinguish between tiers at retrieval time:
+
+- **Peer-reviewed** — PubMed / journal citations (e.g. Leyden JJ et al., *J Am Acad Dermatol* 2011; Hakozaki T et al., *Br J Dermatol* 2002)
+- **Expert-curated** — Paula's Choice Ingredient Dictionary, INCI Decoder
+- **Community** — r/SkincareAddiction
+
+A Reddit thread and a randomised controlled trial are chunked, embedded, and ranked by the same relevance machinery, so a well-phrased community post can outrank a study on a given query. The mitigation today is partial: the **ingredient conflict matrix — the most safety-critical surface — is deliberately not RAG at all.** It is a hand-curated JSON lookup with per-entry citations to primary literature ([ADR-0003](docs/adr/0003-conflict-checker-uses-json-lookup-not-rag.md)), because "can I combine these two actives?" is a question where a plausible-sounding retrieval failure could cause real chemical burns. Deterministic beats probabilistic where the downside is physical. Authority-weighted retrieval for the rest of the KB is on the roadmap.
+
+Content is reproduced in summarised form for personal educational use, with sources attributed in-document.
+
+### Failure posture
+
+Safety-relevant paths fail **closed** — content filtering rejects with HTTP 400 rather than passing through; the vision path returns an error rather than an unvalidated guess. Convenience paths fail **open** — a memory extraction or retrieval failure degrades silently rather than breaking the conversation. The distinction is deliberate: a missing personalisation is an inconvenience, a missing disclaimer is a harm.
+
+---
+
 ## Setup
 
 ### Prerequisites
@@ -412,6 +463,9 @@ Use `[skip ci]` in the commit message to bypass both workflows.
 
 ## Roadmap
 
+- **Account-level deletion / right to erasure** — cascade a user delete through analyses (including stored photographs), routines, sessions, and memory facts; today only per-record deletion exists (see [Ethical Considerations](#ethical-considerations))
+- **Per-skin-tone vision accuracy measurement** — extend the eval suite to cover Fitzpatrick I–VI so the known bias gap is quantified rather than assumed
+- **Authority-weighted retrieval** — rank KB chunks by source tier (peer-reviewed › expert-curated › community) instead of relevance alone
 - Conditional routing / multi-agent graph topology
 - WebSockets upgrade for bidirectional mid-stream signals (would also unlock true multi-tab HITL)
 - Persistent rate limiter (current window is in-memory and resets on restart)
@@ -429,6 +483,7 @@ Use `[skip ci]` in the commit message to bypass both workflows.
 - [Knowledge Base Maintenance](docs/wiki/Knowledge-Base-Maintenance.md)
 - [API Reference](docs/wiki/API-Reference.md)
 - [Evaluation](docs/wiki/Evaluation.md)
+- [Logging](docs/wiki/Logging.md)
 
 ---
 
