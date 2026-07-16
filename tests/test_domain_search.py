@@ -49,20 +49,23 @@ class TestSearchDomainSync:
         }
         tool.invoke.assert_called_once_with("skincare serum")
 
-    def test_tavily_path_ignores_non_list_response(
+    def test_tavily_path_raises_on_non_list_response(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # LangChain's TavilySearchResults swallows API/HTTP errors (e.g. a `432`
+        # quota response) into a plain string. That must surface as a failure
+        # (so search_domain reports ok=False and it never gets cached), not be
+        # silently discarded as an empty-but-successful result.
         monkeypatch.setattr(settings, "tavily_api_key", "test-key")
         tool = MagicMock()
-        tool.invoke.return_value = "not a list"
+        tool.invoke.return_value = "HTTPError('432 Client Error:  for url: ...')"
 
         with patch(
             "langchain_community.tools.tavily_search.TavilySearchResults",
             return_value=tool,
         ):
-            results = search_domain_sync("skincare serum", "dm.de", 5)
-
-        assert results == []
+            with pytest.raises(RuntimeError, match="non-list result"):
+                search_domain_sync("skincare serum", "dm.de", 5)
 
     def test_duckduckgo_fallback_appends_single_site_qualifier(
         self, monkeypatch: pytest.MonkeyPatch

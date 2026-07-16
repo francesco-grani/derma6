@@ -38,7 +38,14 @@ def search_domain_sync(query: str, domain: str, max_results: int) -> list[dict]:
         )
         raw = tool.invoke(query)
         if not isinstance(raw, list):
-            return []
+            # LangChain's TavilySearchResults swallows API/HTTP errors (e.g. a
+            # `432` quota-exceeded response) and returns them as a plain *string*
+            # instead of raising. Returning `[]` here masqueraded that as an
+            # empty-but-successful result set, so the retail lookup logged
+            # `retail_ok=True, listings=0` and even cached the emptiness. Raise
+            # instead, so `search_domain` logs the real error and reports
+            # `ok=False` — the failure is now visible and not cached.
+            raise RuntimeError(f"Tavily search returned a non-list result: {raw!r}")
         return [
             {
                 "title": item.get("title", ""),

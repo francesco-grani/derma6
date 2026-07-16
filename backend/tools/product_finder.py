@@ -32,6 +32,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from vinted import Vinted
 
+from backend.tools import _vinted_patch
+
+# Relax the pinned vinted-api-wrapper's response dataclasses so Vinted API
+# schema drift (a dropped field like `icon_badges`) degrades to `None` instead
+# of crashing dacite.from_dict on every non-empty result. Side-effecting import;
+# must run before any `Vinted().search()` call. See _vinted_patch for the full
+# incident write-up.
+_vinted_patch.apply()
+
 from backend.auth import get_current_user
 from backend.config import settings
 from backend.db.deps import get_product_cache_store, get_profile_store, get_source_discovery_store
@@ -139,7 +148,18 @@ def _search_vinted_sync(query: str, country_code: str) -> list:
     run off the event loop (see `_lookup_secondhand`)."""
     client = Vinted(domain=country_code)
     response = client.search(query=query)
-    return response.items
+    # On an internal parse failure the wrapper returns a bare `{"error": ...}`
+    # dict rather than a `SearchResponse`, whose `.items` is the `dict.items`
+    # *method* (not a list). The schema-drift shim (`_vinted_patch`) makes that
+    # path far rarer, but guard it explicitly so a genuinely unparseable
+    # response surfaces as a clear failure instead of the opaque
+    # `'builtin_function_or_method' object is not subscriptable`.
+    items = getattr(response, "items", None)
+    if not isinstance(items, list):
+        raise RuntimeError(
+            f"Vinted returned an unparseable response (no items list): {response!r:.200}"
+        )
+    return items
 
 
 async def _lookup_secondhand(
