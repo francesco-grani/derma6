@@ -65,6 +65,10 @@ markers = [
 dev = [
     "deepeval>=4.0.6",
     "langgraph-cli[inmem]>=0.4.31",
+    # LangSmith Studio requires langgraph-api >= 0.11.0 for in-Studio tracing.
+    # langgraph-cli only floors it at 0.5.35, and the resolver otherwise prefers
+    # newer grpcio/opentelemetry over a newer langgraph-api, silently pinning 0.7.27.
+    "langgraph-api>=0.11.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
